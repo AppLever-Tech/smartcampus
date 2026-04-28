@@ -177,6 +177,32 @@ class OrgRoleFirestoreService {
     }
   }
 
+  Future<void> createOrUpdateDepartment({
+    required String orgId,
+    required String deptId,
+    required String deptName,
+  }) async {
+    final String orgUpper = orgId.trim().toUpperCase();
+    final String deptUpper = deptId.trim().toUpperCase();
+    if (orgUpper.isEmpty || deptUpper.isEmpty) {
+      throw StateError('Organization ID and Department ID are required.');
+    }
+    final col = FirebaseFirestore.instance.collection(deptCollection);
+    final existing = await col
+        .where('org_id', isEqualTo: orgUpper)
+        .where('dept_id', isEqualTo: deptUpper)
+        .limit(1)
+        .get();
+    final ref = existing.docs.isNotEmpty ? existing.docs.first.reference : col.doc();
+    await ref.set({
+      'org_id': orgUpper,
+      'dept_id': deptUpper,
+      'dept_name': deptName.trim(),
+      'updated_at': FieldValue.serverTimestamp(),
+      'created_at': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
   Future<UserMasterItem?> getUserMaster(String uuid) {
     return authService.getUserByUuid(uuid);
   }

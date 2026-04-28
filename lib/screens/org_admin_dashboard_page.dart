@@ -104,6 +104,139 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
     );
   }
 
+  Future<void> openCreateDepartmentDialog() async {
+    final deptIdController = TextEditingController();
+    final deptNameController = TextEditingController();
+    bool saving = false;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return AlertDialog(
+              title: const smcText(
+                textToDisplay: 'Create Department',
+                textSize: 18,
+                textBoldness: 5,
+                colorOfText: ColorConst.textPrimary,
+              ),
+              content: SizedBox(
+                width: 360,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: deptIdController,
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: InputDecoration(
+                        labelText: 'Department ID',
+                        hintText: 'Example: CSE',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: deptNameController,
+                      decoration: InputDecoration(
+                        labelText: 'Department Name',
+                        hintText: 'Example: Computer Science',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: saving ? null : () => Navigator.pop(ctx),
+                  child: const smcText(
+                    textToDisplay: 'Cancel',
+                    textSize: 14,
+                    colorOfText: ColorConst.textSecondary,
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          final deptId = deptIdController.text.trim().toUpperCase();
+                          final deptName = deptNameController.text.trim();
+                          if (deptId.isEmpty || deptName.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: smcText(
+                                  textToDisplay:
+                                      'Please enter department ID and name.',
+                                  textSize: 14,
+                                  colorOfText: Colors.white,
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+                          setModalState(() {
+                            saving = true;
+                          });
+                          try {
+                            await roleService.createOrUpdateDepartment(
+                              orgId: widget.orgId,
+                              deptId: deptId,
+                              deptName: deptName,
+                            );
+                            if (!context.mounted) {
+                              return;
+                            }
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: smcText(
+                                  textToDisplay: 'Department saved successfully.',
+                                  textSize: 14,
+                                  colorOfText: Colors.white,
+                                ),
+                              ),
+                            );
+                            await refresh();
+                          } catch (_) {
+                            if (!context.mounted) {
+                              return;
+                            }
+                            setModalState(() {
+                              saving = false;
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: smcText(
+                                  textToDisplay: 'Failed to save department.',
+                                  textSize: 14,
+                                  colorOfText: Colors.white,
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: ColorConst.primaryBlue,
+                  ),
+                  child: smcText(
+                    textToDisplay: saving ? 'Saving...' : 'Save',
+                    textSize: 14,
+                    textBoldness: 4,
+                    colorOfText: Colors.white,
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> openDetailSheet(OrgUserRoleMappingItem mapping) async {
     final user = await roleService.getUserMaster(mapping.uuid);
     if (!mounted) {
@@ -444,6 +577,33 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                       textSize: 14,
                       colorOfText: ColorConst.textSecondary,
                       maxLines: 3,
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: openCreateDepartmentDialog,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: ColorConst.primaryBlue,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          icon: const Icon(Icons.add_rounded, color: Colors.white),
+                          label: const smcText(
+                            textToDisplay: 'Create Department',
+                            textSize: 13,
+                            textBoldness: 4,
+                            colorOfText: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        smcText(
+                          textToDisplay: 'Total Departments: ${departments.length}',
+                          textSize: 13,
+                          colorOfText: ColorConst.textSecondary,
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     Expanded(
