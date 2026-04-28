@@ -23,8 +23,8 @@ class FirebaseAuthService {
           continue;
         }
 
-        final data = query.docs.first.data();
-        return OrgUserRoleMappingItem.fromMap(data);
+        final doc = query.docs.first;
+        return OrgUserRoleMappingItem.fromMap(doc.data(), documentId: doc.id);
       }
 
       final allDocs = await FirebaseFirestore.instance
@@ -39,7 +39,7 @@ class FirebaseAuthService {
         }
         for (final candidate in candidates) {
           if (dbUuid == normalizeUuidForCompare(candidate)) {
-            return OrgUserRoleMappingItem.fromMap(data);
+            return OrgUserRoleMappingItem.fromMap(data, documentId: doc.id);
           }
         }
       }
@@ -50,9 +50,132 @@ class FirebaseAuthService {
     }
   }
 
+  Future<OrgUserRoleMappingItem?> getRoleByUuidAndOrgId(
+    String uuid,
+    String orgId,
+  ) async {
+    lastLookupError = null;
+    try {
+      final candidates = uuidCandidates(uuid);
+      for (final candidate in candidates) {
+        final query = await FirebaseFirestore.instance
+            .collection('smcOrgUserRoleMapping')
+            .where('uuid', isEqualTo: candidate)
+            .where('org_id', isEqualTo: orgId)
+            .limit(1)
+            .get();
+
+        if (query.docs.isNotEmpty) {
+          final doc = query.docs.first;
+          return OrgUserRoleMappingItem.fromMap(doc.data(), documentId: doc.id);
+        }
+      }
+
+      final allDocs = await FirebaseFirestore.instance
+          .collection('smcOrgUserRoleMapping')
+          .where('org_id', isEqualTo: orgId)
+          .limit(200)
+          .get();
+      for (final doc in allDocs.docs) {
+        final data = doc.data();
+        final dbUuid = normalizeUuidForCompare(data['uuid']);
+        if (dbUuid.isEmpty) {
+          continue;
+        }
+        for (final candidate in candidates) {
+          if (dbUuid == normalizeUuidForCompare(candidate)) {
+            return OrgUserRoleMappingItem.fromMap(data, documentId: doc.id);
+          }
+        }
+      }
+      return null;
+    } catch (error) {
+      lastLookupError = error.toString();
+      return null;
+    }
+  }
+
+  Future<UserMasterItem?> getUserByUuid(String uuid) async {
+    lastLookupError = null;
+    try {
+      final candidates = uuidCandidates(uuid);
+      for (final candidate in candidates) {
+        final query = await FirebaseFirestore.instance
+            .collection('smcUserMaster')
+            .where('uuid', isEqualTo: candidate)
+            .limit(1)
+            .get();
+
+        if (query.docs.isNotEmpty) {
+          return UserMasterItem.fromMap(query.docs.first.data());
+        }
+      }
+
+      final allDocs = await FirebaseFirestore.instance
+          .collection('smcUserMaster')
+          .limit(200)
+          .get();
+      for (final doc in allDocs.docs) {
+        final data = doc.data();
+        final dbUuid = normalizeUuidForCompare(data['uuid']);
+        if (dbUuid.isEmpty) {
+          continue;
+        }
+        for (final candidate in candidates) {
+          if (dbUuid == normalizeUuidForCompare(candidate)) {
+            return UserMasterItem.fromMap(data);
+          }
+        }
+      }
+      return null;
+    } catch (error) {
+      lastLookupError = error.toString();
+      return null;
+    }
+  }
+
+  Future<OrganizationItem?> getOrganizationById(String orgId) async {
+    lastLookupError = null;
+    final normalizedOrgId = orgId.trim().toUpperCase();
+    if (normalizedOrgId.isEmpty) {
+      return null;
+    }
+
+    try {
+      for (final collectionName in <String>[
+        'smcOrganization',
+        'smcOrganisationMaster',
+      ]) {
+        final queryByUniqueId = await FirebaseFirestore.instance
+            .collection(collectionName)
+            .where('org_unique_id', isEqualTo: normalizedOrgId)
+            .limit(1)
+            .get();
+        if (queryByUniqueId.docs.isNotEmpty) {
+          return OrganizationItem.fromMap(queryByUniqueId.docs.first.data());
+        }
+
+        final queryByOrgId = await FirebaseFirestore.instance
+            .collection(collectionName)
+            .where('org_id', isEqualTo: normalizedOrgId)
+            .limit(1)
+            .get();
+        if (queryByOrgId.docs.isNotEmpty) {
+          return OrganizationItem.fromMap(queryByOrgId.docs.first.data());
+        }
+      }
+
+      return null;
+    } catch (error) {
+      lastLookupError = error.toString();
+      return null;
+    }
+  }
+
   Future<void> sendOtp({
     required String mobileOrUuid,
     required VoidCallback onCodeSent,
+    required VoidCallback onAutoVerified,
     required ValueChanged<String> onError,
   }) async {
     final phoneNumber = normalizeIndianPhoneNumber(mobileOrUuid);
@@ -74,18 +197,22 @@ class FirebaseAuthService {
         phoneNumber: phoneNumber,
         verificationCompleted: (credential) async {
           await FirebaseAuth.instance.signInWithCredential(credential);
-          onCodeSent();
+          onAutoVerified();
         },
+
         verificationFailed: (exception) {
           onError(exception.message ?? 'OTP send failed');
         },
+
         codeSent: (verId, resendToken) {
           verificationId = verId;
           onCodeSent();
         },
+
         codeAutoRetrievalTimeout: (verId) {
           verificationId = verId;
         },
+
       );
     } catch (error) {
       onError('Unable to send OTP: $error');

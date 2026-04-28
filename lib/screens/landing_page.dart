@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cool_alert/cool_alert.dart';
 import 'package:pinput/pinput.dart';
 import 'package:smartcampus/const/color_const.dart';
 import 'package:smartcampus/screens/register_page.dart';
@@ -23,6 +24,7 @@ class LandingPageState extends State<LandingPage> {
   bool isLoading = false;
   bool showWelcomeBackUi = false;
   bool showOtpInput = false;
+  bool isSignUpFlow = false;
   String? pendingUuidForOtp;
 
   @override
@@ -47,61 +49,54 @@ class LandingPageState extends State<LandingPage> {
       otpErrorText = null;
     });
 
-    firebaseAuthService.getRoleByUuid(uuid).then((roleMasterUser) {
-      if (!mounted) {
-        return;
-      }
-      if (roleMasterUser == null) {
-        final String rawError = firebaseAuthService.lastLookupError ?? '';
-        String resolvedErrorMessage =
-            'User not found ';
-        if (rawError.isNotEmpty) {
-          final lower = rawError.toLowerCase();
-          if (lower.contains('permission-denied')) {
-            resolvedErrorMessage =
-                'Firebase connected, but Firestore permission denied. Update Firestore rules.';
-          } else if (lower.contains('unavailable') ||
-              lower.contains('network')) {
-            resolvedErrorMessage =
-                'Firebase connected, but network/Firestore unavailable. Check internet.';
-          } else {
-            resolvedErrorMessage = 'Firestore error: $rawError';
-          }
+
+    firebaseAuthService.sendOtp(
+      mobileOrUuid: uuid,
+      onCodeSent: () {
+        if (!mounted) {
+          return;
         }
         setState(() {
           isLoading = false;
-          errorText = resolvedErrorMessage;
+          errorText = null;
+          otpErrorText = null;
+          showOtpInput = true;
+          pendingUuidForOtp = uuid;
+          otpController.clear();
+        });
+      },
+      onAutoVerified: () {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          isLoading = false;
+          errorText = null;
+          otpErrorText = null;
+          showOtpInput = false;
+          pendingUuidForOtp = uuid;
+        });
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => isSignUpFlow
+                ? RegisterPage(uuid: uuid)
+                : ScreenBrancher(uuid: uuid),
+          ),
+        );
+      },
+      onError: (message) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          isLoading = false;
+          errorText = message;
           showOtpInput = false;
         });
-        return;
-      }
-      firebaseAuthService.sendOtp(
-        mobileOrUuid: uuid,
-        onCodeSent: () {
-          if (!mounted) {
-            return;
-          }
-          setState(() {
-            isLoading = false;
-            errorText = null;
-            otpErrorText = null;
-            showOtpInput = true;
-            pendingUuidForOtp = roleMasterUser.uuid;
-            otpController.clear();
-          });
-        },
-        onError: (message) {
-          if (!mounted) {
-            return;
-          }
-          setState(() {
-            isLoading = false;
-            errorText = message;
-            showOtpInput = false;
-          });
-        },
-      );
-    });
+        showCoolAlert(message);
+      },
+    );
   }
 
   void onVerifyOtp() {
@@ -137,6 +132,7 @@ class LandingPageState extends State<LandingPage> {
               isLoading = false;
               otpErrorText = message;
             });
+            showCoolAlert(message);
           },
         )
         .then((isVerified) {
@@ -149,10 +145,24 @@ class LandingPageState extends State<LandingPage> {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (_) => ScreenBrancher(uuid: pendingUuidForOtp!),
+              builder: (_) => isSignUpFlow
+                  ? RegisterPage(uuid: pendingUuidForOtp!)
+                  : ScreenBrancher(uuid: pendingUuidForOtp!),
             ),
           );
         });
+  }
+
+  void showCoolAlert(String message) {
+    CoolAlert.show(
+      context: context,
+      type: CoolAlertType.warning,
+      title: 'Warning',
+      text: message,
+      confirmBtnText: 'OK',
+      confirmBtnColor: Colors.blue,
+      width: 20
+    );
   }
 
   @override
@@ -173,9 +183,10 @@ class LandingPageState extends State<LandingPage> {
           ),
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(20),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 850),
+                
+                constraints: const BoxConstraints(maxWidth: 1200),
                 child: Container(
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
@@ -183,7 +194,8 @@ class LandingPageState extends State<LandingPage> {
                     borderRadius: BorderRadius.circular(22),
                     border: Border.all(color: ColorConst.borderSoft),
                   ),
-                  child: isWebLayout ? buildWebSection() : buildMobileSection(),
+                  child: isWebLayout ?  buildWebSection()
+                  : buildMobileSection(),
                 ),
               ),
             ),
@@ -198,19 +210,18 @@ class LandingPageState extends State<LandingPage> {
       return Center(child: SizedBox(width: 430, child: buildRightLoginCard()));
     }
 
-    return Row(
-      children: [
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 14),
+    return Center(
+      child: Row(
+        children: [
+          Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Align(alignment: Alignment.center, child: buildBrandChip()),
-                const SizedBox(height: 22),
+                const SizedBox(height: 16),
                 const smcText(
                   textToDisplay: 'Build campus intelligent with AI !',
-                  textSize: 18,
+                  textSize: 24,
                   textBoldness: 4,
                   colorOfText: ColorConst.textPrimary,
                   maxLines: 1,
@@ -218,67 +229,103 @@ class LandingPageState extends State<LandingPage> {
                 const SizedBox(height: 10),
                 const smcText(
                   textToDisplay:
-                      'Smart Campus brings students, faculty and departments together on one intelligent platform.',
-                  textSize: 15,
+                  'Smart Campus brings students, faculty and departments together on one intelligent platform.',
+                  textSize: 19,
                   colorOfText: ColorConst.textSecondary,
                   maxLines: 3,
                 ),
-                const SizedBox(height: 24),
-                const Column(
-                  children: [
-                    Row(
+                const SizedBox(height: 18),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final double tileMaxWidth = ((constraints.maxWidth - 18) / 2)
+                        .clamp(0.0, 280.0);
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Expanded(
-                          child: FeatureTile(
-                            icon: Icons.groups_rounded,
-                            iconBgColor: Color(0xFFE8EDFF),
-                            iconColor: ColorConst.primaryBlue,
-                            title: 'Students',
-                            subtitle: 'Your campus,\nyour way.',
-                          ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Center(
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth: tileMaxWidth,
+                                  ),
+                                  child: const FeatureTile(
+                                    icon: Icons.groups_rounded,
+                                    iconBgColor: Color(0xFFE8EDFF),
+                                    iconColor: ColorConst.primaryBlue,
+                                    title: 'Students',
+                                    subtitle: 'Your campus,\nyour way.',
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 18),
+                            Expanded(
+                              child: Center(
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth: tileMaxWidth,
+                                  ),
+                                  child: const FeatureTile(
+                                    icon: Icons.edit_note_rounded,
+                                    iconBgColor: Color(0xFFE3F7EE),
+                                    iconColor: Color(0xFF16A46B),
+                                    title: 'Faculty',
+                                    subtitle: 'Teach, manage\nand inspire.',
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        SizedBox(width: 18),
-                        Expanded(
-                          child: FeatureTile(
-                            icon: Icons.edit_note_rounded,
-                            iconBgColor: Color(0xFFE3F7EE),
-                            iconColor: Color(0xFF16A46B),
-                            title: 'Faculty',
-                            subtitle: 'Teach, manage\nand inspire.',
-                          ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Center(
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth: tileMaxWidth,
+                                  ),
+                                  child: const FeatureTile(
+                                    icon: Icons.menu_book_rounded,
+                                    iconBgColor: Color(0xFFF0E8FF),
+                                    iconColor: Color(0xFF8B53F6),
+                                    title: 'Subjects',
+                                    subtitle:
+                                        'Access notes,\nassignments and more.',
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 18),
+                            Expanded(
+                              child: Center(
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth: tileMaxWidth,
+                                  ),
+                                  child: const FeatureTile(
+                                    icon: Icons.work_outline_rounded,
+                                    iconBgColor: Color(0xFFFFEAEB),
+                                    iconColor: Color(0xFFF05A64),
+                                    title: 'Departments',
+                                    subtitle:
+                                        'Streamline operations\nand collaboration.',
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
-                    ),
-                    SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: FeatureTile(
-                            icon: Icons.menu_book_rounded,
-                            iconBgColor: Color(0xFFF0E8FF),
-                            iconColor: Color(0xFF8B53F6),
-                            title: 'Subjects',
-                            subtitle: 'Access notes,\nassignments and more.',
-                          ),
-                        ),
-                        SizedBox(width: 18),
-                        Expanded(
-                          child: FeatureTile(
-                            icon: Icons.work_outline_rounded,
-                            iconBgColor: Color(0xFFFFEAEB),
-                            iconColor: Color(0xFFF05A64),
-                            title: 'Departments',
-                            subtitle:
-                                'Streamline operations\nand collaboration.',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                    );
+                  },
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 18),
                 Container(
-                  height: 210,
+                  height: 180,
                   decoration: BoxDecoration(
                     color: const Color(0xFFEFF3FF),
                     borderRadius: BorderRadius.circular(18),
@@ -292,7 +339,7 @@ class LandingPageState extends State<LandingPage> {
                         child: Image.asset(
                           'assets/images/org.png',
                           width: double.infinity,
-                          height: 210,
+                          height: 180,
                           fit: BoxFit.cover,
                         ),
                       ),
@@ -304,119 +351,120 @@ class LandingPageState extends State<LandingPage> {
               ],
             ),
           ),
-        ),
-        if (showWelcomeBackUi) ...[
-          const SizedBox(width: 24),
-          SizedBox(width: 430, child: buildRightLoginCard()),
+          if (showWelcomeBackUi) ...[
+            const SizedBox(width: 24),
+            SizedBox(width: 430, child: buildRightLoginCard()),
+          ],
         ],
-      ],
+      ),
     );
   }
 
   Widget buildIconOverlayAuthActions() {
-    return Column(
+    return Row(
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: SizedBox(
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      showWelcomeBackUi = true;
-                      showOtpInput = false;
-                      otpController.clear();
-                      otpErrorText = null;
-                      errorText = null;
-                      pendingUuidForOtp = null;
-                    });
-                  },
-                  style: ElevatedButton.styleFrom(
-                    elevation: 1.5,
-                    backgroundColor: ColorConst.primaryBlue,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: const smcText(
-                    textToDisplay: 'Sign In',
-                    textSize: 15,
-                    textBoldness: 3,
-                    colorOfText: Colors.white,
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                  ),
+        Expanded(
+          child: SizedBox(
+            height: 48,
+            child: ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  isSignUpFlow = false;
+                  showWelcomeBackUi = true;
+                  showOtpInput = false;
+                  otpController.clear();
+                  otpErrorText = null;
+                  errorText = null;
+                  pendingUuidForOtp = null;
+                });
+              },
+              style: ElevatedButton.styleFrom(
+                elevation: 1.5,
+                backgroundColor: ColorConst.primaryBlue,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
                 ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: SizedBox(
-                height: 48,
-                child: OutlinedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            RegisterPage(uuid: uuidController.text.trim()),
-                      ),
-                    );
-                  },
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: ColorConst.primaryBlue,
-                    side: const BorderSide(
-                      color: ColorConst.primaryBlue,
-                      width: 1.4,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: const smcText(
-                    textToDisplay: 'Sign Up',
-                    textSize: 15,
-                    textBoldness: 3,
-                    colorOfText: ColorConst.primaryBlue,
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                  ),
-                ),
+              child: const smcText(
+                textToDisplay: 'Sign In',
+                textSize: 15,
+                textBoldness: 3,
+                colorOfText: Colors.white,
+                textAlign: TextAlign.center,
+                maxLines: 1,
               ),
             ),
-          ],
+          ),
         ),
-        const SizedBox(height: 10),
-        SizedBox(
-          width: double.infinity,
-          height: 44,
-          child: OutlinedButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Smart Campus helps manage students, faculty and departments.',
-                  ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: SizedBox(
+            height: 48,
+            child: OutlinedButton(
+              onPressed: () {
+                setState(() {
+                  isSignUpFlow = true;
+                  showWelcomeBackUi = true;
+                  showOtpInput = false;
+                  otpController.clear();
+                  otpErrorText = null;
+                  errorText = null;
+                  pendingUuidForOtp = null;
+                });
+              },
+              style: OutlinedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: ColorConst.primaryBlue,
+                side: const BorderSide(
+                  color: ColorConst.primaryBlue,
+                  width: 1.4,
                 ),
-              );
-            },
-            style: OutlinedButton.styleFrom(
-              foregroundColor: ColorConst.textPrimary,
-              side: const BorderSide(color: ColorConst.borderSoft, width: 1.2),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: const smcText(
+                textToDisplay: 'Sign Up',
+                textSize: 15,
+                textBoldness: 3,
+                colorOfText: ColorConst.primaryBlue,
+                textAlign: TextAlign.center,
+                maxLines: 1,
               ),
             ),
-            child: const smcText(
-              textToDisplay: 'Know More',
-              textSize: 14,
-              textBoldness: 3,
-              colorOfText: ColorConst.textPrimary,
-              textAlign: TextAlign.center,
-              maxLines: 1,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: SizedBox(
+            height: 48,
+            child: OutlinedButton(
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Smart Campus helps manage students, faculty and departments.',
+                    ),
+                  ),
+                );
+              },
+              style: OutlinedButton.styleFrom(
+                foregroundColor: ColorConst.textPrimary,
+                backgroundColor: Colors.white,
+                side: const BorderSide(color: ColorConst.borderSoft, width: 1.2),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: const smcText(
+                textToDisplay: 'Know More',
+                textSize: 14,
+                textBoldness: 3,
+                colorOfText: ColorConst.textPrimary,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+              ),
             ),
           ),
         ),
@@ -432,7 +480,7 @@ class LandingPageState extends State<LandingPage> {
           buildBrandChip(),
           const SizedBox(height: 16),
           const smcText(
-            textToDisplay: 'Build campus intelligent with AI !',
+            textToDisplay: 'Build campus intelligence with AI !',
             textSize: 18,
             textBoldness: 4,
             colorOfText: ColorConst.textPrimary,
@@ -488,10 +536,16 @@ class LandingPageState extends State<LandingPage> {
               borderRadius: BorderRadius.circular(18),
             ),
             clipBehavior: Clip.antiAlias,
-            child: Image.asset(
-              'assets/images/org.png',
-              width: double.infinity,
-              fit: BoxFit.cover,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: Image.asset(
+                'assets/images/org.png',
+                width: double.infinity,
+                height: 170,
+                fit: BoxFit.contain,
+                alignment: Alignment.bottomCenter,
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -502,6 +556,7 @@ class LandingPageState extends State<LandingPage> {
       ],
     );
   }
+
 
   Widget buildBrandChip() {
     return Column(
@@ -530,7 +585,7 @@ class LandingPageState extends State<LandingPage> {
         const SizedBox(height: 10),
         const smcText(
           textToDisplay: 'Smart Campus',
-          textSize: 23,
+          textSize:30,
           textBoldness: 4,
           colorOfText: ColorConst.textPrimary,
           maxLines: 1,
@@ -615,6 +670,7 @@ class LandingPageState extends State<LandingPage> {
                 setState(() {
                   showWelcomeBackUi = false;
                   showOtpInput = false;
+                  isSignUpFlow = false;
                   otpController.clear();
                   otpErrorText = null;
                   pendingUuidForOtp = null;
@@ -651,8 +707,8 @@ class LandingPageState extends State<LandingPage> {
             ),
           ),
           const SizedBox(height: 14),
-          const smcText(
-            textToDisplay: 'Welcome Back!',
+          smcText(
+            textToDisplay: isSignUpFlow ? 'Create Account' : 'Welcome Back!',
             textSize: 34 / 2,
             textBoldness: 4,
             colorOfText: ColorConst.textPrimary,
@@ -660,8 +716,10 @@ class LandingPageState extends State<LandingPage> {
             maxLines: 1,
           ),
           const SizedBox(height: 6),
-          const smcText(
-            textToDisplay: 'Enter your mobile number to get OTP',
+          smcText(
+            textToDisplay: isSignUpFlow
+                ? 'Verify mobile number to continue signup'
+                : 'Enter your mobile number to get OTP',
             textSize: 14,
             colorOfText: ColorConst.textSecondary,
             textAlign: TextAlign.center,
@@ -913,6 +971,7 @@ class FeatureTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
@@ -926,22 +985,26 @@ class FeatureTile extends StatelessWidget {
           child: Icon(icon, color: iconColor, size: 24),
         ),
         const SizedBox(width: 12),
-        Expanded(
+        SizedBox(
+          width: 190,
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               smcText(
                 textToDisplay: title,
-                textSize: 21 / 2,
+                textSize: 20,
                 textBoldness: 4,
                 colorOfText: ColorConst.textPrimary,
+                textAlign: TextAlign.start,
                 maxLines: 1,
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 4),
               smcText(
                 textToDisplay: subtitle,
-                textSize: 14,
+                textSize: 19,
                 colorOfText: ColorConst.textSecondary,
+                textAlign: TextAlign.start,
                 maxLines: 3,
               ),
             ],

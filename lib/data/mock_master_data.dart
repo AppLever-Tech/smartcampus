@@ -3,20 +3,68 @@ class OrgUserRoleMappingItem {
   final String orgId;
   final String roleId;
   final String name;
+  final String status;
+  final String deptId;
+  final String documentId;
 
   const OrgUserRoleMappingItem({
     required this.uuid,
     required this.orgId,
     required this.roleId,
     required this.name,
+    this.status = 'Approved',
+    this.deptId = '',
+    this.documentId = '',
   });
 
-  factory OrgUserRoleMappingItem.fromMap(Map<String, dynamic> data) {
+  bool get isRegisteredPending =>
+      status.toLowerCase() == 'registered';
+
+  String get normalizedRoleId => roleId.toUpperCase().trim();
+
+  factory OrgUserRoleMappingItem.fromMap(
+    Map<String, dynamic> data, {
+    String documentId = '',
+  }) {
     return OrgUserRoleMappingItem(
       uuid: (data['uuid'] ?? '').toString().trim(),
       orgId: (data['org_id'] ?? '').toString().trim(),
       roleId: (data['role_id'] ?? '').toString().trim(),
       name: (data['name'] ?? '').toString().trim(),
+      status: (data['status'] ?? 'Approved').toString().trim(),
+      deptId: (data['dept_id'] ?? '').toString().trim(),
+      documentId: documentId,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return <String, dynamic>{
+      'uuid': uuid,
+      'org_id': orgId,
+      'role_id': roleId,
+      'name': name,
+      'status': status,
+      'dept_id': deptId,
+    };
+  }
+
+  OrgUserRoleMappingItem copyWith({
+    String? uuid,
+    String? orgId,
+    String? roleId,
+    String? name,
+    String? status,
+    String? deptId,
+    String? documentId,
+  }) {
+    return OrgUserRoleMappingItem(
+      uuid: uuid ?? this.uuid,
+      orgId: orgId ?? this.orgId,
+      roleId: roleId ?? this.roleId,
+      name: name ?? this.name,
+      status: status ?? this.status,
+      deptId: deptId ?? this.deptId,
+      documentId: documentId ?? this.documentId,
     );
   }
 }
@@ -26,6 +74,7 @@ class UserMasterItem {
   final String name;
   final String email;
   final String mobile;
+  final String photoUrl;
   final String userType;
   final String roleId;
   final String orgId;
@@ -33,12 +82,14 @@ class UserMasterItem {
   final String requestedOrgName;
   final String status;
   final String requestedOn;
+  final String deptId;
 
   const UserMasterItem({
     required this.uuid,
     required this.name,
     required this.email,
     required this.mobile,
+    required this.photoUrl,
     required this.userType,
     required this.roleId,
     required this.orgId,
@@ -46,6 +97,7 @@ class UserMasterItem {
     required this.requestedOrgName,
     required this.status,
     required this.requestedOn,
+    this.deptId = '',
   });
 
   factory UserMasterItem.fromMap(Map<String, dynamic> data) {
@@ -54,6 +106,9 @@ class UserMasterItem {
       name: (data['name'] ?? '').toString().trim(),
       email: (data['email'] ?? '').toString().trim(),
       mobile: (data['mobile'] ?? data['phone'] ?? '').toString().trim(),
+      photoUrl: (data['photo_url'] ?? data['profile_pic'] ?? '')
+          .toString()
+          .trim(),
       userType: (data['user_type'] ?? data['designation'] ?? 'User')
           .toString()
           .trim(),
@@ -67,6 +122,7 @@ class UserMasterItem {
       requestedOn: (data['requested_on'] ?? data['created_at'] ?? '')
           .toString()
           .trim(),
+      deptId: (data['dept_id'] ?? '').toString().trim(),
     );
   }
 
@@ -76,6 +132,7 @@ class UserMasterItem {
       'name': name,
       'email': email,
       'mobile': mobile,
+      'photo_url': photoUrl,
       'user_type': userType,
       'role_id': roleId,
       'org_id': orgId,
@@ -83,14 +140,17 @@ class UserMasterItem {
       'requested_org_name': requestedOrgName,
       'status': status,
       'requested_on': requestedOn,
+      'dept_id': deptId,
     };
   }
+
 
   UserMasterItem copyWith({
     String? uuid,
     String? name,
     String? email,
     String? mobile,
+    String? photoUrl,
     String? userType,
     String? roleId,
     String? orgId,
@@ -98,12 +158,14 @@ class UserMasterItem {
     String? requestedOrgName,
     String? status,
     String? requestedOn,
+    String? deptId,
   }) {
     return UserMasterItem(
       uuid: uuid ?? this.uuid,
       name: name ?? this.name,
       email: email ?? this.email,
       mobile: mobile ?? this.mobile,
+      photoUrl: photoUrl ?? this.photoUrl,
       userType: userType ?? this.userType,
       roleId: roleId ?? this.roleId,
       orgId: orgId ?? this.orgId,
@@ -111,6 +173,7 @@ class UserMasterItem {
       requestedOrgName: requestedOrgName ?? this.requestedOrgName,
       status: status ?? this.status,
       requestedOn: requestedOn ?? this.requestedOn,
+      deptId: deptId ?? this.deptId,
     );
   }
 }
@@ -140,8 +203,10 @@ class OrganizationItem {
 
   factory OrganizationItem.fromMap(Map<String, dynamic> data) {
     return OrganizationItem(
-      orgId: (data['org_id'] ?? '').toString().trim(),
-      orgCode: (data['org_code'] ?? '').toString().trim(),
+      orgId: (data['org_unique_id'] ?? data['org_id'] ?? '').toString().trim(),
+      orgCode: (data['org_code'] ?? data['org_unique_id'] ?? '')
+          .toString()
+          .trim(),
       orgName: (data['org_name'] ?? '').toString().trim(),
       orgType: (data['org_type'] ?? '').toString().trim(),
       orgAddress: (data['org_address'] ?? '').toString().trim(),
@@ -154,6 +219,7 @@ class OrganizationItem {
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
+      'org_unique_id': orgId,
       'org_id': orgId,
       'org_code': orgCode,
       'org_name': orgName,
@@ -191,101 +257,24 @@ class OrganizationItem {
   }
 }
 
-class MockMasterData {
-  static final List<OrgUserRoleMappingItem> smcOrgUserRoleMapping =
-      <OrgUserRoleMappingItem>[
-        const OrgUserRoleMappingItem(
-          uuid: '911234567890',
-          orgId: 'SYSTEM',
-          roleId: 'SYSTEM_ADMIN',
-          name: 'Super User',
-        ),
-        const OrgUserRoleMappingItem(
-          uuid: '911234567891',
-          orgId: 'SJBIT',
-          roleId: 'ORG_ADMIN',
-          name: 'Siva Rama Krishna',
-        ),
-      ];
+class DepartmentMasterItem {
+  final String orgId;
+  final String deptId;
+  final String deptName;
 
-  static final List<UserMasterItem> smcUserMaster = <UserMasterItem>[
-    const UserMasterItem(
-      uuid: '911234567890',
-      name: 'Super User',
-      email: 'admin@smartcampus.ai',
-      mobile: '+91 12345 67890',
-      userType: 'Super Admin',
-      roleId: 'SYSTEM_ADMIN',
-      orgId: 'SYSTEM',
-      requestedOrgId: 'SYSTEM',
-      requestedOrgName: 'SmartCampus HQ',
-      status: 'Approved',
-      requestedOn: '20 May 2025\n09:00 AM',
-    ),
-    const UserMasterItem(
-      uuid: '919876543210',
-      name: 'Rohit Kumar',
-      email: 'rohit.kumar@example.com',
-      mobile: '+91 98765 43210',
-      userType: 'Faculty',
-      roleId: 'FACULTY',
-      orgId: '',
-      requestedOrgId: 'SJBIT',
-      requestedOrgName: 'SJB Institute of Technology',
-      status: 'Pending',
-      requestedOn: '20 May 2025\n10:30 AM',
-    ),
-    const UserMasterItem(
-      uuid: '919123456789',
-      name: 'Anjali Sharma',
-      email: 'anjali.sharma@example.com',
-      mobile: '+91 91234 56789',
-      userType: 'Student',
-      roleId: 'STUDENT',
-      orgId: '',
-      requestedOrgId: 'SJBIT',
-      requestedOrgName: 'SJB Institute of Technology',
-      status: 'Pending',
-      requestedOn: '20 May 2025\n09:15 AM',
-    ),
-    const UserMasterItem(
-      uuid: '919988776655',
-      name: 'Pankaj Mehta',
-      email: 'pankaj.mehta@example.com',
-      mobile: '+91 99887 76655',
-      userType: 'Department Staff',
-      roleId: 'STAFF',
-      orgId: '',
-      requestedOrgId: 'RND001',
-      requestedOrgName: 'SmartLabs Research',
-      status: 'Pending',
-      requestedOn: '19 May 2025\n04:45 PM',
-    ),
-  ];
+  const DepartmentMasterItem({
+    required this.orgId,
+    required this.deptId,
+    required this.deptName,
+  });
 
-  static final List<OrganizationItem> smcOrganisationMaster =
-      <OrganizationItem>[
-        const OrganizationItem(
-          orgId: 'SJBIT',
-          orgCode: 'SC100001',
-          orgName: 'SJB Institute of Technology',
-          orgType: 'College',
-          orgAddress: 'Kengeri, Bengaluru',
-          orgWebsite: 'https://www.sjbit.edu.in',
-          adminUuid: '911234567891',
-          adminName: 'Siva Rama Krishna',
-          status: 'Registered',
-        ),
-        const OrganizationItem(
-          orgId: 'RND001',
-          orgCode: 'SC100002',
-          orgName: 'SmartLabs Research',
-          orgType: 'Research Institute',
-          orgAddress: 'Mysuru, Karnataka',
-          orgWebsite: 'https://smartlabs.example.com',
-          adminUuid: '911234567999',
-          adminName: 'Asha Nair',
-          status: 'Registered',
-        ),
-      ];
+  factory DepartmentMasterItem.fromMap(Map<String, dynamic> data) {
+    return DepartmentMasterItem(
+      orgId: (data['org_id'] ?? '').toString().trim(),
+      deptId: (data['dept_id'] ?? '').toString().trim(),
+      deptName: (data['dept_name'] ?? data['department_name'] ?? '')
+          .toString()
+          .trim(),
+    );
+  }
 }
