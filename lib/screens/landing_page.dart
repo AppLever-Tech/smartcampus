@@ -220,7 +220,7 @@ class LandingPageState extends State<LandingPage> {
                 Align(alignment: Alignment.center, child: buildBrandChip()),
                 const SizedBox(height: 16),
                 const smcText(
-                  textToDisplay: 'Build campus intelligent with AI !',
+                  textToDisplay: 'Build campus intelligence with AI !',
                   textSize: 24,
                   textBoldness: 4,
                   colorOfText: ColorConst.textPrimary,
@@ -229,7 +229,7 @@ class LandingPageState extends State<LandingPage> {
                 const SizedBox(height: 10),
                 const smcText(
                   textToDisplay:
-                  'Smart Campus brings students, faculty and departments together on one intelligent platform.',
+                  'Smart Campus brings students, faculty and departments together on one intelligence platform.',
                   textSize: 19,
                   colorOfText: ColorConst.textSecondary,
                   maxLines: 3,
