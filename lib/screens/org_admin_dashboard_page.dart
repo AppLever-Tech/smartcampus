@@ -508,11 +508,12 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                       onTap: () {},
                     ),
                     const SizedBox(height: 8),
+
                     _menuTile(
-                      title: 'Support',
-                      icon: Icons.support_agent_rounded,
+                      title: 'Basic Details',
+                      icon: Icons.info_outline,
                       isSelected: false,
-                      onTap: onSupport,
+                      onTap: getBasicInfo
                     ),
                     const Spacer(),
                     _menuTile(
@@ -823,6 +824,17 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
           ],
         ),
       ),
+    );
+  }
+
+
+  Widget getBasicInfo(){
+
+    return smcText(
+      textToDisplay: "Basic Details",
+      textSize: 14,
+      textBoldness:  3,
+      colorOfText: ColorConst.textPrimary,
     );
   }
 
