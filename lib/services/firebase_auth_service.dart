@@ -143,8 +143,7 @@ class FirebaseAuthService {
 
     try {
       for (final collectionName in <String>[
-        'smcOrganization',
-        'smcOrganisationMaster',
+        'smcOrganizations',
       ]) {
         final queryByUniqueId = await FirebaseFirestore.instance
             .collection(collectionName)
@@ -152,7 +151,8 @@ class FirebaseAuthService {
             .limit(1)
             .get();
         if (queryByUniqueId.docs.isNotEmpty) {
-          return OrganizationItem.fromMap(queryByUniqueId.docs.first.data());
+          final doc = queryByUniqueId.docs.first;
+          return OrganizationItem.fromMap(doc.data(), documentId: doc.id);
         }
 
         final queryByOrgId = await FirebaseFirestore.instance
@@ -161,7 +161,8 @@ class FirebaseAuthService {
             .limit(1)
             .get();
         if (queryByOrgId.docs.isNotEmpty) {
-          return OrganizationItem.fromMap(queryByOrgId.docs.first.data());
+          final doc = queryByOrgId.docs.first;
+          return OrganizationItem.fromMap(doc.data(), documentId: doc.id);
         }
       }
 
