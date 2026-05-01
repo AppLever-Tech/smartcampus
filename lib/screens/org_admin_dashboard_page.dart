@@ -5,6 +5,7 @@ import 'package:smartcampus/data/mock_master_data.dart';
 import 'package:smartcampus/screens/landing_page.dart';
 import 'package:smartcampus/services/org_role_firestore_service.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
+import 'package:smartcampus/screens/basic_details_screen.dart';
 
 class OrgAdminDashboardPage extends StatefulWidget {
   final String orgId;
@@ -566,14 +567,10 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                       icon: Icons.info_outline_rounded,
                       isSelected: false,
                       onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: smcText(
-                              textToDisplay:
-                                  'Organisation: ${organizationDisplayName.isEmpty ? widget.orgId : organizationDisplayName}',
-                              textSize: 14,
-                              colorOfText: Colors.white,
-                            ),
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => BasicDetailsScreen(isAdmin: true),
                           ),
                         );
                       },
