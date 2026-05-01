@@ -183,6 +183,11 @@ class OrgRoleFirestoreService {
     required String orgId,
     required String deptId,
     required String deptName,
+    String establishedYear = '',
+    String deptType = '',
+    List<String> programsOffered = const [],
+    String affiliation = '',
+    String accreditationStatus = '',
   }) async {
     final String orgUpper = orgId.trim().toUpperCase();
     final String deptUpper = deptId.trim().toUpperCase();
@@ -195,11 +200,18 @@ class OrgRoleFirestoreService {
         .where('dept_id', isEqualTo: deptUpper)
         .limit(1)
         .get();
-    final ref = existing.docs.isNotEmpty ? existing.docs.first.reference : col.doc();
+    final ref = existing.docs.isNotEmpty
+        ? existing.docs.first.reference
+        : col.doc();
     final payload = {
       'org_id': orgUpper,
       'dept_id': deptUpper,
       'dept_name': deptName.trim(),
+      'established_year': establishedYear.trim(),
+      'dept_type': deptType.trim(),
+      'programs_offered': programsOffered,
+      'affiliation': affiliation.trim(),
+      'accreditation_status': accreditationStatus.trim(),
       'updated_at': FieldValue.serverTimestamp(),
       'created_at': FieldValue.serverTimestamp(),
     };

@@ -129,7 +129,20 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
   Future<void> openCreateDepartmentDialog() async {
     final deptIdController = TextEditingController();
     final deptNameController = TextEditingController();
+    final establishedYearController = TextEditingController();
+    final affiliationController = TextEditingController();
+
+    // Dropdown state
+    String selectedDeptType = 'Engineering';
+    String selectedAccreditation = 'None';
+    final Set<String> selectedPrograms = {};
+
+    const deptTypes = ['Engineering', 'Management', 'Science', 'Arts', 'Other'];
+    const accreditationOptions = ['None', 'NBA', 'NAAC', 'NBA & NAAC'];
+    const programOptions = ['B.E', 'B.Tech', 'M.Tech', 'MCA', 'MBA', 'M.Sc', 'B.Sc', 'BCA', 'Ph.D'];
+
     bool saving = false;
+
     await showDialog<void>(
       context: context,
       builder: (ctx) {
@@ -143,33 +156,151 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                 colorOfText: ColorConst.textPrimary,
               ),
               content: SizedBox(
-                width: 360,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: deptIdController,
-                      textCapitalization: TextCapitalization.characters,
-                      decoration: InputDecoration(
-                        labelText: 'Department ID',
-                        hintText: 'Example: CSE',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                width: 400,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Department Code (deptId)
+                      TextField(
+                        controller: deptIdController,
+                        textCapitalization: TextCapitalization.characters,
+                        decoration: InputDecoration(
+                          labelText: 'Department Code *',
+                          hintText: 'e.g. CSE, ECE, MCA',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: deptNameController,
-                      decoration: InputDecoration(
-                        labelText: 'Department Name',
-                        hintText: 'Example: Computer Science',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                      const SizedBox(height: 12),
+
+                      // Department Name
+                      TextField(
+                        controller: deptNameController,
+                        decoration: InputDecoration(
+                          labelText: 'Department Name *',
+                          hintText: 'e.g. Computer Science & Engineering',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+
+                      // Established Year
+                      TextField(
+                        controller: establishedYearController,
+                        keyboardType: TextInputType.number,
+                        maxLength: 4,
+                        decoration: InputDecoration(
+                          labelText: 'Established Year',
+                          hintText: 'e.g. 2005',
+                          counterText: '',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Department Type dropdown
+                      InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Department Type',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: selectedDeptType,
+                            isExpanded: true,
+                            isDense: true,
+                            items: deptTypes
+                                .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                                .toList(),
+                            onChanged: (v) {
+                              if (v != null) {
+                                setModalState(() => selectedDeptType = v);
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Programs Offered — multi-select checkboxes
+                      const smcText(
+                        textToDisplay: 'Program(s) Offered',
+                        textSize: 13,
+                        colorOfText: ColorConst.textSecondary,
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 0,
+                        children: programOptions.map((prog) {
+                          final isSelected = selectedPrograms.contains(prog);
+                          return FilterChip(
+                            label: Text(prog),
+                            selected: isSelected,
+                            selectedColor: ColorConst.primaryBlue.withOpacity(0.15),
+                            checkmarkColor: ColorConst.primaryBlue,
+                            onSelected: (val) {
+                              setModalState(() {
+                                if (val) {
+                                  selectedPrograms.add(prog);
+                                } else {
+                                  selectedPrograms.remove(prog);
+                                }
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Affiliation / University
+                      TextField(
+                        controller: affiliationController,
+                        decoration: InputDecoration(
+                          labelText: 'Affiliation / University',
+                          hintText: 'e.g. Visvesvaraya Technological University',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Accreditation Status dropdown
+                      InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Accreditation Status',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: selectedAccreditation,
+                            isExpanded: true,
+                            isDense: true,
+                            items: accreditationOptions
+                                .map((a) => DropdownMenuItem(value: a, child: Text(a)))
+                                .toList(),
+                            onChanged: (v) {
+                              if (v != null) {
+                                setModalState(() => selectedAccreditation = v);
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               actions: [
@@ -185,62 +316,59 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                   onPressed: saving
                       ? null
                       : () async {
-                          final deptId = deptIdController.text.trim().toUpperCase();
-                          final deptName = deptNameController.text.trim();
-                          if (deptId.isEmpty || deptName.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: smcText(
-                                  textToDisplay:
-                                      'Please enter department ID and name.',
-                                  textSize: 14,
-                                  colorOfText: Colors.white,
-                                ),
-                              ),
-                            );
-                            return;
-                          }
-                          setModalState(() {
-                            saving = true;
-                          });
-                          try {
-                            await roleService.createOrUpdateDepartment(
-                              orgId: widget.orgId,
-                              deptId: deptId,
-                              deptName: deptName,
-                            );
-                            if (!context.mounted) {
-                              return;
-                            }
-                            Navigator.pop(ctx);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: smcText(
-                                  textToDisplay: 'Department saved successfully.',
-                                  textSize: 14,
-                                  colorOfText: Colors.white,
-                                ),
-                              ),
-                            );
-                            await refresh();
-                          } catch (_) {
-                            if (!context.mounted) {
-                              return;
-                            }
-                            setModalState(() {
-                              saving = false;
-                            });
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: smcText(
-                                  textToDisplay: 'Failed to save department.',
-                                  textSize: 14,
-                                  colorOfText: Colors.white,
-                                ),
-                              ),
-                            );
-                          }
-                        },
+                    final deptId = deptIdController.text.trim().toUpperCase();
+                    final deptName = deptNameController.text.trim();
+                    if (deptId.isEmpty || deptName.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: smcText(
+                            textToDisplay:
+                            'Department Code and Name are required.',
+                            textSize: 14,
+                            colorOfText: Colors.white,
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+                    setModalState(() => saving = true);
+                    try {
+                      await roleService.createOrUpdateDepartment(
+                        orgId: widget.orgId,
+                        deptId: deptId,
+                        deptName: deptName,
+                        establishedYear: establishedYearController.text.trim(),
+                        deptType: selectedDeptType,
+                        programsOffered: selectedPrograms.toList(),
+                        affiliation: affiliationController.text.trim(),
+                        accreditationStatus: selectedAccreditation,
+                      );
+                      if (!context.mounted) return;
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: smcText(
+                            textToDisplay: 'Department saved successfully.',
+                            textSize: 14,
+                            colorOfText: Colors.white,
+                          ),
+                        ),
+                      );
+                      await refresh();
+                    } catch (_) {
+                      if (!context.mounted) return;
+                      setModalState(() => saving = false);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: smcText(
+                            textToDisplay: 'Failed to save department.',
+                            textSize: 14,
+                            colorOfText: Colors.white,
+                          ),
+                        ),
+                      );
+                    }
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: ColorConst.primaryBlue,
                   ),
