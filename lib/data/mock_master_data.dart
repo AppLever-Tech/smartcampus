@@ -1,6 +1,7 @@
 class OrgUserRoleMappingItem {
   final String uuid;
   final String orgId;
+  final String orgUniqueId;
   final String roleId;
   final String name;
   final String status;
@@ -10,6 +11,7 @@ class OrgUserRoleMappingItem {
   const OrgUserRoleMappingItem({
     required this.uuid,
     required this.orgId,
+    this.orgUniqueId = '',
     required this.roleId,
     required this.name,
     this.status = 'Approved',
@@ -29,6 +31,7 @@ class OrgUserRoleMappingItem {
     return OrgUserRoleMappingItem(
       uuid: (data['uuid'] ?? '').toString().trim(),
       orgId: (data['org_id'] ?? '').toString().trim(),
+      orgUniqueId: (data['org_unique_id'] ?? '').toString().trim(),
       roleId: (data['role_id'] ?? '').toString().trim(),
       name: (data['name'] ?? '').toString().trim(),
       status: (data['status'] ?? 'Approved').toString().trim(),
@@ -41,6 +44,7 @@ class OrgUserRoleMappingItem {
     return <String, dynamic>{
       'uuid': uuid,
       'org_id': orgId,
+      'org_unique_id': orgUniqueId,
       'role_id': roleId,
       'name': name,
       'status': status,
@@ -51,6 +55,7 @@ class OrgUserRoleMappingItem {
   OrgUserRoleMappingItem copyWith({
     String? uuid,
     String? orgId,
+    String? orgUniqueId,
     String? roleId,
     String? name,
     String? status,
@@ -60,6 +65,7 @@ class OrgUserRoleMappingItem {
     return OrgUserRoleMappingItem(
       uuid: uuid ?? this.uuid,
       orgId: orgId ?? this.orgId,
+      orgUniqueId: orgUniqueId ?? this.orgUniqueId,
       roleId: roleId ?? this.roleId,
       name: name ?? this.name,
       status: status ?? this.status,
@@ -180,7 +186,7 @@ class UserMasterItem {
 
 class OrganizationItem {
   final String orgId;
-  final String orgCode;
+  final String orgUniqueId;
   final String orgName;
   final String orgType;
   final String orgAddress;
@@ -191,7 +197,7 @@ class OrganizationItem {
 
   const OrganizationItem({
     required this.orgId,
-    required this.orgCode,
+    this.orgUniqueId = '',
     required this.orgName,
     required this.orgType,
     required this.orgAddress,
@@ -201,12 +207,10 @@ class OrganizationItem {
     required this.status,
   });
 
-  factory OrganizationItem.fromMap(Map<String, dynamic> data) {
+  factory OrganizationItem.fromMap(Map<String, dynamic> data, {String documentId = ''}) {
     return OrganizationItem(
-      orgId: (data['org_unique_id'] ?? data['org_id'] ?? '').toString().trim(),
-      orgCode: (data['org_code'] ?? data['org_unique_id'] ?? '')
-          .toString()
-          .trim(),
+      orgId: (data['org_id'] ?? '').toString().trim(),
+      orgUniqueId: (data['org_unique_id'] ?? documentId).toString().trim(),
       orgName: (data['org_name'] ?? '').toString().trim(),
       orgType: (data['org_type'] ?? '').toString().trim(),
       orgAddress: (data['org_address'] ?? '').toString().trim(),
@@ -219,9 +223,8 @@ class OrganizationItem {
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
-      'org_unique_id': orgId,
+      'org_unique_id': orgUniqueId,
       'org_id': orgId,
-      'org_code': orgCode,
       'org_name': orgName,
       'org_type': orgType,
       'org_address': orgAddress,
@@ -234,7 +237,7 @@ class OrganizationItem {
 
   OrganizationItem copyWith({
     String? orgId,
-    String? orgCode,
+    String? orgUniqueId,
     String? orgName,
     String? orgType,
     String? orgAddress,
@@ -245,7 +248,7 @@ class OrganizationItem {
   }) {
     return OrganizationItem(
       orgId: orgId ?? this.orgId,
-      orgCode: orgCode ?? this.orgCode,
+      orgUniqueId: orgUniqueId ?? this.orgUniqueId,
       orgName: orgName ?? this.orgName,
       orgType: orgType ?? this.orgType,
       orgAddress: orgAddress ?? this.orgAddress,

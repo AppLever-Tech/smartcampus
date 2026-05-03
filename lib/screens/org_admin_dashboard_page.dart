@@ -5,6 +5,7 @@ import 'package:smartcampus/data/mock_master_data.dart';
 import 'package:smartcampus/screens/landing_page.dart';
 import 'package:smartcampus/services/org_role_firestore_service.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
+import 'package:smartcampus/screens/basic_details_screen.dart';
 
 class OrgAdminDashboardPage extends StatefulWidget {
   final String orgId;
@@ -25,6 +26,8 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
   bool loading = true;
   List<OrgUserRoleMappingItem> pendingDeptAdmins = <OrgUserRoleMappingItem>[];
   List<DepartmentMasterItem> departments = <DepartmentMasterItem>[];
+  int totalAssignedDepartments = 0;
+  String organizationDisplayName = '';
 
   @override
   void initState() {
@@ -40,12 +43,19 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
       final pending =
           await roleService.listPendingDeptAdminsForOrg(widget.orgId);
       final depts = await roleService.loadDepartmentsForOrg(widget.orgId);
+      final assignedCount = await roleService.countAssignedDepartmentsForOrg(
+        widget.orgId,
+      );
+      final org = await roleService.authService.getOrganizationById(widget.orgId);
       if (!mounted) {
         return;
       }
       setState(() {
         pendingDeptAdmins = pending;
         departments = depts;
+        totalAssignedDepartments = assignedCount;
+        organizationDisplayName =
+            (org?.orgName ?? '').trim().isEmpty ? widget.orgId : org!.orgName;
         loading = false;
       });
     } catch (_) {
@@ -54,6 +64,7 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
       }
       setState(() {
         pendingDeptAdmins = <OrgUserRoleMappingItem>[];
+        totalAssignedDepartments = 0;
         loading = false;
       });
     }
@@ -101,6 +112,18 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
           ],
         );
       },
+    );
+  }
+
+  void onNotification() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: smcText(
+          textToDisplay: 'No new notifications.',
+          textSize: 14,
+          colorOfText: Colors.white,
+        ),
+      ),
     );
   }
 
@@ -374,7 +397,7 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                   const SizedBox(height: 12),
                   const smcText(
                     textToDisplay:
-                        'Departments are loaded from smcDepartmentMaster for your organisation.',
+                        'Departments are available for your organisation.',
                     textSize: 13,
                     colorOfText: ColorConst.textSecondary,
                     maxLines: 4,
@@ -494,11 +517,41 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF4D7BFF), Color(0xFF3D5BDB)],
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const Icon(
+                            Icons.school_outlined,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: smcText(
+                            textToDisplay: 'SmartCampus',
+                            textSize: 20,
+                            textBoldness: 5,
+                            colorOfText: ColorConst.textPrimary,
+                            maxLines: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
                     const smcText(
-                      textToDisplay: 'Organisation admin',
-                      textSize: 20,
-                      textBoldness: 5,
-                      colorOfText: ColorConst.textPrimary,
+                      textToDisplay: 'Organisation Admin',
+                      textSize: 13,
+                      textBoldness: 4,
+                      colorOfText: ColorConst.textSecondary,
                     ),
                     const SizedBox(height: 20),
                     _menuTile(
@@ -508,13 +561,36 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                       onTap: () {},
                     ),
                     const SizedBox(height: 8),
+
+                    _menuTile(
+                      title: 'Basic Details',
+                      icon: Icons.info_outline_rounded,
+                      isSelected: false,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => BasicDetailsScreen(isAdmin: true),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _menuTile(
+                      title: 'Notification',
+                      icon: Icons.notifications_none_rounded,
+                      isSelected: false,
+                      onTap: onNotification,
+                    ),
+                    const SizedBox(height: 8),
+                    const Spacer(),
                     _menuTile(
                       title: 'Support',
                       icon: Icons.support_agent_rounded,
                       isSelected: false,
                       onTap: onSupport,
                     ),
-                    const Spacer(),
+                    const SizedBox(height: 8),
                     _menuTile(
                       title: 'Logout',
                       icon: Icons.logout_rounded,
@@ -561,7 +637,8 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                                 maxLines: 1,
                               ),
                               smcText(
-                                textToDisplay: 'Org ID: ${widget.orgId}',
+                                textToDisplay:
+                                    'Organisation: ${organizationDisplayName.isEmpty ? widget.orgId : organizationDisplayName}',
                                 textSize: 13,
                                 colorOfText: ColorConst.textSecondary,
                               ),
@@ -570,17 +647,18 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
+                    /*const SizedBox(height: 16),
                     const smcText(
                       textToDisplay:
-                          'Department admins (DEPT_ADMIN, Registered) in your organisation.',
+                        'Department admins (DEPT_ADMIN, Registered) in your organisation.',
                       textSize: 14,
                       colorOfText: ColorConst.textSecondary,
                       maxLines: 3,
-                    ),
+                    ),*/
                     const SizedBox(height: 10),
                     Row(
                       children: [
+                        const Spacer(),
                         ElevatedButton.icon(
                           onPressed: openCreateDepartmentDialog,
                           style: ElevatedButton.styleFrom(
@@ -597,223 +675,137 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                             colorOfText: Colors.white,
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        smcText(
-                          textToDisplay: 'Total Departments: ${departments.length}',
-                          textSize: 13,
-                          colorOfText: ColorConst.textSecondary,
-                        ),
                       ],
                     ),
                     const SizedBox(height: 12),
                     if (loading)
                       const Expanded(child: Center(child: CircularProgressIndicator()))
                     else ...[
-                      const smcText(
-                        textToDisplay: 'Departments',
-                        textSize: 14,
-                        textBoldness: 4,
-                        colorOfText: ColorConst.textPrimary,
+                      Row(
+                        children: [
+                          _buildCountCard(
+                            label: 'Total Departments',
+                            value: '${departments.length}',
+                            icon: Icons.account_tree_outlined,
+                          ),
+                          const SizedBox(width: 12),
+                          _buildCountCard(
+                            label: 'Total Assigned Departments',
+                            value: '$totalAssignedDepartments',
+                            icon: Icons.assignment_turned_in_outlined,
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        height: 200,
-                        child: departments.isEmpty
-                            ? Container(
-                                width: double.infinity,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border:
-                                      Border.all(color: const Color(0xFFE3EAF8)),
-                                ),
-                                child: const Center(
-                                  child: smcText(
-                                    textToDisplay: 'No departments created yet.',
-                                    textSize: 13,
-                                    colorOfText: ColorConst.textSecondary,
-                                  ),
-                                ),
-                              )
-                            : LayoutBuilder(
-                                builder: (context, constraints) {
-                                  final double tableWidth = constraints.maxWidth;
-                                  const double deptIdWidth = 180;
-                                  final double deptNameWidth =
-                                      (tableWidth - deptIdWidth).clamp(240, 700);
-                                  return SingleChildScrollView(
-                                    scrollDirection: Axis.horizontal,
-                                    child: ConstrainedBox(
-                                      constraints:
-                                          BoxConstraints(minWidth: tableWidth),
-                                      child: DataTable(
-                                        headingRowHeight: 48,
-                                        dataRowMinHeight: 48,
-                                        dataRowMaxHeight: 54,
-                                        horizontalMargin: 8,
-                                        columnSpacing: 0,
-                                        dividerThickness: 1,
-                                        border: TableBorder.all(
-                                          color: const Color(0xFFE3EAF8),
-                                          width: 1,
-                                        ),
-                                        headingRowColor: WidgetStateProperty.all(
-                                          const Color(0xFFF4F7FF),
-                                        ),
-                                        columns: [
-                                          DataColumn(
-                                            label: SizedBox(
-                                              width: deptIdWidth,
-                                              child: const Center(
-                                                child: smcText(
-                                                  textToDisplay: 'Dept ID',
-                                                  textSize: 12,
-                                                  textBoldness: 4,
-                                                  colorOfText: Color(0xFF5C6B8B),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          DataColumn(
-                                            label: SizedBox(
-                                              width: deptNameWidth,
-                                              child: const Center(
-                                                child: smcText(
-                                                  textToDisplay: 'Department Name',
-                                                  textSize: 12,
-                                                  textBoldness: 4,
-                                                  colorOfText: Color(0xFF5C6B8B),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                        rows: departments.map((dept) {
-                                          return DataRow(
-                                            cells: [
-                                              DataCell(
-                                                SizedBox(
-                                                  width: deptIdWidth,
-                                                  child: Center(
-                                                    child: smcText(
-                                                      textToDisplay: dept.deptId,
-                                                      textSize: 12,
-                                                      textBoldness: 5,
-                                                      colorOfText:
-                                                          ColorConst.primaryBlue,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                              DataCell(
-                                                SizedBox(
-                                                  width: deptNameWidth,
-                                                  child: Center(
-                                                    child: smcText(
-                                                      textToDisplay: dept
-                                                              .deptName.isEmpty
-                                                          ? '-'
-                                                          : dept.deptName,
-                                                      textSize: 12,
-                                                      colorOfText:
-                                                          ColorConst.textPrimary,
-                                                      maxLines: 1,
-                                                      textAlign: TextAlign.center,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          );
-                                        }).toList(),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                      ),
-                      const SizedBox(height: 12),
-                      const smcText(
-                        textToDisplay: 'Pending Department Admins',
-                        textSize: 14,
-                        textBoldness: 4,
-                        colorOfText: ColorConst.textPrimary,
-                      ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 14),
                       Expanded(
-                        child: pendingDeptAdmins.isEmpty
-                            ? const Center(
-                                child: smcText(
-                                  textToDisplay:
-                                      'No pending department admins. Add departments in smcDepartmentMaster to enable assignments.',
-                                  textSize: 14,
-                                  colorOfText: ColorConst.textSecondary,
-                                  maxLines: 5,
-                                  textAlign: TextAlign.center,
-                                ),
-                              )
-                            : LayoutBuilder(
-                                builder: (context, constraints) {
-                                  final double tableWidth = constraints.maxWidth;
-                                  const double nameWidth = 220;
-                                  const double uuidWidth = 260;
-                                  const double statusWidth = 120;
-                                  const double actionWidth = 120;
-                                  return SingleChildScrollView(
-                                    scrollDirection: Axis.horizontal,
-                                    child: ConstrainedBox(
-                                      constraints: BoxConstraints(minWidth: tableWidth),
-                                      child: DataTable(
-                                        headingRowHeight: 50,
-                                        dataRowMinHeight: 52,
-                                        dataRowMaxHeight: 58,
-                                        horizontalMargin: 8,
-                                        columnSpacing: 0,
-                                        dividerThickness: 1,
-                                        border: TableBorder.all(
-                                          color: const Color(0xFFE3EAF8),
-                                          width: 1,
-                                        ),
-                                        headingRowColor: WidgetStateProperty.all(
-                                          const Color(0xFFF4F7FF),
-                                        ),
-                                        columns: const [
-                                          DataColumn(label: SizedBox(width: nameWidth, child: Center(child: smcText(textToDisplay: 'Name', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
-                                          DataColumn(label: SizedBox(width: uuidWidth, child: Center(child: smcText(textToDisplay: 'UUID', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
-                                          DataColumn(label: SizedBox(width: statusWidth, child: Center(child: smcText(textToDisplay: 'Status', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
-                                          DataColumn(label: SizedBox(width: actionWidth, child: Center(child: smcText(textToDisplay: 'Action', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
-                                        ],
-                                        rows: pendingDeptAdmins.map((row) {
-                                          return DataRow(
-                                            onSelectChanged: (_) => openDetailSheet(row),
-                                            cells: [
-                                              DataCell(SizedBox(width: nameWidth, child: Center(child: smcText(textToDisplay: row.name, textSize: 12, textBoldness: 4, colorOfText: ColorConst.textPrimary, maxLines: 1)))),
-                                              DataCell(SizedBox(width: uuidWidth, child: Center(child: smcText(textToDisplay: row.uuid, textSize: 12, colorOfText: ColorConst.textSecondary, maxLines: 1)))),
-                                              const DataCell(SizedBox(width: statusWidth, child: Center(child: smcText(textToDisplay: 'Registered', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF3558DA))))),
-                                              DataCell(
-                                                SizedBox(
-                                                  width: actionWidth,
-                                                  child: Center(
-                                                    child: ElevatedButton(
-                                                      onPressed: departments.isEmpty ? null : () => openAssignDepartmentSheet(row),
-                                                      style: ElevatedButton.styleFrom(
-                                                        backgroundColor: ColorConst.primaryBlue,
-                                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                                      ),
-                                                      child: const smcText(textToDisplay: 'Add', textSize: 12, textBoldness: 4, colorOfText: Colors.white),
-                                                    ),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFFE3EAF8)),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0x12000000),
+                                blurRadius: 14,
+                                offset: Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: pendingDeptAdmins.isEmpty
+                                ? const Center(
+                                    child: smcText(
+                                      textToDisplay:
+                                          'No pending department admins. Add departments to enable assignments.',
+                                      textSize: 14,
+                                      colorOfText: ColorConst.textSecondary,
+                                      maxLines: 5,
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  )
+                                : LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      final double tableWidth = constraints.maxWidth;
+                                      const double nameWidth = 220;
+                                      const double uuidWidth = 260;
+                                      const double statusWidth = 120;
+                                      const double actionWidth = 120;
+                                      return Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Padding(
+                                            padding: EdgeInsets.only(left: 4, bottom: 8),
+                                            child: smcText(
+                                              textToDisplay: 'Pending Department Admins',
+                                              textSize: 14,
+                                              textBoldness: 5,
+                                              colorOfText: ColorConst.textPrimary,
+                                            ),
+                                          ),
+                                          Expanded(
+                                            child: SingleChildScrollView(
+                                              scrollDirection: Axis.horizontal,
+                                              child: ConstrainedBox(
+                                                constraints:
+                                                    BoxConstraints(minWidth: tableWidth),
+                                                child: DataTable(
+                                                  headingRowHeight: 50,
+                                                  dataRowMinHeight: 52,
+                                                  dataRowMaxHeight: 58,
+                                                  horizontalMargin: 8,
+                                                  columnSpacing: 0,
+                                                  dividerThickness: 1,
+                                                  border: TableBorder.all(
+                                                    color: const Color(0xFFE3EAF8),
+                                                    width: 1,
                                                   ),
+                                                  headingRowColor:
+                                                      WidgetStateProperty.all(
+                                                    const Color(0xFFF4F7FF),
+                                                  ),
+                                                  columns: const [
+                                                    DataColumn(label: SizedBox(width: nameWidth, child: Center(child: smcText(textToDisplay: 'Name', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
+                                                    DataColumn(label: SizedBox(width: uuidWidth, child: Center(child: smcText(textToDisplay: 'UUID', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
+                                                    DataColumn(label: SizedBox(width: statusWidth, child: Center(child: smcText(textToDisplay: 'Status', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
+                                                    DataColumn(label: SizedBox(width: actionWidth, child: Center(child: smcText(textToDisplay: 'Action', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
+                                                  ],
+                                                  rows: pendingDeptAdmins.map((row) {
+                                                    return DataRow(
+                                                      onSelectChanged: (_) => openDetailSheet(row),
+                                                      cells: [
+                                                        DataCell(SizedBox(width: nameWidth, child: Center(child: smcText(textToDisplay: row.name, textSize: 12, textBoldness: 4, colorOfText: ColorConst.textPrimary, maxLines: 1)))),
+                                                        DataCell(SizedBox(width: uuidWidth, child: Center(child: smcText(textToDisplay: row.uuid, textSize: 12, colorOfText: ColorConst.textSecondary, maxLines: 1)))),
+                                                        const DataCell(SizedBox(width: statusWidth, child: Center(child: smcText(textToDisplay: 'Registered', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF3558DA))))),
+                                                        DataCell(
+                                                          SizedBox(
+                                                            width: actionWidth,
+                                                            child: Center(
+                                                              child: ElevatedButton(
+                                                                onPressed: departments.isEmpty ? null : () => openAssignDepartmentSheet(row),
+                                                                style: ElevatedButton.styleFrom(
+                                                                  backgroundColor: ColorConst.primaryBlue,
+                                                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                                ),
+                                                                child: const smcText(textToDisplay: 'Assign', textSize: 12, textBoldness: 4, colorOfText: Colors.white),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    );
+                                                  }).toList(),
                                                 ),
                                               ),
-                                            ],
-                                          );
-                                        }).toList(),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                          ),
+                        ),
                       ),
                     ],
                   ],
@@ -825,7 +817,6 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
       ),
     );
   }
-
   Widget _menuTile({
     required String title,
     required IconData icon,
@@ -856,6 +847,70 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
               textBoldness: isSelected ? 4 : 3,
               colorOfText:
                   isSelected ? ColorConst.primaryBlue : ColorConst.textPrimary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCountCard({
+    required String label,
+    required String value,
+    required IconData icon,
+  }) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              const Color(0xFFF7FAFF),
+              icon == Icons.assignment_turned_in_outlined
+                  ? const Color(0xFFEFF4FF)
+                  : const Color(0xFFF2F9FF),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE3EAF8)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x12000000),
+              blurRadius: 10,
+              offset: Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFDCE7FF)),
+              ),
+              child: Icon(icon, color: ColorConst.primaryBlue, size: 20),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                smcText(
+                  textToDisplay: value,
+                  textSize: 18,
+                  textBoldness: 5,
+                  colorOfText: ColorConst.textPrimary,
+                ),
+                smcText(
+                  textToDisplay: label,
+                  textSize: 12,
+                  colorOfText: ColorConst.textSecondary,
+                ),
+              ],
             ),
           ],
         ),
