@@ -31,7 +31,7 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
 
   Future<void> fetchData() async {
     final doc =
-    await _firestore.collection('organisation').doc('org_details').get();
+    await _firestore.collection('smcOrganizations').doc('org_details').get();
 
     if (doc.exists) {
       final data = doc.data()!;
@@ -45,7 +45,7 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
   }
 
   Future<void> saveData() async {
-    await _firestore.collection('organisation').doc('org_details').set({
+    await _firestore.collection('smcOrganizations').doc('org_details').set({
       'name': nameController.text,
       'email': emailController.text,
       'phone': phoneController.text,
@@ -99,17 +99,25 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
-        iconTheme: const IconThemeData(color: Colors.black),
-        title: const Text(
-          "Organisation Details",
-          style: TextStyle(color: Colors.black),
+    return Container(
+      color: const Color(0xFFF6F7FB),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+       Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text(
+          "Organization Details",
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF1F2A44),
+          ),
         ),
-        actions: [
+
           if (widget.isAdmin)
             IconButton(
               icon: Icon(
@@ -126,8 +134,10 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
             ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
+       ),
+      Expanded(
+        child : Padding(
+         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -204,7 +214,10 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
             ),
           ],
         ),
+       ),
       ),
+      ],
+    ),
     );
   }
 }
