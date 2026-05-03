@@ -3,8 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class BasicDetailsScreen extends StatefulWidget {
   final bool isAdmin;
-
-  const BasicDetailsScreen({Key? key, required this.isAdmin})
+  final String orgId;
+  const BasicDetailsScreen({Key? key, required this.isAdmin,required this.orgId})
       : super(key: key);
 
   @override
@@ -20,8 +20,7 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
   final TextEditingController addressController = TextEditingController();
-  final TextEditingController descriptionController =
-  TextEditingController();
+
 
   @override
   void initState() {
@@ -30,8 +29,10 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
   }
 
   Future<void> fetchData() async {
-    final doc =
-    await _firestore.collection('smcOrganizations').doc('org_details').get();
+    final doc = await FirebaseFirestore.instance
+        .collection('smcOrganizations')
+        .doc(widget.orgId)
+        .get();
 
     if (doc.exists) {
       final data = doc.data()!;
@@ -41,27 +42,33 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
       addressController.text = data['address'] ?? '';
 
       setState(() {});
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Organization not found")),
+      );
     }
   }
 
   Future<void> saveData() async {
-    await _firestore.collection('smcOrganizations').doc('org_details').set({
+    final docRef = FirebaseFirestore.instance
+        .collection('smcOrganizations')
+        .doc(widget.orgId);
+
+    await docRef.set({
       'name': nameController.text,
       'email': emailController.text,
       'phone': phoneController.text,
       'address': addressController.text,
-
-    });
+    }, SetOptions(merge: true));
 
     setState(() {
       isEditing = false;
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Details updated successfully")),
+      const SnackBar(content: Text("Saved successfully")),
     );
   }
-
   Widget _buildBrightField(
       String label, TextEditingController controller) {
     return Padding(

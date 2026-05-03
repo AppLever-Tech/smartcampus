@@ -813,7 +813,7 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                     ],
                   ],
                 )
-                :const BasicDetailsScreen(isAdmin: true),
+                : BasicDetailsScreen(isAdmin: true,orgId: widget.orgId,),
               ),
             ),
           ],
