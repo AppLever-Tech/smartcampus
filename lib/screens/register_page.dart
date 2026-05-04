@@ -27,7 +27,8 @@ class RegisterPage extends StatefulWidget {
 class RegisterPageState extends State<RegisterPage> {
   final GlobalKey<FormState> formKey = GlobalKey<FormState>();
   final FirebaseAuthService firebaseAuthService = FirebaseAuthService();
-  final TextEditingController nameController = TextEditingController();
+  final TextEditingController firstNameController = TextEditingController();
+  final TextEditingController lastNameController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController mobileController = TextEditingController();
   final TextEditingController orgIdController = TextEditingController();
@@ -45,7 +46,8 @@ class RegisterPageState extends State<RegisterPage> {
 
   @override
   void dispose() {
-    nameController.dispose();
+    firstNameController.dispose();
+    lastNameController.dispose();
     emailController.dispose();
     mobileController.dispose();
     orgIdController.dispose();
@@ -58,6 +60,9 @@ class RegisterPageState extends State<RegisterPage> {
     }
 
     final mobile = mobileController.text.trim();
+    final fullName =
+        '${firstNameController.text.trim()} ${lastNameController.text.trim()}'
+            .trim();
     final normalizedUuid = firebaseAuthService.normalizeUuidForCompare(mobile);
     final enteredOrgId = orgIdController.text.trim().toUpperCase();
     const roleId = '';
@@ -113,7 +118,7 @@ class RegisterPageState extends State<RegisterPage> {
 
       final user = UserMasterItem(
         uuid: normalizedUuid,
-        name: nameController.text.trim(),
+        name: fullName,
         email: emailController.text.trim(),
         mobile: mobile,
         photoUrl: photoUrl,
@@ -372,7 +377,23 @@ class RegisterPageState extends State<RegisterPage> {
             Center(child: buildProfileImagePicker(compact: true, inline: true)),
           ],
           const SizedBox(height: 24),
-          buildField(controller: nameController, label: 'Full Name'),
+          Row(
+            children: [
+              Expanded(
+                child: buildField(
+                  controller: firstNameController,
+                  label: 'First Name',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: buildField(
+                  controller: lastNameController,
+                  label: 'Last Name',
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 14),
           buildField(
             controller: emailController,

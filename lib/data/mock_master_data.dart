@@ -264,20 +264,54 @@ class DepartmentMasterItem {
   final String orgId;
   final String deptId;
   final String deptName;
+  final String establishedYear;       // e.g. "2005"
+  final String deptType;              // "Engineering" / "Management" / "Science"
+  final List<String> programsOffered; // ["B.E", "M.Tech", "MCA"]
+  final String affiliation;           // University / affiliation name
+  final String accreditationStatus;   // "NBA" / "NAAC" / "NBA & NAAC" / "None"
 
   const DepartmentMasterItem({
     required this.orgId,
     required this.deptId,
     required this.deptName,
+    this.establishedYear = '',
+    this.deptType = '',
+    this.programsOffered = const [],
+    this.affiliation = '',
+    this.accreditationStatus = '',
   });
 
   factory DepartmentMasterItem.fromMap(Map<String, dynamic> data) {
+    final rawPrograms = data['programs_offered'];
+    List<String> programs = [];
+    if (rawPrograms is List) {
+      programs = rawPrograms.map((e) => e.toString().trim()).toList();
+    } else if (rawPrograms is String && rawPrograms.isNotEmpty) {
+      programs = rawPrograms.split(',').map((e) => e.trim()).toList();
+    }
+
     return DepartmentMasterItem(
       orgId: (data['org_id'] ?? '').toString().trim(),
       deptId: (data['dept_id'] ?? '').toString().trim(),
-      deptName: (data['dept_name'] ?? data['department_name'] ?? '')
-          .toString()
-          .trim(),
+      deptName: (data['dept_name'] ?? data['department_name'] ?? '').toString().trim(),
+      establishedYear: (data['established_year'] ?? '').toString().trim(),
+      deptType: (data['dept_type'] ?? '').toString().trim(),
+      programsOffered: programs,
+      affiliation: (data['affiliation'] ?? '').toString().trim(),
+      accreditationStatus: (data['accreditation_status'] ?? '').toString().trim(),
     );
+  }
+
+  Map<String, dynamic> toMap() {
+    return <String, dynamic>{
+      'org_id': orgId,
+      'dept_id': deptId,
+      'dept_name': deptName,
+      'established_year': establishedYear,
+      'dept_type': deptType,
+      'programs_offered': programsOffered,
+      'affiliation': affiliation,
+      'accreditation_status': accreditationStatus,
+    };
   }
 }
