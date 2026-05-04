@@ -17,10 +17,11 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
   bool isEditing = false;
 
   final TextEditingController nameController = TextEditingController();
+  final TextEditingController typeController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
   final TextEditingController addressController = TextEditingController();
-
+  final TextEditingController websiteController = TextEditingController();
 
   @override
   void initState() {
@@ -37,9 +38,11 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
     if (doc.exists) {
       final data = doc.data()!;
       nameController.text = data['name'] ?? '';
+      typeController.text = data['type'] ?? '';
       emailController.text = data['email'] ?? '';
       phoneController.text = data['phone'] ?? '';
       addressController.text = data['address'] ?? '';
+      websiteController.text = data['website'] ?? '';
 
       setState(() {});
     } else {
@@ -56,9 +59,11 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
 
     await docRef.set({
       'name': nameController.text,
+      'type': typeController.text,
       'email': emailController.text,
       'phone': phoneController.text,
       'address': addressController.text,
+      'website': websiteController.text,
     }, SetOptions(merge: true));
 
     setState(() {
@@ -104,6 +109,51 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
     );
   }
 
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF2F4F8),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: const Color(0xFF4F6EF7),size: 18),
+          ),
+          const SizedBox(width: 16),
+
+          SizedBox(
+            width: 100,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF6B7280),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Text(":", style: TextStyle(color: Color(0xFF6B7280)),),
+          const SizedBox(width: 10),
+
+          Expanded(
+            child: Text(
+              value.isEmpty ? "N/A" : value,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                color: Color(0xFF111827),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -117,10 +167,10 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           const Text(
-          "Organization Details",
+          "Organisation Basic Information",
           style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
             color: Color(0xFF1F2A44),
           ),
         ),
@@ -148,14 +198,7 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "Basic Information",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF1F2A44),
-              ),
-            ),
+
             const SizedBox(height: 12),
 
 
@@ -188,37 +231,54 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
                 ],
               ),
             ),
-
-
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: const Color(0xFFE3EAF8)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.03),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.all(18),
+                  padding: const EdgeInsets.all(20),
                   child: ListView(
                     children: [
-                      _buildBrightField(
-                          "Organisation Name", nameController),
-                      _buildBrightField("Email", emailController),
-                      _buildBrightField("Phone", phoneController),
-                      _buildBrightField("Address", addressController),
+                      const Text("Organisation Details"),
+                      const SizedBox(height: 20),
 
+                      if (!isEditing) ...[
+                        // _buildInfoRow(Icons.badge_outlined, "Org ID", widget.orgId),
+                        // const Divider(),
+
+                        _buildInfoRow(Icons.business_outlined, "Name", nameController.text),
+                        const Divider(),
+
+                        _buildInfoRow(Icons.school_outlined, "Type", typeController.text),
+                        const Divider(),
+
+                        _buildInfoRow(Icons.email_outlined, "Email", emailController.text),
+                        const Divider(),
+
+                        _buildInfoRow(Icons.phone_outlined, "Phone", phoneController.text),
+                        const Divider(),
+
+                        _buildInfoRow(Icons.location_on_outlined, "Address", addressController.text),
+                        const Divider(),
+
+                        _buildInfoRow(Icons.language_outlined, "Website", websiteController.text),
+                      ] else ...[
+                        _buildBrightField("Organisation Name", nameController),
+                        _buildBrightField("Type", typeController),
+                        _buildBrightField("Email", emailController),
+                        _buildBrightField("Phone", phoneController),
+                        _buildBrightField("Address", addressController),
+                        _buildBrightField("Website", websiteController),
+                      ],
                     ],
                   ),
                 ),
               ),
             ),
+
           ],
         ),
        ),
