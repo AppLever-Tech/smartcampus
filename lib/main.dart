@@ -11,9 +11,11 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     await Firebase.initializeApp(
+
       options: DefaultFirebaseOptions.currentPlatform,
     );
   } catch (e) {
+
     debugPrint("Exception occurred: $e");
   }
   runApp(const SmartCampusApp());
@@ -53,6 +55,7 @@ class SmartCampusApp extends StatelessWidget {
           }
 
           final user = snapshot.data;
+
           if (user != null) {
             final uuid = _resolveUuidFromUser(user);
             if (uuid != null && uuid.isNotEmpty) {

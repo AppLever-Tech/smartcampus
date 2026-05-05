@@ -5,6 +5,7 @@ import 'package:smartcampus/data/mock_master_data.dart';
 import 'package:smartcampus/screens/landing_page.dart';
 import 'package:smartcampus/services/org_role_firestore_service.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
+import 'package:smartcampus/screens/basic_details_screen.dart';
 
 class OrgAdminDashboardPage extends StatefulWidget {
   final String orgId;
@@ -23,6 +24,7 @@ class OrgAdminDashboardPage extends StatefulWidget {
 class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
   final OrgRoleFirestoreService roleService = OrgRoleFirestoreService();
   bool loading = true;
+  int selectedMenuIndex = 0;
   List<OrgUserRoleMappingItem> pendingDeptAdmins = <OrgUserRoleMappingItem>[];
   List<DepartmentMasterItem> departments = <DepartmentMasterItem>[];
   int totalAssignedDepartments = 0;
@@ -684,26 +686,23 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                     _menuTile(
                       title: 'Dashboard',
                       icon: Icons.dashboard_outlined,
-                      isSelected: true,
-                      onTap: () {},
+                      isSelected: selectedMenuIndex == 0,
+                      onTap: () {
+                        setState(() {
+                          selectedMenuIndex = 0;
+                        });
+                      },
                     ),
                     const SizedBox(height: 8),
 
                     _menuTile(
                       title: 'Basic Details',
                       icon: Icons.info_outline_rounded,
-                      isSelected: false,
+                      isSelected: selectedMenuIndex == 1,
                       onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: smcText(
-                              textToDisplay:
-                                  'Organisation: ${organizationDisplayName.isEmpty ? widget.orgId : organizationDisplayName}',
-                              textSize: 14,
-                              colorOfText: Colors.white,
-                            ),
-                          ),
-                        );
+                        setState(() {
+                          selectedMenuIndex = 1;
+                        });
                       },
                     ),
                     const SizedBox(height: 8),
@@ -735,7 +734,8 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Column(
+                child: selectedMenuIndex == 0
+                ?Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
@@ -940,7 +940,8 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                       ),
                     ],
                   ],
-                ),
+                )
+                : BasicDetailsScreen(isAdmin: true,orgId: widget.orgId,),
               ),
             ),
           ],
