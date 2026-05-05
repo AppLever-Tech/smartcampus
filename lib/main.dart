@@ -55,6 +55,7 @@ class SmartCampusApp extends StatelessWidget {
           }
 
           final user = snapshot.data;
+
           if (user != null) {
             final uuid = _resolveUuidFromUser(user);
             if (uuid != null && uuid.isNotEmpty) {
