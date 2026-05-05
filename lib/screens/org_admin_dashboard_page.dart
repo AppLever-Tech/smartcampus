@@ -24,6 +24,7 @@ class OrgAdminDashboardPage extends StatefulWidget {
 class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
   final OrgRoleFirestoreService roleService = OrgRoleFirestoreService();
   bool loading = true;
+  int selectedMenuIndex = 0;
   List<OrgUserRoleMappingItem> pendingDeptAdmins = <OrgUserRoleMappingItem>[];
   List<DepartmentMasterItem> departments = <DepartmentMasterItem>[];
   int totalAssignedDepartments = 0;
@@ -685,22 +686,23 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                     _menuTile(
                       title: 'Dashboard',
                       icon: Icons.dashboard_outlined,
-                      isSelected: true,
-                      onTap: () {},
+                      isSelected: selectedMenuIndex == 0,
+                      onTap: () {
+                        setState(() {
+                          selectedMenuIndex = 0;
+                        });
+                      },
                     ),
                     const SizedBox(height: 8),
 
                     _menuTile(
                       title: 'Basic Details',
                       icon: Icons.info_outline_rounded,
-                      isSelected: false,
+                      isSelected: selectedMenuIndex == 1,
                       onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => BasicDetailsScreen(isAdmin: true),
-                          ),
-                        );
+                        setState(() {
+                          selectedMenuIndex = 1;
+                        });
                       },
                     ),
                     const SizedBox(height: 8),
@@ -732,7 +734,8 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Column(
+                child: selectedMenuIndex == 0
+                ?Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
@@ -937,7 +940,8 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                       ),
                     ],
                   ],
-                ),
+                )
+                : BasicDetailsScreen(isAdmin: true,orgId: widget.orgId,),
               ),
             ),
           ],
