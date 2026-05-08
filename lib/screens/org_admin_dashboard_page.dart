@@ -344,6 +344,7 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                         programsOffered: selectedPrograms.toList(),
                         affiliation: affiliationController.text.trim(),
                         accreditationStatus: selectedAccreditation,
+                        createdBy: FirebaseAuth.instance.currentUser?.uid ?? '',
                       );
                       if (!context.mounted) return;
                       Navigator.pop(ctx);

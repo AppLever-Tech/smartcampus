@@ -63,6 +63,7 @@ Future<Widget> resolveHomeWidget(String uuid) async {
         return DeptAdminDashboardPage(
           orgId: primary.orgId,
           adminName: primary.name,
+          deptId: primary.deptId,
         );
       default:
         return RegisterPage(uuid: uuid);
