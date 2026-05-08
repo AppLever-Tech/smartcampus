@@ -372,9 +372,8 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                               '$deptName ($deptId) has been saved successfully.',
                               confirmBtnText: 'OK',
                               confirmBtnColor: ColorConst.primaryBlue,
-                              onConfirmBtnTap: () {
-                                Navigator.pop(context);
-                                refresh();
+                              onConfirmBtnTap: () async {
+                                await refresh();
                               },
                             );
                           } catch (_) {
