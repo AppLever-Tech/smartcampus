@@ -974,6 +974,325 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
       ),
     );
   }
+  Future<void> openCreateCourseDialog() async {
+    final courseCodeController = TextEditingController();
+    final courseTitleController = TextEditingController();
+    final curriculumController = TextEditingController();
+
+    String selectedCourseType = 'Core';
+    String selectedDepartment = 'Computer Science';
+    String selectedProgram = 'B.E';
+
+    const courseTypes = [
+      'Core',
+      'Elective',
+      'Open Elective',
+    ];
+
+    const departments = [
+      'Computer Science',
+      'Electronics',
+      'Mechanical',
+      'Civil',
+      'MCA',
+      'MBA',
+    ];
+
+    const programs = [
+      'B.E',
+      'MCA',
+      'MBA',
+    ];
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: Container(
+                width: 600,
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7F7FB),
+                  borderRadius: BorderRadius.circular(28),
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const smcText(
+                        textToDisplay: 'Create Course',
+                        textSize: 22,
+                        textBoldness: 5,
+                        colorOfText:
+                        ColorConst.textPrimary,
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // COURSE CODE
+                      TextField(
+                        controller:
+                        courseCodeController,
+                        decoration: InputDecoration(
+                          hintText:
+                          'Course Code (e.g. CS301)',
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding:
+                          const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 18,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius:
+                            BorderRadius.circular(
+                              18,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // COURSE TITLE
+                      TextField(
+                        controller:
+                        courseTitleController,
+                        decoration: InputDecoration(
+                          hintText: 'Course Title',
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding:
+                          const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 18,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius:
+                            BorderRadius.circular(
+                              18,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // COURSE TYPE
+                      InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Course Type',
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius:
+                            BorderRadius.circular(
+                              18,
+                            ),
+                          ),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: selectedCourseType,
+                            isExpanded: true,
+                            items: courseTypes
+                                .map(
+                                  (e) =>
+                                  DropdownMenuItem(
+                                    value: e,
+                                    child: Text(e),
+                                  ),
+                            )
+                                .toList(),
+                            onChanged: (v) {
+                              if (v != null) {
+                                setModalState(() {
+                                  selectedCourseType =
+                                      v;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // DEPARTMENT OFFERING
+                      InputDecorator(
+                        decoration: InputDecoration(
+                          labelText:
+                          'Department Offering',
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius:
+                            BorderRadius.circular(
+                              18,
+                            ),
+                          ),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value:
+                            selectedDepartment,
+                            isExpanded: true,
+                            items: departments
+                                .map(
+                                  (e) =>
+                                  DropdownMenuItem(
+                                    value: e,
+                                    child: Text(e),
+                                  ),
+                            )
+                                .toList(),
+                            onChanged: (v) {
+                              if (v != null) {
+                                setModalState(() {
+                                  selectedDepartment =
+                                      v;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // PROGRAM MAPPING
+                      InputDecorator(
+                        decoration: InputDecoration(
+                          labelText:
+                          'Program Mapping',
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius:
+                            BorderRadius.circular(
+                              18,
+                            ),
+                          ),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: selectedProgram,
+                            isExpanded: true,
+                            items: programs
+                                .map(
+                                  (e) =>
+                                  DropdownMenuItem(
+                                    value: e,
+                                    child: Text(e),
+                                  ),
+                            )
+                                .toList(),
+                            onChanged: (v) {
+                              if (v != null) {
+                                setModalState(() {
+                                  selectedProgram =
+                                      v;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // CURRICULUM VERSION
+                      TextField(
+                        controller:
+                        curriculumController,
+                        decoration: InputDecoration(
+                          hintText:
+                          'Curriculum Version (2024-2026 Curriculum for MCA)',
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding:
+                          const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 18,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius:
+                            BorderRadius.circular(
+                              18,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 30),
+
+                      Row(
+                        mainAxisAlignment:
+                        MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                            },
+                            child: const smcText(
+                              textToDisplay: 'Cancel',
+                              textSize: 16,
+                              colorOfText:
+                              ColorConst
+                                  .textSecondary,
+                            ),
+                          ),
+
+                          const SizedBox(width: 12),
+
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                            },
+                            style:
+                            ElevatedButton.styleFrom(
+                              backgroundColor:
+                              ColorConst
+                                  .primaryBlue,
+                              padding:
+                              const EdgeInsets.symmetric(
+                                horizontal: 26,
+                                vertical: 14,
+                              ),
+                              shape:
+                              RoundedRectangleBorder(
+                                borderRadius:
+                                BorderRadius
+                                    .circular(18),
+                              ),
+                            ),
+                            child: const smcText(
+                              textToDisplay: 'Save',
+                              textSize: 15,
+                              textBoldness: 5,
+                              colorOfText:
+                              Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
   Widget _buildCoursesPage() {
     return Container(
       width: double.infinity,
@@ -1004,7 +1323,7 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
               ),
 
               ElevatedButton.icon(
-                onPressed: () {},
+                onPressed: openCreateCourseDialog,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: ColorConst.primaryBlue,
                   shape: RoundedRectangleBorder(
