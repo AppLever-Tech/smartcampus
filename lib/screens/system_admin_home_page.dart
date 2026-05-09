@@ -354,7 +354,7 @@ class SystemAdminHomePageState extends State<SystemAdminHomePage> {
                       const SizedBox(height: 8),
                       const smcText(
                         textToDisplay:
-                            'Organisation is stored in smcOrganization. Org ID must be exactly 6 digits (you can change it later).',
+                            'Organisation ID must be exactly 6 digits (you can change it later).',
                         textSize: 13,
                         colorOfText: ColorConst.textSecondary,
                         maxLines: 4,
@@ -502,7 +502,7 @@ class SystemAdminHomePageState extends State<SystemAdminHomePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: smcText(
-            textToDisplay: 'Organisation saved to smcOrganization.',
+            textToDisplay: 'Organisation saved successfully.',
             textSize: 14,
             colorOfText: Colors.white,
             maxLines: 2,
@@ -670,7 +670,7 @@ class SystemAdminHomePageState extends State<SystemAdminHomePage> {
                   const SizedBox(height: 12),
                   const smcText(
                     textToDisplay:
-                        'Pick an organisation from smcOrganization / master list.',
+                        'Pick an organisation from the list.',
                     textSize: 13,
                     colorOfText: ColorConst.textSecondary,
                     maxLines: 3,

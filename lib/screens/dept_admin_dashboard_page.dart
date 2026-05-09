@@ -25,6 +25,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   bool loading = true;
   List<OrgUserRoleMappingItem> facultyAndStudents = <OrgUserRoleMappingItem>[];
   List<DepartmentMasterItem> departments = <DepartmentMasterItem>[];
+  String organizationDisplayName = '';
 
   @override
   void initState() {
@@ -40,12 +41,15 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       final people =
           await roleService.listFacultyAndStudentsForOrg(widget.orgId);
       final depts = await roleService.loadDepartmentsForOrg(widget.orgId);
+      final org = await roleService.authService.getOrganizationById(widget.orgId);
       if (!mounted) {
         return;
       }
       setState(() {
         facultyAndStudents = people;
         departments = depts;
+        organizationDisplayName =
+            (org?.orgName ?? '').trim().isEmpty ? widget.orgId : org!.orgName;
         loading = false;
       });
     } catch (_) {
@@ -109,8 +113,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: smcText(
-            textToDisplay:
-                'No departments found. Add rows to smcDepartmentMaster.',
+            textToDisplay: 'No departments found. Please add departments first.',
             textSize: 14,
             colorOfText: Colors.white,
             maxLines: 3,
@@ -331,7 +334,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                     ),
                     const SizedBox(height: 4),
                     smcText(
-                      textToDisplay: 'Organisation: ${widget.orgId}',
+                      textToDisplay:
+                          'Organisation: ${organizationDisplayName.isEmpty ? widget.orgId : organizationDisplayName}',
                       textSize: 13,
                       colorOfText: ColorConst.textSecondary,
                     ),

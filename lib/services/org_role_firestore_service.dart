@@ -10,9 +10,8 @@ class OrgRoleFirestoreService {
 
   static const String mappingCollection = 'smcOrgUserRoleMapping';
   static const String userMasterCollection = 'smcUserMaster';
-  static const String orgCollection = 'smcOrganization';
-  static const String orgCollectionLegacy = 'smcOrganisationMaster';
-  static const String deptCollection = 'smcDepartmentMaster';
+  static const String orgCollection = 'smcOrganizations';
+  static const String deptCollection = 'smcDepartments';
 
   Future<List<OrgUserRoleMappingItem>> getAllRoleMappingsForUuid(
     String uuid,
@@ -129,13 +128,13 @@ class OrgRoleFirestoreService {
 
   Future<List<OrganizationItem>> loadAllOrganizations() async {
     final map = <String, OrganizationItem>{};
-    for (final col in [orgCollection, orgCollectionLegacy]) {
+    for (final col in [orgCollection]) {
       try {
         final snap = await FirebaseFirestore.instance.collection(col).get();
         for (final doc in snap.docs) {
           final data = Map<String, dynamic>.from(doc.data());
-          data.putIfAbsent('org_unique_id', () => data['org_id'] ?? '');
-          final item = OrganizationItem.fromMap(data);
+          data.putIfAbsent('org_unique_id', () => doc.id);
+          final item = OrganizationItem.fromMap(data, documentId: doc.id);
           if (item.orgId.isNotEmpty) {
             map[item.orgId.toUpperCase()] = item;
           }
@@ -149,38 +148,46 @@ class OrgRoleFirestoreService {
 
   Future<List<DepartmentMasterItem>> loadDepartmentsForOrg(String orgId) async {
     final norm = orgId.trim().toUpperCase();
-    try {
-      final byField = await FirebaseFirestore.instance
-          .collection(deptCollection)
-          .where('org_id', isEqualTo: norm)
-          .limit(200)
-          .get();
-      if (byField.docs.isNotEmpty) {
-        return byField.docs
-            .map((d) => DepartmentMasterItem.fromMap(d.data()))
-            .toList();
+    for (final col in [deptCollection]) {
+      try {
+        final byField = await FirebaseFirestore.instance
+            .collection(col)
+            .where('org_id', isEqualTo: norm)
+            .limit(200)
+            .get();
+        if (byField.docs.isNotEmpty) {
+          return byField.docs
+              .map((d) => DepartmentMasterItem.fromMap(d.data()))
+              .toList();
+        }
+      } catch (_) {
+        // ignore query errors (missing index etc.)
       }
-    } catch (_) {
-      // ignore query errors (missing index etc.)
+      try {
+        final all = await FirebaseFirestore.instance.collection(col).limit(400).get();
+        final rows = all.docs
+            .map((d) => DepartmentMasterItem.fromMap(d.data()))
+            .where((d) => d.orgId.toUpperCase() == norm)
+            .toList();
+        if (rows.isNotEmpty) {
+          return rows;
+        }
+      } catch (_) {
+        continue;
+      }
     }
-    try {
-      final all = await FirebaseFirestore.instance
-          .collection(deptCollection)
-          .limit(400)
-          .get();
-      return all.docs
-          .map((d) => DepartmentMasterItem.fromMap(d.data()))
-          .where((d) => d.orgId.toUpperCase() == norm)
-          .toList();
-    } catch (_) {
-      return <DepartmentMasterItem>[];
-    }
+    return <DepartmentMasterItem>[];
   }
 
   Future<void> createOrUpdateDepartment({
     required String orgId,
     required String deptId,
     required String deptName,
+    String establishedYear = '',
+    String deptType = '',
+    List<String> programsOffered = const [],
+    String affiliation = '',
+    String accreditationStatus = '',
   }) async {
     final String orgUpper = orgId.trim().toUpperCase();
     final String deptUpper = deptId.trim().toUpperCase();
@@ -193,14 +200,37 @@ class OrgRoleFirestoreService {
         .where('dept_id', isEqualTo: deptUpper)
         .limit(1)
         .get();
-    final ref = existing.docs.isNotEmpty ? existing.docs.first.reference : col.doc();
-    await ref.set({
+    final ref = existing.docs.isNotEmpty
+        ? existing.docs.first.reference
+        : col.doc();
+    final payload = {
       'org_id': orgUpper,
       'dept_id': deptUpper,
       'dept_name': deptName.trim(),
+      'established_year': establishedYear.trim(),
+      'dept_type': deptType.trim(),
+      'programs_offered': programsOffered,
+      'affiliation': affiliation.trim(),
+      'accreditation_status': accreditationStatus.trim(),
       'updated_at': FieldValue.serverTimestamp(),
       'created_at': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    };
+    await ref.set(payload, SetOptions(merge: true));
+  }
+
+  Future<int> countAssignedDepartmentsForOrg(String orgId) async {
+    final norm = orgId.trim().toUpperCase();
+    final snap = await FirebaseFirestore.instance.collection(mappingCollection).get();
+    final ids = <String>{};
+    for (final doc in snap.docs) {
+      final m = OrgUserRoleMappingItem.fromMap(doc.data(), documentId: doc.id);
+      if (m.normalizedRoleId == 'DEPT_ADMIN' &&
+          m.orgId.trim().toUpperCase() == norm &&
+          m.deptId.trim().isNotEmpty) {
+        ids.add(m.deptId.trim().toUpperCase());
+      }
+    }
+    return ids.length;
   }
 
   Future<UserMasterItem?> getUserMaster(String uuid) {
@@ -287,6 +317,7 @@ class OrgRoleFirestoreService {
     final merged = mapping
         .copyWith(
           orgId: orgIdUpper,
+          orgUniqueId: organization.orgUniqueId,
           status: 'Approved',
           roleId: 'ORG_ADMIN',
         )
@@ -457,25 +488,22 @@ class OrgRoleFirestoreService {
     final trimmedId = orgIdSix.trim().toUpperCase();
     final collectionRef = FirebaseFirestore.instance.collection(orgCollection);
     final existing = await collectionRef
-        .where('org_unique_id', isEqualTo: trimmedId)
+        .where('org_id', isEqualTo: trimmedId)
         .limit(1)
         .get();
     final DocumentReference<Map<String, dynamic>> docRef = existing.docs.isNotEmpty
         ? existing.docs.first.reference
         : collectionRef.doc();
-    await docRef.set(
-      {
-        'org_unique_id': trimmedId,
-        'org_id': trimmedId,
-        'org_code': trimmedId,
-        'org_name': orgName.trim(),
-        'org_type': orgType.trim(),
-        'org_address': orgAddress.trim(),
-        'org_website': orgWebsite.trim(),
-        'updated_at': FieldValue.serverTimestamp(),
-        'created_at': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    final payload = {
+      'org_id': trimmedId,
+      'org_unique_id': docRef.id,
+      'org_name': orgName.trim(),
+      'org_type': orgType.trim(),
+      'org_address': orgAddress.trim(),
+      'org_website': orgWebsite.trim(),
+      'updated_at': FieldValue.serverTimestamp(),
+      'created_at': FieldValue.serverTimestamp(),
+    };
+    await docRef.set(payload, SetOptions(merge: true));
   }
 }
