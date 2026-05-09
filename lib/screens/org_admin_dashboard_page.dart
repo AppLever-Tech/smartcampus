@@ -7,6 +7,7 @@ import 'package:smartcampus/services/org_role_firestore_service.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 import 'package:smartcampus/screens/basic_details_screen.dart';
 
+
 class OrgAdminDashboardPage extends StatefulWidget {
   final String orgId;
   final String adminName;
@@ -696,6 +697,22 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                     const SizedBox(height: 8),
 
                     _menuTile(
+                      title: 'Courses',
+                      icon: Icons.menu_book_outlined,
+                      isSelected: selectedMenuIndex == 2,
+                      onTap: () {
+                        setState(() {
+                          selectedMenuIndex = 2;
+                        });
+                      },
+                    ),
+
+
+
+                    const SizedBox(height: 8),
+
+
+                    _menuTile(
                       title: 'Basic Details',
                       icon: Icons.info_outline_rounded,
                       isSelected: selectedMenuIndex == 1,
@@ -925,6 +942,7 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                                                           ),
                                                         ),
                                                       ],
+
                                                     );
                                                   }).toList(),
                                                 ),
@@ -941,11 +959,81 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                     ],
                   ],
                 )
-                : BasicDetailsScreen(isAdmin: true,orgId: widget.orgId,),
+
+                    : selectedMenuIndex == 1
+                    ? BasicDetailsScreen(
+                  isAdmin: true,
+                  orgId: widget.orgId,
+                )
+                    : _buildCoursesPage(),
+
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+  Widget _buildCoursesPage() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE3EAF8)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x12000000),
+            blurRadius: 14,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const smcText(
+                textToDisplay: 'Courses',
+                textSize: 22,
+                textBoldness: 5,
+                colorOfText: ColorConst.textPrimary,
+              ),
+
+              ElevatedButton.icon(
+                onPressed: () {},
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ColorConst.primaryBlue,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                icon: const Icon(Icons.add, color: Colors.white),
+                label: const smcText(
+                  textToDisplay: 'Add Course',
+                  textSize: 14,
+                  textBoldness: 4,
+                  colorOfText: Colors.white,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          const Expanded(
+            child: Center(
+              child: smcText(
+                textToDisplay: 'No courses added yet',
+                textSize: 16,
+                colorOfText: ColorConst.textSecondary,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
