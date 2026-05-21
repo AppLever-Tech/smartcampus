@@ -1,4 +1,3 @@
-import 'package:cool_alert/cool_alert.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:smartcampus/const/color_const.dart';
@@ -324,34 +323,89 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                             }
                           },
                         ),
-                      );
-                      return;
-                    }
-                    setModalState(() => saving = true);
-                    try {
-                      await roleService.createOrUpdateDepartment(
-                        orgId: widget.orgId,
-                        deptId: deptId,
-                        deptName: deptName,
-                        establishedYear: establishedYearController.text.trim(),
-                        deptType: selectedDeptType,
-                        programsOffered: selectedPrograms.toList(),
-                        affiliation: affiliationController.text.trim(),
-                        accreditationStatus: selectedAccreditation,
-                        createdBy: FirebaseAuth.instance.currentUser?.uid ?? '',
-                      );
-                      if (!context.mounted) return;
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: smcText(
-                            textToDisplay: 'Department saved successfully.',
-                            textSize: 14,
-                            colorOfText: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: saving
+                            ? null
+                            : () async {
+                                final deptId =
+                                    deptIdController.text.trim().toUpperCase();
+                                final deptName = deptNameController.text.trim();
+                                if (deptId.isEmpty || deptName.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: smcText(
+                                        textToDisplay:
+                                            'Department ID and name are required.',
+                                        textSize: 14,
+                                        colorOfText: Colors.white,
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
+                                setModalState(() => saving = true);
+                                try {
+                                  await roleService.createOrUpdateDepartment(
+                                    orgId: widget.orgId,
+                                    deptId: deptId,
+                                    deptName: deptName,
+                                    establishedYear:
+                                        establishedYearController.text.trim(),
+                                    deptType: selectedDeptType,
+                                    programsOffered: selectedPrograms.toList(),
+                                    affiliation:
+                                        affiliationController.text.trim(),
+                                    accreditationStatus: selectedAccreditation,
+                                    createdBy: FirebaseAuth.instance.currentUser
+                                            ?.uid ??
+                                        '',
+                                  );
+                                  if (!context.mounted) {
+                                    return;
+                                  }
+                                  Navigator.pop(ctx);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: smcText(
+                                        textToDisplay:
+                                            'Department saved successfully.',
+                                        textSize: 14,
+                                        colorOfText: Colors.white,
+                                      ),
+                                    ),
+                                  );
+                                  await refresh();
+                                } catch (_) {
+                                  if (!context.mounted) {
+                                    return;
+                                  }
+                                  setModalState(() => saving = false);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: smcText(
+                                        textToDisplay: 'Failed to save department.',
+                                        textSize: 14,
+                                        colorOfText: Colors.white,
+                                      ),
+                                    ),
+                                  );
+                                }
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: ColorConst.primaryBlue,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
                         child: smcText(
-                          textToDisplay: saving ? 'Saving...' : 'Save Department',
+                          textToDisplay:
+                              saving ? 'Saving...' : 'Save Department',
                           textSize: 15,
                           textBoldness: 4,
                           colorOfText: Colors.white,
