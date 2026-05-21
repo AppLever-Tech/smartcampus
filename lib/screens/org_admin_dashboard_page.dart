@@ -726,15 +726,28 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                         });
                       },
                     ),
+
+                    const SizedBox(height: 8),
+
+                    _menuTile(
+                      title: 'Departments',
+                      icon: Icons.account_tree_outlined,
+                      isSelected: selectedMenuIndex == 2,
+                      onTap: () {
+                        setState(() {
+                          selectedMenuIndex = 2;
+                        });
+                      },
+                    ),
                     const SizedBox(height: 8),
 
                     _menuTile(
                       title: 'Courses',
                       icon: Icons.menu_book_outlined,
-                      isSelected: selectedMenuIndex == 2,
+                      isSelected: selectedMenuIndex == 3,
                       onTap: () {
                         setState(() {
-                          selectedMenuIndex = 2;
+                          selectedMenuIndex = 3;
                         });
                       },
                     ),
@@ -997,7 +1010,14 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                   isAdmin: true,
                   orgId: widget.orgId,
                 )
-                    : _buildCoursesPage(),
+
+                    : selectedMenuIndex == 3
+                    ? _buildCoursesPage()
+
+                    : selectedMenuIndex == 2
+                    ? _buildDepartmentsPage()
+
+                    : const SizedBox()
 
               ),
             ),
@@ -1423,6 +1443,141 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
         ),
       ),
     );
+  }
+
+  Widget _buildDepartmentsPage() {
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+
+      decoration: BoxDecoration(
+        color: Colors.white,
+
+        borderRadius:
+        BorderRadius.circular(14),
+
+        border: Border.all(
+          color: const Color(0xFFE3EAF8),
+        ),
+      ),
+
+      child: Column(
+        crossAxisAlignment:
+        CrossAxisAlignment.start,
+
+        children: [
+
+          Row(
+            mainAxisAlignment:
+            MainAxisAlignment.spaceBetween,
+
+            children: [
+
+              const smcText(
+                textToDisplay: 'Departments',
+                textSize: 22,
+                textBoldness: 5,
+                colorOfText:
+                ColorConst.textPrimary,
+              ),
+
+              ElevatedButton.icon(
+
+                onPressed:
+                openCreateDepartmentSheet,
+
+                icon: const Icon(
+                  Icons.add,
+                  color: Colors.white,
+                ),
+
+                label: const smcText(
+                  textToDisplay:
+                  'Create Department',
+
+                  textSize: 14,
+
+                  colorOfText:
+                  Colors.white,
+                ),
+
+                style:
+                ElevatedButton.styleFrom(
+                  backgroundColor:
+                  ColorConst.primaryBlue,
+                ),
+              ),
+
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          Expanded(
+
+            child: departments.isEmpty
+
+                ? const Center(
+              child: smcText(
+                textToDisplay:
+                "No departments added",
+
+                textSize: 15,
+
+                colorOfText:
+                ColorConst
+                    .textSecondary,
+              ),
+            )
+
+                : ListView.builder(
+
+              itemCount:
+              departments.length,
+
+              itemBuilder:
+                  (context,index){
+
+                final dept =
+                departments[index];
+
+                return Card(
+
+                  child: ListTile(
+
+                    leading:
+                    const CircleAvatar(
+
+                      child: Icon(
+                        Icons.account_tree,
+                      ),
+                    ),
+
+                    title: Text(
+                      dept.deptName,
+                    ),
+
+                    subtitle: Text(
+                      "ID : ${dept.deptId}",
+                    ),
+
+                  ),
+
+                );
+
+              },
+
+            ),
+
+          ),
+
+        ],
+
+      ),
+
+    );
+
   }
 
   Widget _buildCountCard({
