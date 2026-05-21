@@ -157,7 +157,7 @@ class OrgRoleFirestoreService {
             .get();
         if (byField.docs.isNotEmpty) {
           return byField.docs
-              .map((d) => DepartmentMasterItem.fromMap(d.data()))
+              .map((d) => DepartmentMasterItem.fromMap(d.data(), documentId: d.id))
               .toList();
         }
       } catch (_) {
@@ -166,7 +166,7 @@ class OrgRoleFirestoreService {
       try {
         final all = await FirebaseFirestore.instance.collection(col).limit(400).get();
         final rows = all.docs
-            .map((d) => DepartmentMasterItem.fromMap(d.data()))
+            .map((d) => DepartmentMasterItem.fromMap(d.data(), documentId: d.id))
             .where((d) => d.orgId.toUpperCase() == norm)
             .toList();
         if (rows.isNotEmpty) {
@@ -191,21 +191,27 @@ class OrgRoleFirestoreService {
   }) async {
     final String orgUpper = orgId.trim().toUpperCase();
     final String deptUpper = deptId.trim().toUpperCase();
+
     if (orgUpper.isEmpty || deptUpper.isEmpty) {
       throw StateError('Organization ID and Department ID are required.');
     }
+
     final col = FirebaseFirestore.instance.collection(deptCollection);
+
     final existing = await col
         .where('org_id', isEqualTo: orgUpper)
         .where('dept_id', isEqualTo: deptUpper)
         .limit(1)
         .get();
+
     final ref = existing.docs.isNotEmpty
         ? existing.docs.first.reference
         : col.doc();
+
     final payload = {
       'org_id': orgUpper,
       'dept_id': deptUpper,
+      'dept_unique_id': ref.id,
       'dept_name': deptName.trim(),
       'established_year': establishedYear.trim(),
       'dept_type': deptType.trim(),
@@ -213,8 +219,13 @@ class OrgRoleFirestoreService {
       'affiliation': affiliation.trim(),
       'accreditation_status': accreditationStatus.trim(),
       'updated_at': FieldValue.serverTimestamp(),
-      'created_at': FieldValue.serverTimestamp(),
     };
+
+    // ✅ Only set created_at during CREATE
+    if (existing.docs.isEmpty) {
+      payload['created_at'] = FieldValue.serverTimestamp();
+    }
+
     await ref.set(payload, SetOptions(merge: true));
   }
 
