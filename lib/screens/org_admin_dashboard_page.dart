@@ -1,3 +1,4 @@
+import 'package:cool_alert/cool_alert.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:smartcampus/const/color_const.dart';
@@ -6,6 +7,7 @@ import 'package:smartcampus/screens/landing_page.dart';
 import 'package:smartcampus/services/org_role_firestore_service.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 import 'package:smartcampus/screens/basic_details_screen.dart';
+
 
 class OrgAdminDashboardPage extends StatefulWidget {
   final String orgId;
@@ -128,207 +130,199 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
     );
   }
 
-  Future<void> openCreateDepartmentDialog() async {
+  Future<void> openCreateDepartmentSheet() async {
     final deptIdController = TextEditingController();
     final deptNameController = TextEditingController();
     final establishedYearController = TextEditingController();
     final affiliationController = TextEditingController();
 
-    // Dropdown state
     String selectedDeptType = 'Engineering';
     String selectedAccreditation = 'None';
     final Set<String> selectedPrograms = {};
 
     const deptTypes = ['Engineering', 'Management', 'Science', 'Arts', 'Other'];
     const accreditationOptions = ['None', 'NBA', 'NAAC', 'NBA & NAAC'];
-    const programOptions = ['B.E', 'B.Tech', 'M.Tech', 'MCA', 'MBA', 'M.Sc', 'B.Sc', 'BCA', 'Ph.D'];
+    const programOptions = [
+      'B.E', 'B.Tech', 'M.Tech', 'MCA', 'MBA', 'M.Sc', 'B.Sc', 'BCA', 'Ph.D'
+    ];
 
     bool saving = false;
 
-    await showDialog<void>(
+    await showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            return AlertDialog(
-              title: const smcText(
-                textToDisplay: 'Create Department',
-                textSize: 18,
-                textBoldness: 5,
-                colorOfText: ColorConst.textPrimary,
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 24,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
               ),
-              content: SizedBox(
-                width: 400,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Department Code (deptId)
-                      TextField(
-                        controller: deptIdController,
-                        textCapitalization: TextCapitalization.characters,
-                        decoration: InputDecoration(
-                          labelText: 'Department Code *',
-                          hintText: 'e.g. CSE, ECE, MCA',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header row
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const smcText(
+                          textToDisplay: 'Create Department',
+                          textSize: 18,
+                          textBoldness: 5,
+                          colorOfText: ColorConst.textPrimary,
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          icon: const Icon(Icons.close_rounded),
+                          color: ColorConst.textSecondary,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Department ID
+                    TextField(
+                      controller: deptIdController,
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: InputDecoration(
+                        labelText: 'Department ID *',
+                        hintText: 'e.g. CSE, ECE, MCA',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                    ),
+                    const SizedBox(height: 12),
 
-                      // Department Name
-                      TextField(
-                        controller: deptNameController,
-                        decoration: InputDecoration(
-                          labelText: 'Department Name *',
-                          hintText: 'e.g. Computer Science & Engineering',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                    // Department Name
+                    TextField(
+                      controller: deptNameController,
+                      decoration: InputDecoration(
+                        labelText: 'Department Name *',
+                        hintText: 'e.g. Computer Science & Engineering',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                    ),
+                    const SizedBox(height: 12),
 
-                      // Established Year
-                      TextField(
-                        controller: establishedYearController,
-                        keyboardType: TextInputType.number,
-                        maxLength: 4,
-                        decoration: InputDecoration(
-                          labelText: 'Established Year',
-                          hintText: 'e.g. 2005',
-                          counterText: '',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                    // Established Year
+                    TextField(
+                      controller: establishedYearController,
+                      keyboardType: TextInputType.number,
+                      maxLength: 4,
+                      decoration: InputDecoration(
+                        labelText: 'Established Year',
+                        hintText: 'e.g. 2005',
+                        counterText: '',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                    ),
+                    const SizedBox(height: 12),
 
-                      // Department Type dropdown
-                      InputDecorator(
-                        decoration: InputDecoration(
-                          labelText: 'Department Type',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                    // Department Type
+                    InputDecorator(
+                      decoration: InputDecoration(
+                        labelText: 'Department Type',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: selectedDeptType,
-                            isExpanded: true,
-                            isDense: true,
-                            items: deptTypes
-                                .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                                .toList(),
-                            onChanged: (v) {
-                              if (v != null) {
-                                setModalState(() => selectedDeptType = v);
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: selectedDeptType,
+                          isExpanded: true,
+                          isDense: true,
+                          items: deptTypes
+                              .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                              .toList(),
+                          onChanged: (v) {
+                            if (v != null) {
+                              setModalState(() => selectedDeptType = v);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Programs Offered
+                    const smcText(
+                      textToDisplay: 'Program(s) Offered',
+                      textSize: 13,
+                      colorOfText: ColorConst.textSecondary,
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 0,
+                      children: programOptions.map((prog) {
+                        final isSelected = selectedPrograms.contains(prog);
+                        return FilterChip(
+                          label: Text(prog),
+                          selected: isSelected,
+                          selectedColor: ColorConst.primaryBlue.withValues(alpha: 0.15),
+                          checkmarkColor: ColorConst.primaryBlue,
+                          onSelected: (val) {
+                            setModalState(() {
+                              if (val) {
+                                selectedPrograms.add(prog);
+                              } else {
+                                selectedPrograms.remove(prog);
                               }
-                            },
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 12),
 
-                      // Programs Offered — multi-select checkboxes
-                      const smcText(
-                        textToDisplay: 'Program(s) Offered',
-                        textSize: 13,
-                        colorOfText: ColorConst.textSecondary,
+                    // Affiliation / University
+                    TextField(
+                      controller: affiliationController,
+                      decoration: InputDecoration(
+                        labelText: 'Affiliation / University',
+                        hintText: 'e.g. Visvesvaraya Technological University',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 0,
-                        children: programOptions.map((prog) {
-                          final isSelected = selectedPrograms.contains(prog);
-                          return FilterChip(
-                            label: Text(prog),
-                            selected: isSelected,
-                            selectedColor: ColorConst.primaryBlue.withOpacity(0.15),
-                            checkmarkColor: ColorConst.primaryBlue,
-                            onSelected: (val) {
-                              setModalState(() {
-                                if (val) {
-                                  selectedPrograms.add(prog);
-                                } else {
-                                  selectedPrograms.remove(prog);
-                                }
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 12),
+                    ),
+                    const SizedBox(height: 12),
 
-                      // Affiliation / University
-                      TextField(
-                        controller: affiliationController,
-                        decoration: InputDecoration(
-                          labelText: 'Affiliation / University',
-                          hintText: 'e.g. Visvesvaraya Technological University',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                    // Accreditation Status
+                    InputDecorator(
+                      decoration: InputDecoration(
+                        labelText: 'Accreditation Status',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      const SizedBox(height: 12),
-
-                      // Accreditation Status dropdown
-                      InputDecorator(
-                        decoration: InputDecoration(
-                          labelText: 'Accreditation Status',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: selectedAccreditation,
-                            isExpanded: true,
-                            isDense: true,
-                            items: accreditationOptions
-                                .map((a) => DropdownMenuItem(value: a, child: Text(a)))
-                                .toList(),
-                            onChanged: (v) {
-                              if (v != null) {
-                                setModalState(() => selectedAccreditation = v);
-                              }
-                            },
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: saving ? null : () => Navigator.pop(ctx),
-                  child: const smcText(
-                    textToDisplay: 'Cancel',
-                    textSize: 14,
-                    colorOfText: ColorConst.textSecondary,
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: saving
-                      ? null
-                      : () async {
-                    final deptId = deptIdController.text.trim().toUpperCase();
-                    final deptName = deptNameController.text.trim();
-                    if (deptId.isEmpty || deptName.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: smcText(
-                            textToDisplay:
-                            'Department Code and Name are required.',
-                            textSize: 14,
-                            colorOfText: Colors.white,
-                          ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: selectedAccreditation,
+                          isExpanded: true,
+                          isDense: true,
+                          items: accreditationOptions
+                              .map((a) => DropdownMenuItem(value: a, child: Text(a)))
+                              .toList(),
+                          onChanged: (v) {
+                            if (v != null) {
+                              setModalState(() => selectedAccreditation = v);
+                            }
+                          },
                         ),
                       );
                       return;
@@ -356,33 +350,17 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                             colorOfText: Colors.white,
                           ),
                         ),
-                      );
-                      await refresh();
-                    } catch (_) {
-                      if (!context.mounted) return;
-                      setModalState(() => saving = false);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: smcText(
-                            textToDisplay: 'Failed to save department.',
-                            textSize: 14,
-                            colorOfText: Colors.white,
-                          ),
+                        child: smcText(
+                          textToDisplay: saving ? 'Saving...' : 'Save Department',
+                          textSize: 15,
+                          textBoldness: 4,
+                          colorOfText: Colors.white,
                         ),
-                      );
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: ColorConst.primaryBlue,
-                  ),
-                  child: smcText(
-                    textToDisplay: saving ? 'Saving...' : 'Save',
-                    textSize: 14,
-                    textBoldness: 4,
-                    colorOfText: Colors.white,
-                  ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             );
           },
         );
@@ -697,6 +675,22 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                     const SizedBox(height: 8),
 
                     _menuTile(
+                      title: 'Courses',
+                      icon: Icons.menu_book_outlined,
+                      isSelected: selectedMenuIndex == 2,
+                      onTap: () {
+                        setState(() {
+                          selectedMenuIndex = 2;
+                        });
+                      },
+                    ),
+
+
+
+                    const SizedBox(height: 8),
+
+
+                    _menuTile(
                       title: 'Basic Details',
                       icon: Icons.info_outline_rounded,
                       isSelected: selectedMenuIndex == 1,
@@ -792,7 +786,7 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                       children: [
                         const Spacer(),
                         ElevatedButton.icon(
-                          onPressed: openCreateDepartmentDialog,
+                          onPressed: openCreateDepartmentSheet,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: ColorConst.primaryBlue,
                             shape: RoundedRectangleBorder(
@@ -926,6 +920,7 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                                                           ),
                                                         ),
                                                       ],
+
                                                     );
                                                   }).toList(),
                                                 ),
@@ -942,11 +937,400 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                     ],
                   ],
                 )
-                : BasicDetailsScreen(isAdmin: true,orgId: widget.orgId,),
+
+                    : selectedMenuIndex == 1
+                    ? BasicDetailsScreen(
+                  isAdmin: true,
+                  orgId: widget.orgId,
+                )
+                    : _buildCoursesPage(),
+
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+  Future<void> openCreateCourseDialog() async {
+    final courseCodeController = TextEditingController();
+    final courseTitleController = TextEditingController();
+    final curriculumController = TextEditingController();
+
+    String selectedCourseType = 'Core';
+    String selectedDepartment = 'Computer Science';
+    String selectedProgram = 'B.E';
+
+    const courseTypes = [
+      'Core',
+      'Elective',
+      'Open Elective',
+    ];
+
+    const departments = [
+      'Computer Science',
+      'Electronics',
+      'Mechanical',
+      'Civil',
+      'MCA',
+      'MBA',
+    ];
+
+    const programs = [
+      'B.E',
+      'MCA',
+      'MBA',
+    ];
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: Container(
+                width: 600,
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7F7FB),
+                  borderRadius: BorderRadius.circular(28),
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const smcText(
+                        textToDisplay: 'Create Course',
+                        textSize: 22,
+                        textBoldness: 5,
+                        colorOfText:
+                        ColorConst.textPrimary,
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // COURSE CODE
+                      TextField(
+                        controller:
+                        courseCodeController,
+                        decoration: InputDecoration(
+                          hintText:
+                          'Course Code (e.g. CS301)',
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding:
+                          const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 18,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius:
+                            BorderRadius.circular(
+                              18,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // COURSE TITLE
+                      TextField(
+                        controller:
+                        courseTitleController,
+                        decoration: InputDecoration(
+                          hintText: 'Course Title',
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding:
+                          const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 18,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius:
+                            BorderRadius.circular(
+                              18,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // COURSE TYPE
+                      InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Course Type',
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius:
+                            BorderRadius.circular(
+                              18,
+                            ),
+                          ),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: selectedCourseType,
+                            isExpanded: true,
+                            items: courseTypes
+                                .map(
+                                  (e) =>
+                                  DropdownMenuItem(
+                                    value: e,
+                                    child: Text(e),
+                                  ),
+                            )
+                                .toList(),
+                            onChanged: (v) {
+                              if (v != null) {
+                                setModalState(() {
+                                  selectedCourseType =
+                                      v;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // DEPARTMENT OFFERING
+                      InputDecorator(
+                        decoration: InputDecoration(
+                          labelText:
+                          'Department Offering',
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius:
+                            BorderRadius.circular(
+                              18,
+                            ),
+                          ),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value:
+                            selectedDepartment,
+                            isExpanded: true,
+                            items: departments
+                                .map(
+                                  (e) =>
+                                  DropdownMenuItem(
+                                    value: e,
+                                    child: Text(e),
+                                  ),
+                            )
+                                .toList(),
+                            onChanged: (v) {
+                              if (v != null) {
+                                setModalState(() {
+                                  selectedDepartment =
+                                      v;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // PROGRAM MAPPING
+                      InputDecorator(
+                        decoration: InputDecoration(
+                          labelText:
+                          'Program Mapping',
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius:
+                            BorderRadius.circular(
+                              18,
+                            ),
+                          ),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: selectedProgram,
+                            isExpanded: true,
+                            items: programs
+                                .map(
+                                  (e) =>
+                                  DropdownMenuItem(
+                                    value: e,
+                                    child: Text(e),
+                                  ),
+                            )
+                                .toList(),
+                            onChanged: (v) {
+                              if (v != null) {
+                                setModalState(() {
+                                  selectedProgram =
+                                      v;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // CURRICULUM VERSION
+                      TextField(
+                        controller:
+                        curriculumController,
+                        decoration: InputDecoration(
+                          hintText:
+                          'Curriculum Version (2024-2026 Curriculum for MCA)',
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding:
+                          const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 18,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius:
+                            BorderRadius.circular(
+                              18,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 30),
+
+                      Row(
+                        mainAxisAlignment:
+                        MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                            },
+                            child: const smcText(
+                              textToDisplay: 'Cancel',
+                              textSize: 16,
+                              colorOfText:
+                              ColorConst
+                                  .textSecondary,
+                            ),
+                          ),
+
+                          const SizedBox(width: 12),
+
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                            },
+                            style:
+                            ElevatedButton.styleFrom(
+                              backgroundColor:
+                              ColorConst
+                                  .primaryBlue,
+                              padding:
+                              const EdgeInsets.symmetric(
+                                horizontal: 26,
+                                vertical: 14,
+                              ),
+                              shape:
+                              RoundedRectangleBorder(
+                                borderRadius:
+                                BorderRadius
+                                    .circular(18),
+                              ),
+                            ),
+                            child: const smcText(
+                              textToDisplay: 'Save',
+                              textSize: 15,
+                              textBoldness: 5,
+                              colorOfText:
+                              Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+  Widget _buildCoursesPage() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE3EAF8)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x12000000),
+            blurRadius: 14,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const smcText(
+                textToDisplay: 'Courses',
+                textSize: 22,
+                textBoldness: 5,
+                colorOfText: ColorConst.textPrimary,
+              ),
+
+              ElevatedButton.icon(
+                onPressed: openCreateCourseDialog,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ColorConst.primaryBlue,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                icon: const Icon(Icons.add, color: Colors.white),
+                label: const smcText(
+                  textToDisplay: 'Add Course',
+                  textSize: 14,
+                  textBoldness: 4,
+                  colorOfText: Colors.white,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          const Expanded(
+            child: Center(
+              child: smcText(
+                textToDisplay: 'No courses added yet',
+                textSize: 16,
+                colorOfText: ColorConst.textSecondary,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

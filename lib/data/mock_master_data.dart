@@ -263,6 +263,7 @@ class OrganizationItem {
 class DepartmentMasterItem {
   final String orgId;
   final String deptId;
+  final String deptUniqueId;          // Firestore document ID
   final String deptName;
   final String establishedYear;       // e.g. "2005"
   final String deptType;              // "Engineering" / "Management" / "Science"
@@ -274,6 +275,7 @@ class DepartmentMasterItem {
   const DepartmentMasterItem({
     required this.orgId,
     required this.deptId,
+    this.deptUniqueId = '',
     required this.deptName,
     this.establishedYear = '',
     this.deptType = '',
@@ -282,8 +284,7 @@ class DepartmentMasterItem {
     this.accreditationStatus = '',
     this.createdBy = '',
   });
-
-  factory DepartmentMasterItem.fromMap(Map<String, dynamic> data) {
+  factory DepartmentMasterItem.fromMap(Map<String, dynamic> data, {String documentId = ''}) {
     final rawPrograms = data['programs_offered'];
     List<String> programs = [];
     if (rawPrograms is List) {
@@ -295,6 +296,7 @@ class DepartmentMasterItem {
     return DepartmentMasterItem(
       orgId: (data['org_id'] ?? '').toString().trim(),
       deptId: (data['dept_id'] ?? '').toString().trim(),
+      deptUniqueId: (data['dept_unique_id'] ?? documentId).toString().trim(),
       deptName: (data['dept_name'] ?? data['department_name'] ?? '').toString().trim(),
       establishedYear: (data['established_year'] ?? '').toString().trim(),
       deptType: (data['dept_type'] ?? '').toString().trim(),
@@ -309,6 +311,7 @@ class DepartmentMasterItem {
     return <String, dynamic>{
       'org_id': orgId,
       'dept_id': deptId,
+      'dept_unique_id': deptUniqueId,
       'dept_name': deptName,
       'established_year': establishedYear,
       'dept_type': deptType,
