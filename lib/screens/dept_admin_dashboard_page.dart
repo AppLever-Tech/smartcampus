@@ -320,7 +320,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
   // ── Create/Edit Student bottom sheet ──────────────────────────
 
-  Future<void> openCreateStudentSheet({StudentModel? studentToEdit}) async {
+  Future<void> openCreateStudentSheet({StudentModel? studentToEdit, bool isViewOnly = false}) async {
     final formKey = GlobalKey<FormState>();
 
     // Basic Profile
@@ -449,7 +449,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         children: [
                           Expanded(
                             child: smcText(
-                              textToDisplay: studentToEdit == null ? 'Create Student' : 'Edit Student',
+                              textToDisplay: isViewOnly ? 'Student Details' : (studentToEdit == null ? 'Create Student' : 'Edit Student'),
                               textSize: 18,
                               textBoldness: 5,
                               colorOfText: ColorConst.textPrimary,
@@ -466,6 +466,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       _sectionHeader('Basic Profile Information', Icons.person_outline_rounded),
                       TextFormField(
                         controller: studentIdCtrl,
+                        readOnly: isViewOnly,
                         decoration: _fieldDecor('Student ID (USN) *', hint: 'e.g. 1AB20CS001'),
                         textCapitalization: TextCapitalization.characters,
                         validator: (v) => (v == null || v.trim().isEmpty) ? 'Student ID is required' : null,
@@ -473,6 +474,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: fullNameCtrl,
+                        readOnly: isViewOnly,
                         decoration: _fieldDecor('Full Name *'),
                         textCapitalization: TextCapitalization.words,
                         validator: (v) => (v == null || v.trim().isEmpty) ? 'Full name is required' : null,
@@ -482,7 +484,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         value: selectedGender,
                         decoration: _fieldDecor('Gender *'),
                         items: ['Male', 'Female', 'Other'].map((g) => DropdownMenuItem(value: g, child: Text(g, style: const TextStyle(fontSize: 13)))).toList(),
-                        onChanged: (v) => setModalState(() => selectedGender = v!),
+                        onChanged: isViewOnly ? null : (v) => setModalState(() => selectedGender = v!),
                       ),
                       const SizedBox(height: 8),
                       TextFormField(
@@ -491,7 +493,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         decoration: _fieldDecor('Date of Birth *').copyWith(
                           suffixIcon: const Icon(Icons.calendar_today_outlined, size: 16),
                         ),
-                        onTap: () async {
+                        onTap: isViewOnly ? null : () async {
                           final picked = await showDatePicker(
                             context: ctx,
                             initialDate: DateTime(2005),
@@ -510,7 +512,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       const SizedBox(height: 8),
 
                       GestureDetector(
-                        onTap: () async {
+                        onTap: isViewOnly ? null : () async {
                           final picker = ImagePicker();
                           final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
                           if (picked != null) {
@@ -528,13 +530,14 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                           ),
                           child: photographBytes != null
                               ? Image.memory(photographBytes!, height: 80, fit: BoxFit.cover)
-                              : Row(children: const [Icon(Icons.photo_camera_outlined, size: 16), SizedBox(width: 8), Text('Upload Photograph', style: TextStyle(fontSize: 12))]),
+                              : Row(children: [const Icon(Icons.photo_camera_outlined, size: 16), const SizedBox(width: 8), Text(isViewOnly ? 'Photograph' : 'Upload Photograph', style: const TextStyle(fontSize: 12))]),
                         ),
                       ),
 
                       _sectionHeader('Identity & Category', Icons.verified_user_outlined),
                       TextFormField(
                         controller: aadhaarCtrl,
+                        readOnly: isViewOnly,
                         decoration: _fieldDecor('Aadhaar / Govt ID'),
                         keyboardType: TextInputType.number,
                       ),
@@ -543,14 +546,14 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         value: selectedCategory,
                         decoration: _fieldDecor('Category *'),
                         items: ['Gen', 'OBC', 'SC', 'ST'].map((c) => DropdownMenuItem(value: c, child: Text(c, style: const TextStyle(fontSize: 13)))).toList(),
-                        onChanged: (v) => setModalState(() => selectedCategory = v!),
+                        onChanged: isViewOnly ? null : (v) => setModalState(() => selectedCategory = v!),
                       ),
                       const SizedBox(height: 6),
                       DropdownButtonFormField<String>(
                         value: selectedNationality,
                         decoration: _fieldDecor('Nationality *'),
                         items: ['Indian', 'NRI', 'Foreigner'].map((n) => DropdownMenuItem(value: n, child: Text(n, style: const TextStyle(fontSize: 13)))).toList(),
-                        onChanged: (v) => setModalState(() => selectedNationality = v!),
+                        onChanged: isViewOnly ? null : (v) => setModalState(() => selectedNationality = v!),
                       ),
                       const SizedBox(height: 6),
                       const Padding(
@@ -569,7 +572,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                 groupValue: selectedBloodGroup,
                                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                 activeColor: ColorConst.primaryBlue,
-                                onChanged: (v) => setModalState(() => selectedBloodGroup = v!),
+                                onChanged: isViewOnly ? null : (v) => setModalState(() => selectedBloodGroup = v!),
                               ),
                               smcText(textToDisplay: bg, textSize: 12, colorOfText: ColorConst.textPrimary),
                               const SizedBox(width: 4),
@@ -581,12 +584,14 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       _sectionHeader('Contact Details', Icons.contact_phone_outlined),
                       TextFormField(
                         controller: mobileCtrl,
+                        readOnly: isViewOnly,
                         decoration: _fieldDecor('Mobile Number *'),
                         keyboardType: TextInputType.phone,
                       ),
                       const SizedBox(height: 6),
                       TextFormField(
                         controller: emailCtrl,
+                        readOnly: isViewOnly,
                         decoration: _fieldDecor('Email Address *'),
                         keyboardType: TextInputType.emailAddress,
                       ),
@@ -594,24 +599,27 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       _sectionHeader('Address', Icons.home_outlined),
                       TextFormField(
                         controller: permanentAddrCtrl,
+                        readOnly: isViewOnly,
                         decoration: _fieldDecor('Permanent Address'),
                         maxLines: 1,
                       ),
                       const SizedBox(height: 6),
                       TextFormField(
                         controller: correspondenceAddrCtrl,
+                        readOnly: isViewOnly,
                         decoration: _fieldDecor('Correspondence Address'),
                         maxLines: 1,
                       ),
 
                       _sectionHeader('Emergency Contact (Parent/Guardian)', Icons.emergency_outlined),
-                      TextFormField(controller: emergNameCtrl, decoration: _fieldDecor('Contact Person Name')),
+                      TextFormField(controller: emergNameCtrl, readOnly: isViewOnly, decoration: _fieldDecor('Contact Person Name')),
                       const SizedBox(height: 6),
-                      TextFormField(controller: emergRelationCtrl, decoration: _fieldDecor('Relation')),
+                      TextFormField(controller: emergRelationCtrl, readOnly: isViewOnly, decoration: _fieldDecor('Relation')),
                       const SizedBox(height: 6),
-                      TextFormField(controller: emergMobileCtrl, decoration: _fieldDecor('Emergency Mobile'), keyboardType: TextInputType.phone),
+                      TextFormField(controller: emergMobileCtrl, readOnly: isViewOnly, decoration: _fieldDecor('Emergency Mobile'), keyboardType: TextInputType.phone),
 
                       const SizedBox(height: 12),
+                      if (!isViewOnly)
                       SizedBox(
                         width: double.infinity,
                         height: 40,
@@ -660,11 +668,32 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                               }
                               if (!ctx.mounted) return;
                               Navigator.pop(ctx);
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Student ${studentToEdit == null ? 'added' : 'updated'} successfully.')));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  backgroundColor: Colors.green.shade600,
+                                  content: smcText(
+                                    textToDisplay: 'Student ${studentToEdit == null ? 'added' : 'updated'} successfully.',
+                                    textSize: 14,
+                                    colorOfText: Colors.white,
+                                  ),
+                                ),
+                              );
                               await refresh();
                             } catch (e) {
+                              if (!ctx.mounted) return;
                               setModalState(() => saving = false);
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                              final errorMsg = e.toString().replaceFirst('Exception: ', '');
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  backgroundColor: Colors.red.shade600,
+                                  content: smcText(
+                                    textToDisplay: 'Error: $errorMsg',
+                                    textSize: 13,
+                                    colorOfText: Colors.white,
+                                    maxLines: 3,
+                                  ),
+                                ),
+                              );
                             }
                           },
                           style: ElevatedButton.styleFrom(backgroundColor: ColorConst.primaryBlue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
@@ -684,7 +713,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
   // ── Create/Edit Faculty bottom sheet ──────────────────────────
 
-  Future<void> openCreateFacultySheet({FacultyModel? facultyToEdit}) async {
+  Future<void> openCreateFacultySheet({FacultyModel? facultyToEdit, bool isViewOnly = false}) async {
     final formKey = GlobalKey<FormState>();
 
     // Controllers — Basic Profile
@@ -816,7 +845,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         children: [
                           Expanded(
                             child: smcText(
-                              textToDisplay: facultyToEdit == null ? 'Create Faculty' : 'Edit Faculty',
+                              textToDisplay: isViewOnly ? 'Faculty Details' : (facultyToEdit == null ? 'Create Faculty' : 'Edit Faculty'),
                               textSize: 18,
                               textBoldness: 5,
                               colorOfText: ColorConst.textPrimary,
@@ -841,6 +870,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       // Faculty / Employee ID
                       TextFormField(
                         controller: facultyIdCtrl,
+                        readOnly: isViewOnly,
                         decoration: _fieldDecor(
                           'Faculty / Employee ID *',
                           hint: 'e.g. FAC-2024-001',
@@ -856,6 +886,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       // Full Name
                       TextFormField(
                         controller: fullNameCtrl,
+                        readOnly: isViewOnly,
                         decoration: _fieldDecor('Full Name *'),
                         textCapitalization: TextCapitalization.words,
                         validator: (v) =>
@@ -883,7 +914,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                           ),
                         )
                             .toList(),
-                        onChanged: (v) {
+                        onChanged: isViewOnly ? null : (v) {
                           if (v != null) {
                             setModalState(() => selectedGender = v);
                           }
@@ -902,7 +933,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                             color: ColorConst.textSecondary,
                           ),
                         ),
-                        onTap: () async {
+                        onTap: isViewOnly ? null : () async {
                           final picked = await showDatePicker(
                             context: ctx,
                             initialDate: DateTime(1990),
@@ -926,7 +957,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
                       // Photograph upload
                       GestureDetector(
-                        onTap: () async {
+                        onTap: isViewOnly ? null : () async {
                           final picker = ImagePicker();
                           final picked = await picker.pickImage(
                             source: ImageSource.gallery,
@@ -961,6 +992,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                   fit: BoxFit.cover,
                                 ),
                               ),
+                              if (!isViewOnly)
                               GestureDetector(
                                 onTap: () => setModalState(() => photographBytes = null),
                                 child: Container(
@@ -976,12 +1008,12 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                             ],
                           )
                               : Row(
-                            children: const [
-                              Icon(Icons.photo_camera_outlined, size: 16, color: ColorConst.primaryBlue),
-                              SizedBox(width: 8),
+                            children: [
+                              const Icon(Icons.photo_camera_outlined, size: 16, color: ColorConst.primaryBlue),
+                              const SizedBox(width: 8),
                               Expanded(
                                 child: smcText(
-                                  textToDisplay: 'Tap to upload photograph (optional)',
+                                  textToDisplay: isViewOnly ? 'Photograph' : 'Tap to upload photograph (optional)',
                                   textSize: 12,
                                   colorOfText: ColorConst.textSecondary,
                                   maxLines: 2,
@@ -1002,6 +1034,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
                       TextFormField(
                         controller: aadhaarCtrl,
+                        readOnly: isViewOnly,
                         decoration: _fieldDecor('Aadhaar Number'),
                         keyboardType: TextInputType.number,
                         inputFormatters: [
@@ -1020,6 +1053,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
                       TextFormField(
                         controller: panCtrl,
+                        readOnly: isViewOnly,
                         decoration: _fieldDecor('PAN Number'),
                         textCapitalization: TextCapitalization.characters,
                         inputFormatters: [
@@ -1045,6 +1079,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
                       TextFormField(
                         controller: mobileCtrl,
+                        readOnly: isViewOnly,
                         decoration: _fieldDecor('Mobile Number *'),
                         keyboardType: TextInputType.phone,
                         inputFormatters: [
@@ -1065,6 +1100,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
                       TextFormField(
                         controller: emailCtrl,
+                        readOnly: isViewOnly,
                         decoration: _fieldDecor('Email Address *'),
                         keyboardType: TextInputType.emailAddress,
                         validator: (v) {
@@ -1090,6 +1126,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
                       TextFormField(
                         controller: permanentAddrCtrl,
+                        readOnly: isViewOnly,
                         decoration: _fieldDecor('Permanent Address'),
                         maxLines: 1,
                         textCapitalization: TextCapitalization.sentences,
@@ -1098,6 +1135,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
                       TextFormField(
                         controller: currentAddrCtrl,
+                        readOnly: isViewOnly,
                         decoration: _fieldDecor('Current Address'),
                         maxLines: 1,
                         textCapitalization: TextCapitalization.sentences,
@@ -1113,6 +1151,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
                       TextFormField(
                         controller: emergNameCtrl,
+                        readOnly: isViewOnly,
                         decoration: _fieldDecor('Contact Person Name'),
                         textCapitalization: TextCapitalization.words,
                       ),
@@ -1120,6 +1159,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
                       TextFormField(
                         controller: emergRelationCtrl,
+                        readOnly: isViewOnly,
                         decoration: _fieldDecor(
                           'Relation',
                           hint: 'e.g. Spouse, Parent, Sibling',
@@ -1130,6 +1170,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
                       TextFormField(
                         controller: emergMobileCtrl,
+                        readOnly: isViewOnly,
                         decoration: _fieldDecor('Emergency Mobile'),
                         keyboardType: TextInputType.phone,
                         inputFormatters: [
@@ -1147,6 +1188,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
                       // ── Save button ────────────────────────
                       const SizedBox(height: 16),
+                      if (!isViewOnly)
                       SizedBox(
                         width: double.infinity,
                         height: 44,
@@ -1223,11 +1265,12 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                             } catch (e) {
                               if (!ctx.mounted) return;
                               setModalState(() => saving = false);
+                              final errorMsg = e.toString().replaceFirst('Exception: ', '');
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   backgroundColor: Colors.red.shade600,
                                   content: smcText(
-                                    textToDisplay: 'Error: $e',
+                                    textToDisplay: 'Error: $errorMsg',
                                     textSize: 13,
                                     colorOfText: Colors.white,
                                     maxLines: 3,
@@ -1754,7 +1797,20 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                     rows: pageRows.map((s) {
                                       return DataRow(
                                         cells: [
-                                          DataCell(Center(child: smcText(textToDisplay: s.studentId, textSize: 12, textBoldness: 5, colorOfText: ColorConst.primaryBlue))),
+                                          DataCell(
+                                            Center(
+                                              child: InkWell(
+                                                onTap: () => openCreateStudentSheet(studentToEdit: s, isViewOnly: true),
+                                                child: smcText(
+                                                  textToDisplay: s.studentId,
+                                                  textSize: 12,
+                                                  textBoldness: 4,
+                                                  colorOfText: Colors.blue,
+                                                  decoration: TextDecoration.underline,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
                                           DataCell(Center(child: smcText(textToDisplay: s.fullName, textSize: 12, colorOfText: const Color(0xFF2E3954), maxLines: 1))),
                                           DataCell(
                                             Center(
@@ -2124,7 +2180,20 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                     rows: pageRows.map((f) {
                                       return DataRow(
                                         cells: [
-                                          DataCell(Center(child: smcText(textToDisplay: f.facultyId, textSize: 12, textBoldness: 5, colorOfText: ColorConst.primaryBlue))),
+                                          DataCell(
+                                            Center(
+                                              child: InkWell(
+                                                onTap: () => openCreateFacultySheet(facultyToEdit: f, isViewOnly: true),
+                                                child: smcText(
+                                                  textToDisplay: f.facultyId,
+                                                  textSize: 12,
+                                                  textBoldness: 4,
+                                                  colorOfText: Colors.blue,
+                                                  decoration: TextDecoration.underline,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
                                           DataCell(Center(child: smcText(textToDisplay: f.fullName, textSize: 12, colorOfText: const Color(0xFF2E3954), maxLines: 1))),
                                           DataCell(
                                             Center(

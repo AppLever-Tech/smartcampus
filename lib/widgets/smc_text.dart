@@ -9,6 +9,7 @@ class smcText extends StatelessWidget {
   final TextAlign textAlign;
   final int maxLines;
   final TextOverflow overflow;
+  final TextDecoration? decoration;
 
   const smcText({
     super.key,
@@ -19,6 +20,7 @@ class smcText extends StatelessWidget {
     this.textAlign = TextAlign.left,
     this.maxLines = 2,
     this.overflow = TextOverflow.ellipsis,
+    this.decoration,
   });
 
   FontWeight get fontWeight {
@@ -47,6 +49,7 @@ class smcText extends StatelessWidget {
         fontSize: textSize,
         fontWeight: fontWeight,
         color: colorOfText,
+        decoration: decoration,
       ),
     );
   }
