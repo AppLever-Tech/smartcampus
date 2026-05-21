@@ -188,6 +188,7 @@ class OrgRoleFirestoreService {
     List<String> programsOffered = const [],
     String affiliation = '',
     String accreditationStatus = '',
+    String createdBy = '',
   }) async {
     final String orgUpper = orgId.trim().toUpperCase();
     final String deptUpper = deptId.trim().toUpperCase();
@@ -218,6 +219,7 @@ class OrgRoleFirestoreService {
       'programs_offered': programsOffered,
       'affiliation': affiliation.trim(),
       'accreditation_status': accreditationStatus.trim(),
+      'created_by': createdBy,
       'updated_at': FieldValue.serverTimestamp(),
     };
 

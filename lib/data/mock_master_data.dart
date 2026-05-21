@@ -270,6 +270,7 @@ class DepartmentMasterItem {
   final List<String> programsOffered; // ["B.E", "M.Tech", "MCA"]
   final String affiliation;           // University / affiliation name
   final String accreditationStatus;   // "NBA" / "NAAC" / "NBA & NAAC" / "None"
+  final String createdBy;
 
   const DepartmentMasterItem({
     required this.orgId,
@@ -281,6 +282,7 @@ class DepartmentMasterItem {
     this.programsOffered = const [],
     this.affiliation = '',
     this.accreditationStatus = '',
+    this.createdBy = '',
   });
   factory DepartmentMasterItem.fromMap(Map<String, dynamic> data, {String documentId = ''}) {
     final rawPrograms = data['programs_offered'];
@@ -301,6 +303,7 @@ class DepartmentMasterItem {
       programsOffered: programs,
       affiliation: (data['affiliation'] ?? '').toString().trim(),
       accreditationStatus: (data['accreditation_status'] ?? '').toString().trim(),
+      createdBy: (data['created_by'] ?? '').toString().trim(),
     );
   }
 
@@ -315,6 +318,7 @@ class DepartmentMasterItem {
       'programs_offered': programsOffered,
       'affiliation': affiliation,
       'accreditation_status': accreditationStatus,
+      'created_by': createdBy,
     };
   }
 }

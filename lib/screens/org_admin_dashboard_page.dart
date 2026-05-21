@@ -324,78 +324,30 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                             }
                           },
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Save button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: saving
-                            ? null
-                            : () async {
-                          final deptId =
-                          deptIdController.text.trim().toUpperCase();
-                          final deptName = deptNameController.text.trim();
-                          if (deptId.isEmpty || deptName.isEmpty) {
-                            CoolAlert.show(
-                              context: context,
-                              type: CoolAlertType.warning,
-                              title: 'Missing Fields',
-                              text:
-                              'Department ID and Name are required.',
-                              confirmBtnText: 'OK',
-                              confirmBtnColor: ColorConst.primaryBlue,
-                            );
-                            return;
-                          }
-                          setModalState(() => saving = true);
-                          try {
-                            await roleService.createOrUpdateDepartment(
-                              orgId: widget.orgId,
-                              deptId: deptId,
-                              deptName: deptName,
-                              establishedYear:
-                              establishedYearController.text.trim(),
-                              deptType: selectedDeptType,
-                              programsOffered: selectedPrograms.toList(),
-                              affiliation: affiliationController.text.trim(),
-                              accreditationStatus: selectedAccreditation,
-                            );
-                            if (!context.mounted) return;
-                            Navigator.pop(ctx);
-                            CoolAlert.show(
-                              context: context,
-                              type: CoolAlertType.success,
-                              title: 'Department Created',
-                              text:
-                              '$deptName ($deptId) has been saved successfully.',
-                              confirmBtnText: 'OK',
-                              confirmBtnColor: ColorConst.primaryBlue,
-                              onConfirmBtnTap: () async {
-                                await refresh();
-                              },
-                            );
-                          } catch (_) {
-                            if (!context.mounted) return;
-                            setModalState(() => saving = false);
-                            CoolAlert.show(
-                              context: context,
-                              type: CoolAlertType.error,
-                              title: 'Save Failed',
-                              text:
-                              'Could not save the department. Please try again.',
-                              confirmBtnText: 'OK',
-                              confirmBtnColor: ColorConst.primaryBlue,
-                            );
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: ColorConst.primaryBlue,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
+                      );
+                      return;
+                    }
+                    setModalState(() => saving = true);
+                    try {
+                      await roleService.createOrUpdateDepartment(
+                        orgId: widget.orgId,
+                        deptId: deptId,
+                        deptName: deptName,
+                        establishedYear: establishedYearController.text.trim(),
+                        deptType: selectedDeptType,
+                        programsOffered: selectedPrograms.toList(),
+                        affiliation: affiliationController.text.trim(),
+                        accreditationStatus: selectedAccreditation,
+                        createdBy: FirebaseAuth.instance.currentUser?.uid ?? '',
+                      );
+                      if (!context.mounted) return;
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: smcText(
+                            textToDisplay: 'Department saved successfully.',
+                            textSize: 14,
+                            colorOfText: Colors.white,
                           ),
                         ),
                         child: smcText(
