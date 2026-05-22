@@ -38,6 +38,7 @@ class CourseModel {
     );
   }
 
+
   Map<String, dynamic> toMap() {
     return {
       'batch': batch,

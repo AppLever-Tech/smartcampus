@@ -269,6 +269,7 @@ class _AddCoursePageState extends State<AddCoursePage> {
                       Navigator.pop(context);
                     },
 
+
                     child: const Text(
                       'Save Course',
                     ),
