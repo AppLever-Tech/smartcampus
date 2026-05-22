@@ -6,6 +6,7 @@ import 'package:smartcampus/screens/landing_page.dart';
 import 'package:smartcampus/services/org_role_firestore_service.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 import 'package:smartcampus/screens/basic_details_screen.dart';
+import 'package:smartcampus/screens/course_details_page.dart';
 
 
 class OrgAdminDashboardPage extends StatefulWidget {
@@ -30,6 +31,7 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
   List<DepartmentMasterItem> departments = <DepartmentMasterItem>[];
   int totalAssignedDepartments = 0;
   String organizationDisplayName = '';
+  List<Map<String, dynamic>> courses = [];
 
   @override
   void initState() {
@@ -1286,6 +1288,23 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
 
                           ElevatedButton(
                             onPressed: () {
+                              if (courseCodeController.text.trim().isEmpty ||
+                                  courseTitleController.text.trim().isEmpty) {
+                                return;
+                              }
+
+                              setState(() {
+                                courses.add({
+                                  'courseCode': courseCodeController.text.trim(),
+                                  'courseTitle': courseTitleController.text.trim(),
+                                  'courseType': selectedCourseType,
+                                  'departmentOffering': selectedDepartment,
+                                  'programMapping': selectedProgram,
+                                  'curriculumVersion':
+                                  curriculumController.text.trim(),
+                                });
+                              });
+
                               Navigator.pop(ctx);
                             },
                             style:
@@ -1375,12 +1394,239 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
 
           const SizedBox(height: 20),
 
-          const Expanded(
-            child: Center(
+          Expanded(
+            child: courses.isEmpty
+                ? const Center(
               child: smcText(
                 textToDisplay: 'No courses added yet',
                 textSize: 16,
                 colorOfText: ColorConst.textSecondary,
+              ),
+            )
+                : Container(
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: const Color(0xFFE3EAF8),
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  // HEADER
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFF4F7FF),
+                      border: Border(
+                        bottom: BorderSide(
+                          color: Color(0xFFE3EAF8),
+                        ),
+                      ),
+                    ),
+                    child: Row(
+                      children: const [
+                        Expanded(
+                          flex: 2,
+                          child: smcText(
+                            textToDisplay: 'Course ID',
+                            textSize: 13,
+                            textBoldness: 5,
+                            colorOfText:
+                            ColorConst.textPrimary,
+                          ),
+                        ),
+                        Expanded(
+                          flex: 3,
+                          child: smcText(
+                            textToDisplay: 'Name',
+                            textSize: 13,
+                            textBoldness: 5,
+                            colorOfText:
+                            ColorConst.textPrimary,
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: smcText(
+                            textToDisplay: 'Course Type',
+                            textSize: 13,
+                            textBoldness: 5,
+                            colorOfText:
+                            ColorConst.textPrimary,
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: smcText(
+                            textToDisplay: 'Details',
+                            textSize: 13,
+                            textBoldness: 5,
+                            colorOfText:
+                            ColorConst.textPrimary,
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: smcText(
+                            textToDisplay: 'Syllabus',
+                            textSize: 13,
+                            textBoldness: 5,
+                            colorOfText:
+                            ColorConst.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // COURSE LIST
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: courses.length,
+                      itemBuilder: (context, index) {
+                        final course = courses[index];
+
+                        return Container(
+                          padding:
+                          const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                color: Color(0xFFE3EAF8),
+                              ),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                flex: 2,
+                                child: smcText(
+                                  textToDisplay:
+                                  course['courseCode'],
+                                  textSize: 13,
+                                  textBoldness: 5,
+                                  colorOfText:
+                                  ColorConst.primaryBlue,
+                                ),
+                              ),
+
+                              Expanded(
+                                flex: 3,
+                                child: smcText(
+                                  textToDisplay:
+                                  course['courseTitle'],
+                                  textSize: 13,
+                                  colorOfText:
+                                  ColorConst.textPrimary,
+                                ),
+                              ),
+
+                              Expanded(
+                                flex: 2,
+                                child: Container(
+                                  padding:
+                                  const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color:
+                                    const Color(0xFFEAF0FF),
+                                    borderRadius:
+                                    BorderRadius.circular(
+                                      20,
+                                    ),
+                                  ),
+                                  child: smcText(
+                                    textToDisplay:
+                                    course['courseType'],
+                                    textSize: 12,
+                                    textBoldness: 5,
+                                    colorOfText:
+                                    ColorConst.primaryBlue,
+                                  ),
+                                ),
+                              ),
+
+                              // DETAILS BUTTON
+                              Expanded(
+                                flex: 2,
+                                child: ElevatedButton(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            CourseDetailsPage(
+                                              course: course,
+                                            ),
+                                      ),
+                                    );
+                                  },
+                                  style:
+                                  ElevatedButton.styleFrom(
+                                    backgroundColor:
+                                    ColorConst.primaryBlue,
+                                    shape:
+                                    RoundedRectangleBorder(
+                                      borderRadius:
+                                      BorderRadius.circular(
+                                        10,
+                                      ),
+                                    ),
+                                  ),
+                                  child: const smcText(
+                                    textToDisplay: 'View',
+                                    textSize: 12,
+                                    textBoldness: 5,
+                                    colorOfText: Colors.white,
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(width: 10),
+
+                              // SYLLABUS BUTTON
+                              Expanded(
+                                flex: 2,
+                                child: OutlinedButton(
+                                  onPressed: () {},
+                                  style:
+                                  OutlinedButton.styleFrom(
+                                    side: const BorderSide(
+                                      color:
+                                      ColorConst.primaryBlue,
+                                    ),
+                                    shape:
+                                    RoundedRectangleBorder(
+                                      borderRadius:
+                                      BorderRadius.circular(
+                                        10,
+                                      ),
+                                    ),
+                                  ),
+                                  child: const smcText(
+                                    textToDisplay: 'Open',
+                                    textSize: 12,
+                                    textBoldness: 5,
+                                    colorOfText:
+                                    ColorConst.primaryBlue,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
