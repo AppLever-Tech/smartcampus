@@ -16,7 +16,10 @@ import 'package:smartcampus/services/faculty_firestore_service.dart';
 import 'package:smartcampus/services/student_firestore_service.dart';
 import 'package:smartcampus/services/org_role_firestore_service.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
-
+import '../models/course_model.dart';
+import '../services/course_firestore_service.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:smartcampus/courses/add_course_page.dart';
 class DeptAdminDashboardPage extends StatefulWidget {
   final String orgId;
   final String deptId;
@@ -27,6 +30,7 @@ class DeptAdminDashboardPage extends StatefulWidget {
     required this.orgId,
     this.deptId = '',
     required this.adminName,
+
   });
 
   @override
@@ -37,6 +41,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   final OrgRoleFirestoreService roleService = OrgRoleFirestoreService();
   final FacultyFirestoreService facultyService = FacultyFirestoreService();
   final StudentFirestoreService studentService = StudentFirestoreService();
+  final CourseFirestoreService
+  courseService =
+  CourseFirestoreService();
 
   bool loading = true;
   int selectedMenuIndex = 0; // 0: Dashboard, 1: Students, 2: Faculties
@@ -46,7 +53,16 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   List<StudentModel> studentList = [];
   String organizationDisplayName = '';
   bool canEditOrDelete = false;
+  String? selectedBatch;
+  String? selectedSemester;
+  String? selectedCourse;
 
+  Stream<QuerySnapshot> getCoursesStream() {
+
+    return FirebaseFirestore.instance
+        .collection('courses')
+        .snapshots();
+  }
   // Search and Pagination for Students
   final TextEditingController studentSearchController = TextEditingController();
   int studentRowsPerPage = 10;
@@ -1365,6 +1381,14 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                     ),
                     const SizedBox(height: 8),
                     _menuTile(
+                      title: 'Courses',
+                      icon: Icons.people_alt_outlined,
+                      isSelected: selectedMenuIndex == 3,
+                      onTap: () => setState(() => selectedMenuIndex = 3),
+                    ),
+
+                    const SizedBox(height: 8),
+                    _menuTile(
                       title: 'Support',
                       icon: Icons.support_agent_rounded,
                       isSelected: false,
@@ -1440,6 +1464,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         return _buildStudentsView();
       case 2:
         return _buildFacultiesView();
+      case 3:
+        return _buildCoursesView();
+
       default:
         return _buildDashboardView();
     }
@@ -1600,6 +1627,569 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         const SizedBox(height: 16),
         Expanded(child: buildFacultyTable()),
       ],
+    );
+  }
+
+  Widget _buildCoursesView() {
+
+    return StreamBuilder<List<CourseModel>>(
+
+      stream: courseService.getCourses(),
+
+      builder: (context, snapshot) {
+
+        if (!snapshot.hasData) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        }
+
+        final courses = snapshot.data!;
+
+        List<String> availableCourses = [];
+
+        if (selectedBatch != null &&
+            selectedSemester != null) {
+
+          availableCourses = courses
+              .where((course) =>
+          course.batch == selectedBatch &&
+              course.semester ==
+                  selectedSemester)
+              .map((e) => e.courseTitle)
+              .toSet()
+              .toList();
+        }
+
+        CourseModel? selectedCourseData;
+
+        if (selectedCourse != null) {
+
+          try {
+
+            selectedCourseData =
+                courses.firstWhere(
+                      (course) =>
+                  course.courseTitle ==
+                      selectedCourse &&
+                      course.batch ==
+                          selectedBatch &&
+                      course.semester ==
+                          selectedSemester,
+                );
+
+          } catch (e) {}
+        }
+
+        return SingleChildScrollView(
+
+          padding:
+          const EdgeInsets.all(24),
+
+          child: Column(
+
+            crossAxisAlignment:
+            CrossAxisAlignment.start,
+
+            children: [
+
+              Row(
+
+                mainAxisAlignment:
+                MainAxisAlignment.spaceBetween,
+
+                children: [
+
+                  Column(
+
+                    crossAxisAlignment:
+                    CrossAxisAlignment.start,
+
+                    children: [
+
+                      const Text(
+                        'Course List',
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight:
+                          FontWeight.bold,
+                        ),
+                      ),
+
+                      const SizedBox(height: 8),
+
+                      Text(
+                        'View and manage all courses in your department.',
+                        style: TextStyle(
+                          color:
+                          Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  ElevatedButton.icon(
+
+                    onPressed: () async {
+
+                      await Navigator.push(
+                        context,
+
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              AddCoursePage(),
+                        ),
+                      );
+                    },
+
+                    icon:
+                    const Icon(Icons.add),
+
+                    label:
+                    const Text('Add Course'),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 24),
+
+              // =========================
+              // TABLE 1
+              // =========================
+
+              Container(
+
+                padding:
+                const EdgeInsets.all(20),
+
+                decoration: BoxDecoration(
+
+                  color: Colors.white,
+
+                  borderRadius:
+                  BorderRadius.circular(20),
+
+                  border: Border.all(
+                    color:
+                    const Color(0xFFE4E8F0),
+                  ),
+                ),
+
+                child: Column(
+
+                  children: [
+
+                    Container(
+
+                      padding:
+                      const EdgeInsets.all(16),
+
+                      decoration: BoxDecoration(
+
+                        color:
+                        const Color(0xFFF5F7FB),
+
+                        borderRadius:
+                        BorderRadius.circular(
+                            12),
+                      ),
+
+                      child: const Row(
+
+                        children: [
+
+                          Expanded(
+                            child: Text(
+                              'Batch',
+                            ),
+                          ),
+
+                          Expanded(
+                            child: Text(
+                              'Semester',
+                            ),
+                          ),
+
+                          Expanded(
+                            child: Text(
+                              'Course',
+                            ),
+                          ),
+
+                          Expanded(
+                            child: Text(
+                              'Faculty',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    Row(
+
+                      children: [
+
+                        Expanded(
+
+                          child:
+                          DropdownButtonFormField<
+                              String>(
+
+                            value: selectedBatch,
+
+                            decoration:
+                            _inputDecoration(
+                                'Batch'),
+
+                            items: [
+
+                              '2023-25',
+                              '2024-26',
+                              '2025-27'
+
+                            ].map((e) {
+
+                              return DropdownMenuItem(
+                                value: e,
+                                child: Text(e),
+                              );
+
+                            }).toList(),
+
+                            onChanged: (value) {
+
+                              setState(() {
+
+                                selectedBatch =
+                                    value;
+
+                                selectedCourse =
+                                null;
+                              });
+                            },
+                          ),
+                        ),
+
+                        const SizedBox(width: 16),
+
+                        Expanded(
+
+                          child:
+                          DropdownButtonFormField<
+                              String>(
+
+                            value:
+                            selectedSemester,
+
+                            decoration:
+                            _inputDecoration(
+                                'Semester'),
+
+                            items: [
+
+                              'I',
+                              'II',
+                              'III',
+                              'IV'
+
+                            ].map((e) {
+
+                              return DropdownMenuItem(
+                                value: e,
+                                child: Text(e),
+                              );
+
+                            }).toList(),
+
+                            onChanged: (value) {
+
+                              setState(() {
+
+                                selectedSemester =
+                                    value;
+
+                                selectedCourse =
+                                null;
+                              });
+                            },
+                          ),
+                        ),
+
+                        const SizedBox(width: 16),
+
+                        Expanded(
+
+                          child:
+                          DropdownButtonFormField<
+                              String>(
+
+                            value:
+                            selectedCourse,
+
+                            decoration:
+                            _inputDecoration(
+                                'Course'),
+
+                            items:
+                            availableCourses
+                                .map((e) {
+
+                              return DropdownMenuItem(
+                                value: e,
+                                child: Text(e),
+                              );
+
+                            }).toList(),
+
+                            onChanged: (value) {
+
+                              setState(() {
+
+                                selectedCourse =
+                                    value;
+                              });
+                            },
+                          ),
+                        ),
+
+                        const SizedBox(width: 16),
+
+                        Expanded(
+
+                          child: Container(
+
+                            height: 58,
+
+                            alignment:
+                            Alignment.centerLeft,
+
+                            padding:
+                            const EdgeInsets
+                                .symmetric(
+                              horizontal: 16,
+                            ),
+
+                            decoration:
+                            BoxDecoration(
+
+                              borderRadius:
+                              BorderRadius
+                                  .circular(14),
+
+                              border: Border.all(
+                                color:
+                                const Color(
+                                    0xFFE4E8F0),
+                              ),
+                            ),
+
+                            child: Text(
+
+                              selectedCourseData
+                                  ?.faculty ??
+                                  '-',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // =========================
+              // TABLE 2
+              // =========================
+
+              if (selectedCourseData != null)
+
+                Container(
+
+                  padding:
+                  const EdgeInsets.all(20),
+
+                  decoration: BoxDecoration(
+
+                    color: Colors.white,
+
+                    borderRadius:
+                    BorderRadius.circular(
+                        20),
+
+                    border: Border.all(
+                      color:
+                      const Color(0xFFE4E8F0),
+                    ),
+                  ),
+
+                  child: Column(
+
+                    children: [
+
+                      Container(
+
+                        padding:
+                        const EdgeInsets.all(
+                            16),
+
+                        decoration: BoxDecoration(
+
+                          color:
+                          const Color(
+                              0xFFF5F7FB),
+
+                          borderRadius:
+                          BorderRadius.circular(
+                              12),
+                        ),
+
+                        child: const Row(
+
+                          children: [
+
+                            Expanded(
+                              child: Text(
+                                  'Course Code'),
+                            ),
+
+                            Expanded(
+                              child: Text(
+                                  'Course Title'),
+                            ),
+
+                            Expanded(
+                              child: Text(
+                                  'Credits'),
+                            ),
+
+                            Expanded(
+                              child: Text(
+                                  'Course Type'),
+                            ),
+
+                            Expanded(
+                              child: Text(
+                                  'Syllabus'),
+                            ),
+
+                            Expanded(
+                              child: Text(
+                                  'Faculty'),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      Row(
+
+                        children: [
+
+                          Expanded(
+                            child: Text(
+                              selectedCourseData
+                                  .courseCode,
+                            ),
+                          ),
+
+                          Expanded(
+                            child: Text(
+                              selectedCourseData
+                                  .courseTitle,
+                            ),
+                          ),
+
+                          Expanded(
+                            child: Text(
+                              selectedCourseData
+                                  .credits,
+                            ),
+                          ),
+
+                          Expanded(
+                            child: Text(
+                              selectedCourseData
+                                  .courseType,
+                            ),
+                          ),
+
+                          Expanded(
+
+                            child: InkWell(
+
+                              onTap: () async {
+
+                                final Uri url =
+                                Uri.parse(
+                                  selectedCourseData!
+                                      .syllabus,
+                                );
+
+                                await launchUrl(
+                                    url);
+                              },
+
+                              child: const Text(
+
+                                'Open Link',
+
+                                style: TextStyle(
+                                  color: Colors.blue,
+                                  decoration:
+                                  TextDecoration
+                                      .underline,
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          Expanded(
+                            child: Text(
+                              selectedCourseData
+                                  .faculty,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+  InputDecoration _inputDecoration(String hint) {
+
+    return InputDecoration(
+
+      hintText: hint,
+
+      filled: true,
+
+      fillColor: Colors.white,
+
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 18,
+      ),
+
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+      ),
+
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(
+          color: Color(0xFFE4E8F0),
+        ),
+      ),
     );
   }
 
