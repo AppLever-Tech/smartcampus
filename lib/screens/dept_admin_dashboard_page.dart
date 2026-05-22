@@ -19,7 +19,6 @@ import 'package:smartcampus/widgets/smc_text.dart';
 import '../models/course_model.dart';
 import '../services/course_firestore_service.dart';
 import 'package:url_launcher/url_launcher.dart';
-
 import 'package:smartcampus/courses/add_course_page.dart';
 class DeptAdminDashboardPage extends StatefulWidget {
   final String orgId;
