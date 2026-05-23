@@ -24,7 +24,6 @@ class DeptAdminDashboardPage extends StatefulWidget {
   final String orgId;
   final String deptId;
   final String adminName;
-
   const DeptAdminDashboardPage({
     super.key,
     required this.orgId,
