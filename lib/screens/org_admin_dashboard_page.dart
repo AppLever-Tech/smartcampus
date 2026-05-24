@@ -743,6 +743,22 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                     ),
                     const SizedBox(height: 8),
 
+                    _menuTile(
+                      title: 'Courses',
+                      icon: Icons.menu_book_outlined,
+                      isSelected: selectedMenuIndex == 3,
+                      onTap: () {
+                        setState(() {
+                          selectedMenuIndex = 3;
+                        });
+                      },
+                    ),
+
+
+
+
+                    const SizedBox(height: 8),
+
 
 
                     _menuTile(
@@ -998,6 +1014,10 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                   isAdmin: true,
                   orgId: widget.orgId,
                 )
+
+                    : selectedMenuIndex == 3
+                    ? _buildCoursesPage()
+
 
                     : selectedMenuIndex == 2
                     ? _buildDepartmentsPage()

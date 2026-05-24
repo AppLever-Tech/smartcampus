@@ -1363,6 +1363,21 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       icon: Icons.dashboard_outlined,
                       isSelected: selectedMenuIndex == 0,
                       onTap: () => setState(() => selectedMenuIndex = 0),
+
+                    ),
+                    const SizedBox(height: 8),
+                    _menuTile(
+                      title: 'Students',
+                      icon: Icons.school_outlined,
+                      isSelected: selectedMenuIndex == 1,
+                      onTap: () => setState(() => selectedMenuIndex = 1),
+                    ),
+                    const SizedBox(height: 8),
+                    _menuTile(
+                      title: 'Faculties',
+                      icon: Icons.people_alt_outlined,
+                      isSelected: selectedMenuIndex == 2,
+                      onTap: () => setState(() => selectedMenuIndex = 2),
                     ),
                     const SizedBox(height: 8),
                     _menuTile(
@@ -2187,8 +2202,185 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(
           color: Color(0xFFE4E8F0),
+
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSelectedView() {
+    switch (selectedMenuIndex) {
+      case 1:
+        return _buildStudentsView();
+      case 2:
+        return _buildFacultiesView();
+      default:
+        return _buildDashboardView();
+    }
+  }
+
+  Widget _buildDashboardView() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const smcText(
+          textToDisplay: 'Department Overview',
+          textSize: 16,
+          textBoldness: 5,
+          colorOfText: ColorConst.textPrimary,
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            _buildStatCard(
+              title: 'Total Students',
+              count: studentList.length.toString(),
+              icon: Icons.school_rounded,
+              color: Colors.blue,
+            ),
+            const SizedBox(width: 16),
+            _buildStatCard(
+              title: 'Total Faculty',
+              count: facultyList.length.toString(),
+              icon: Icons.people_alt_rounded,
+              color: Colors.green,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatCard({required String title, required String count, required IconData icon, required Color color}) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE3EAF8)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            const SizedBox(width: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                smcText(
+                  textToDisplay: title,
+                  textSize: 13,
+                  colorOfText: ColorConst.textSecondary,
+                ),
+                smcText(
+                  textToDisplay: count,
+                  textSize: 20,
+                  textBoldness: 5,
+                  colorOfText: ColorConst.textPrimary,
+                ),
+              ],
+            ),
+          ],
+
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStudentsView() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: smcText(
+                textToDisplay: 'Students in your department',
+                textSize: 14,
+                textBoldness: 3,
+                colorOfText: ColorConst.textSecondary,
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: openCreateStudentSheet,
+              icon: const Icon(Icons.school_rounded, size: 18, color: Colors.white),
+              label: const smcText(
+                textToDisplay: 'Create Student',
+                textSize: 14,
+                textBoldness: 4,
+                colorOfText: Colors.white,
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: ColorConst.primaryBlue,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Expanded(child: buildStudentTable()),
+      ],
+    );
+  }
+
+  Widget _buildFacultiesView() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: smcText(
+                textToDisplay: 'Faculty in your department',
+                textSize: 14,
+                textBoldness: 3,
+                colorOfText: ColorConst.textSecondary,
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: openCreateFacultySheet,
+              icon: const Icon(Icons.person_add_alt_1_rounded, size: 18, color: Colors.white),
+              label: const smcText(
+                textToDisplay: 'Create Faculty',
+                textSize: 14,
+                textBoldness: 4,
+                colorOfText: Colors.white,
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: ColorConst.primaryBlue,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Expanded(child: buildFacultyTable()),
+      ],
     );
   }
 
