@@ -7,11 +7,15 @@ import 'package:smartcampus/widgets/smc_text.dart';
 class PersonDetailPage extends StatefulWidget {
   final dynamic person; // Can be StudentModel or FacultyModel
   final bool isStudent;
+  final bool embedded;
+  final VoidCallback? onClose;
 
   const PersonDetailPage({
     super.key,
     required this.person,
     required this.isStudent,
+    this.embedded = false,
+    this.onClose,
   });
 
   @override
@@ -21,14 +25,45 @@ class PersonDetailPage extends StatefulWidget {
 class _PersonDetailPageState extends State<PersonDetailPage> {
   int _selectedIndex = 0;
 
+  String get _name => widget.isStudent
+      ? (widget.person as StudentModel).fullName
+      : (widget.person as FacultyModel).fullName;
+
+  String get _id => widget.isStudent
+      ? (widget.person as StudentModel).studentId
+      : (widget.person as FacultyModel).facultyId;
+
+  String get _idLabel => widget.isStudent ? 'USN' : 'Faculty ID';
+
   @override
   Widget build(BuildContext context) {
-    final String name = widget.isStudent 
-        ? (widget.person as StudentModel).fullName 
-        : (widget.person as FacultyModel).fullName;
-    final String id = widget.isStudent 
-        ? (widget.person as StudentModel).studentId 
-        : (widget.person as FacultyModel).facultyId;
+    final Widget body = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildTabBar(),
+        Expanded(child: _buildSelectedView()),
+      ],
+    );
+
+    if (widget.embedded) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF6F7FB),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE3EAF8)),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildEmbeddedHeader(),
+              Expanded(child: body),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
@@ -43,42 +78,94 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             smcText(
-              textToDisplay: name,
+              textToDisplay: _name,
               textSize: 16,
               textBoldness: 5,
               colorOfText: Colors.white,
             ),
             smcText(
-              textToDisplay: '${widget.isStudent ? "USN" : "Faculty ID"}: $id',
+              textToDisplay: '$_idLabel: $_id',
               textSize: 12,
               colorOfText: Colors.white.withOpacity(0.8),
             ),
           ],
         ),
       ),
-      body: Column(
+      body: body,
+    );
+  }
+
+  Widget _buildEmbeddedHeader() {
+    return Container(
+      color: ColorConst.primaryBlue,
+      padding: const EdgeInsets.fromLTRB(4, 8, 12, 8),
+      child: Row(
         children: [
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            alignment: Alignment.centerLeft,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _buildFilterChip('Basic Details', 0),
-                  const SizedBox(width: 10),
-                  _buildFilterChip('Achievements', 1),
-                  const SizedBox(width: 10),
-                  _buildFilterChip('Publications', 2),
-                ],
-              ),
+          IconButton(
+            icon: const Icon(Icons.close_rounded, color: Colors.white),
+            tooltip: 'Close',
+            onPressed: widget.onClose,
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                smcText(
+                  textToDisplay: _name,
+                  textSize: 15,
+                  textBoldness: 5,
+                  colorOfText: Colors.white,
+                  maxLines: 1,
+                ),
+                smcText(
+                  textToDisplay: '$_idLabel: $_id',
+                  textSize: 11,
+                  colorOfText: Colors.white.withOpacity(0.85),
+                  maxLines: 1,
+                ),
+              ],
             ),
           ),
-          Expanded(child: _buildSelectedView()),
         ],
       ),
     );
+  }
+
+  Widget _buildTabBar() {
+    final List<String> tabs = _tabLabels;
+
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      alignment: Alignment.centerLeft,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (int i = 0; i < tabs.length; i++) ...[
+              if (i > 0) const SizedBox(width: 10),
+              _buildFilterChip(tabs[i], i),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<String> get _tabLabels {
+    if (widget.isStudent) {
+      return const [
+        'Basic Details',
+        'Courses Opted',
+        'Achievements',
+        'Publications',
+      ];
+    }
+    return const [
+      'Basic Details',
+      'Achievements',
+      'Publications',
+    ];
   }
 
   Widget _buildFilterChip(String label, int index) {
@@ -115,12 +202,16 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
   }
 
   Widget _buildSelectedView() {
-    switch (_selectedIndex) {
-      case 0:
+    final String tab = _tabLabels[_selectedIndex.clamp(0, _tabLabels.length - 1)];
+
+    switch (tab) {
+      case 'Basic Details':
         return _buildBasicDetails();
-      case 1:
+      case 'Courses Opted':
+        return _buildCoursesOpted();
+      case 'Achievements':
         return _buildAchievements();
-      case 2:
+      case 'Publications':
         return _buildPublications();
       default:
         return _buildBasicDetails();
@@ -197,6 +288,16 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCoursesOpted() {
+    return const Center(
+      child: smcText(
+        textToDisplay: 'No courses opted yet.',
+        textSize: 14,
+        colorOfText: ColorConst.textSecondary,
       ),
     );
   }

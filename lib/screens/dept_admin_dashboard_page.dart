@@ -1,6 +1,8 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -73,6 +75,10 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   int facultyCurrentPage = 1;
   String facultyGenderFilter = 'All';
 
+  StudentModel? selectedStudentDetail;
+  bool sidebarExpanded = false;
+  double studentListPanelRatio = 0.55;
+
   @override
   void initState() {
     super.initState();
@@ -90,6 +96,14 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     studentSearchController.dispose();
     facultySearchController.dispose();
     super.dispose();
+  }
+
+  void closeStudentDetail() {
+    setState(() => selectedStudentDetail = null);
+  }
+
+  void openStudentDetail(StudentModel student) {
+    setState(() => selectedStudentDetail = student);
   }
 
   Future<void> refresh() async {
@@ -661,37 +675,24 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                 );
               }
 
-              if (photographUrl != null && photographUrl!.trim().isNotEmpty) {
-                return Column(
-                  children: [
-                    const SizedBox(height: 10),
-                    Center(
-                      child: Container(
-                        width: 280,
-                        height: 420,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: ColorConst.borderSoft),
-                          color: const Color(0xFFF7F9FF),
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: Image.network(
-                          photographUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Center(
-                            child: Icon(
-                              Icons.broken_image_outlined,
-                              color: ColorConst.textSecondary,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
+              final String normalizedUrl =
+                  _normalizeStudentPhotoUrl(photographUrl ?? '');
+              if (normalizedUrl.isEmpty) {
+                return const SizedBox.shrink();
               }
 
-              return const SizedBox.shrink();
+              return Column(
+                children: [
+                  const SizedBox(height: 10),
+                  Center(
+                    child: _StudentPhotoAvatar(
+                      photoUrl: normalizedUrl,
+                      previewWidth: 280,
+                      previewHeight: 420,
+                    ),
+                  ),
+                ],
+              );
             }
 
             Widget _buildStepContent() {
@@ -1804,36 +1805,67 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         child: Row(
           children: [
             // ── Side nav ────────────────────────────────────────
-            Container(
-              width: 240,
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeInOut,
+              width: sidebarExpanded ? 240 : 84,
               decoration: const BoxDecoration(
                 color: Colors.white,
                 border: Border(right: BorderSide(color: Color(0xFFE3EAF8))),
               ),
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(12),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment:
+                      sidebarExpanded ? CrossAxisAlignment.start : CrossAxisAlignment.center,
                   children: [
-                    const smcText(
-                      textToDisplay: 'Department Admin',
-                      textSize: 20,
-                      textBoldness: 5,
-                      colorOfText: ColorConst.textPrimary,
-                    ),
-                    const SizedBox(height: 20),
+                    if (sidebarExpanded)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4, bottom: 12),
+                        child: Row(
+                          children: [
+                            const Expanded(
+                              child: smcText(
+                                textToDisplay: 'Department Admin',
+                                textSize: 18,
+                                textBoldness: 5,
+                                colorOfText: ColorConst.textPrimary,
+                                maxLines: 1,
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.chevron_left_rounded),
+                              tooltip: 'Collapse menu',
+                              color: ColorConst.textSecondary,
+                              onPressed: () => setState(() => sidebarExpanded = false),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      IconButton(
+                        icon: const Icon(Icons.chevron_right_rounded),
+                        tooltip: 'Expand menu',
+                        color: ColorConst.primaryBlue,
+                        onPressed: () => setState(() => sidebarExpanded = true),
+                      ),
+                    const SizedBox(height: 8),
                     _menuTile(
                       title: 'Dashboard',
                       icon: Icons.dashboard_outlined,
                       isSelected: selectedMenuIndex == 0,
-                      onTap: () => setState(() => selectedMenuIndex = 0),
-
+                      sidebarExpanded: sidebarExpanded,
+                      onTap: () => setState(() {
+                        selectedMenuIndex = 0;
+                        selectedStudentDetail = null;
+                      }),
                     ),
                     const SizedBox(height: 8),
                     _menuTile(
                       title: 'Students',
                       icon: Icons.school_outlined,
                       isSelected: selectedMenuIndex == 1,
+                      sidebarExpanded: sidebarExpanded,
                       onTap: () => setState(() => selectedMenuIndex = 1),
                     ),
                     const SizedBox(height: 8),
@@ -1841,21 +1873,29 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       title: 'Faculties',
                       icon: Icons.people_alt_outlined,
                       isSelected: selectedMenuIndex == 2,
-                      onTap: () => setState(() => selectedMenuIndex = 2),
+                      sidebarExpanded: sidebarExpanded,
+                      onTap: () => setState(() {
+                        selectedMenuIndex = 2;
+                        selectedStudentDetail = null;
+                      }),
                     ),
                     const SizedBox(height: 8),
                     _menuTile(
                       title: 'Courses',
                       icon: Icons.people_alt_outlined,
                       isSelected: selectedMenuIndex == 3,
-                      onTap: () => setState(() => selectedMenuIndex = 3),
+                      sidebarExpanded: sidebarExpanded,
+                      onTap: () => setState(() {
+                        selectedMenuIndex = 3;
+                        selectedStudentDetail = null;
+                      }),
                     ),
-
                     const SizedBox(height: 8),
                     _menuTile(
                       title: 'Support',
                       icon: Icons.support_agent_rounded,
                       isSelected: false,
+                      sidebarExpanded: sidebarExpanded,
                       onTap: onSupport,
                     ),
                     const Spacer(),
@@ -1863,6 +1903,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       title: 'Logout',
                       icon: Icons.logout_rounded,
                       isSelected: false,
+                      sidebarExpanded: sidebarExpanded,
                       onTap: onLogout,
                     ),
                   ],
@@ -1988,11 +2029,83 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   }
 
   Widget _buildStudentsView() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(child: buildStudentTable()),
-      ],
+    if (selectedStudentDetail == null) {
+      return buildStudentTable();
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const double dividerWidth = 10;
+        const double minListWidth = 360;
+        const double minDetailWidth = 320;
+        final double availableWidth =
+            (constraints.maxWidth - dividerWidth).clamp(0, double.infinity);
+
+        if (availableWidth <= minListWidth + minDetailWidth) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(flex: 5, child: buildStudentTable()),
+              _buildStudentPanelDivider(constraints.maxWidth),
+              Expanded(
+                flex: 4,
+                child: PersonDetailPage(
+                  person: selectedStudentDetail!,
+                  isStudent: true,
+                  embedded: true,
+                  onClose: closeStudentDetail,
+                ),
+              ),
+            ],
+          );
+        }
+
+        final double listWidth = (availableWidth * studentListPanelRatio)
+            .clamp(minListWidth, availableWidth - minDetailWidth);
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(width: listWidth, child: buildStudentTable()),
+            _buildStudentPanelDivider(constraints.maxWidth),
+            Expanded(
+              child: PersonDetailPage(
+                person: selectedStudentDetail!,
+                isStudent: true,
+                embedded: true,
+                onClose: closeStudentDetail,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildStudentPanelDivider(double totalWidth) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeColumn,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragUpdate: (details) {
+          setState(() {
+            studentListPanelRatio += details.delta.dx / totalWidth;
+            studentListPanelRatio = studentListPanelRatio.clamp(0.3, 0.7);
+          });
+        },
+        child: Container(
+          width: 10,
+          child: Center(
+            child: Container(
+              width: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD8E2F4),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -2602,6 +2715,37 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
   // ── Student Table ───────────────────────────────────────────
 
+  String _normalizeStudentPhotoUrl(String rawUrl) {
+    final value = rawUrl.trim();
+    if (value.isEmpty) {
+      return '';
+    }
+    if (value.startsWith('gs://')) {
+      return value;
+    }
+    if (value.startsWith('//')) {
+      return 'https:$value';
+    }
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      return value;
+    }
+    return '';
+  }
+
+  Widget _buildStudentAvatar(StudentModel student, {double radius = 18}) {
+    final String initial = student.fullName.trim().isEmpty
+        ? '?'
+        : student.fullName.trim().substring(0, 1).toUpperCase();
+    final String rawUrl = student.photographUrl;
+    final String normalizedUrl = _normalizeStudentPhotoUrl(rawUrl);
+
+    return _StudentPhotoAvatar(
+      photoUrl: normalizedUrl,
+      fallbackInitial: initial,
+      radius: radius,
+    );
+  }
+
   Widget buildStudentTable() {
     final String searchTerm = studentSearchController.text.trim().toLowerCase();
     final List<StudentModel> genderFiltered = studentGenderFilter == 'All'
@@ -2612,7 +2756,10 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       return '${s.studentId} ${s.fullName} ${s.gender} ${s.category}'
           .toLowerCase()
           .contains(searchTerm);
-    }).toList();
+    }).toList()
+      ..sort(
+        (a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()),
+      );
 
     final int totalRows = searched.length;
     final int totalPages = totalRows == 0 ? 1 : ((totalRows - 1) ~/ studentRowsPerPage) + 1;
@@ -2634,6 +2781,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 width: 44,
@@ -2652,11 +2800,14 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                   children: [
                     Row(
                       children: [
-                        const smcText(
-                          textToDisplay: 'Student List',
-                          textSize: 16,
-                          textBoldness: 5,
-                          colorOfText: Color(0xFF1F2F52),
+                        const Flexible(
+                          child: smcText(
+                            textToDisplay: 'Student List',
+                            textSize: 16,
+                            textBoldness: 5,
+                            colorOfText: Color(0xFF1F2F52),
+                            maxLines: 1,
+                          ),
                         ),
                         const SizedBox(width: 8),
                         Container(
@@ -2679,49 +2830,52 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       textToDisplay: 'View and manage all students in your department.',
                       textSize: 12,
                       colorOfText: Color(0xFF7D87A3),
+                      maxLines: 2,
                     ),
                   ],
                 ),
               ),
-              Row(
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: openCreateStudentSheet,
-                    icon: const Icon(Icons.school_rounded, size: 18, color: Colors.white),
-                    label: const smcText(
-                      textToDisplay: 'Create Student',
-                      textSize: 14,
-                      textBoldness: 4,
-                      colorOfText: Colors.white,
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: ColorConst.primaryBlue,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              ElevatedButton.icon(
+                onPressed: openCreateStudentSheet,
+                icon: const Icon(Icons.school_rounded, size: 18, color: Colors.white),
+                label: const smcText(
+                  textToDisplay: 'Create Student',
+                  textSize: 14,
+                  textBoldness: 4,
+                  colorOfText: Colors.white,
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ColorConst.primaryBlue,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  const SizedBox(width: 10),
-                  OutlinedButton.icon(
-                    onPressed: onImportStudents,
-                    icon: const Icon(Icons.upload_file_rounded, size: 18),
-                    label: const smcText(
-                      textToDisplay: 'Import Students',
-                      textSize: 14,
-                      textBoldness: 4,
-                      colorOfText: ColorConst.primaryBlue,
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: ColorConst.primaryBlue,
-                      side: const BorderSide(color: ColorConst.primaryBlue),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: onImportStudents,
+                icon: const Icon(Icons.upload_file_rounded, size: 18),
+                label: const smcText(
+                  textToDisplay: 'Import Students',
+                  textSize: 14,
+                  textBoldness: 4,
+                  colorOfText: ColorConst.primaryBlue,
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: ColorConst.primaryBlue,
+                  side: const BorderSide(color: ColorConst.primaryBlue),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                ],
+                ),
               ),
             ],
           ),
@@ -2854,42 +3008,58 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                     headingRowHeight: 50,
                                     dataRowMinHeight: 52,
                                     dataRowMaxHeight: 58,
-                                    horizontalMargin: 8,
+                                    horizontalMargin: 0,
                                     columnSpacing: 0,
                                     dividerThickness: 1,
                                     border: TableBorder.all(color: const Color(0xFFE3EAF8), width: 1),
                                     headingRowColor: MaterialStateProperty.all(const Color(0xFFF4F7FF)),
                                     columns: const [
-                                      DataColumn(label: SizedBox(width: 100, child: Center(child: smcText(textToDisplay: 'USN / ID', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
-                                      DataColumn(label: SizedBox(width: 180, child: Center(child: smcText(textToDisplay: 'Name', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
+                                      DataColumn(label: SizedBox(width: 100, child: Padding(padding: EdgeInsets.only(left: 8), child: Align(alignment: Alignment.centerLeft, child: smcText(textToDisplay: 'USN / ID', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B)))))),
+                                      DataColumn(label: SizedBox(width: 220, child: Center(child: smcText(textToDisplay: 'Name', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
                                       DataColumn(label: SizedBox(width: 100, child: Center(child: smcText(textToDisplay: 'Gender', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
                                       DataColumn(label: SizedBox(width: 120, child: Center(child: smcText(textToDisplay: 'Category', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
-                                      DataColumn(label: SizedBox(width: 100, child: Center(child: smcText(textToDisplay: 'Photo', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
                                       DataColumn(label: SizedBox(width: 80, child: Center(child: smcText(textToDisplay: 'Actions', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
                                     ],
                                     rows: pageRows.map((s) {
                                       return DataRow(
                                         cells: [
                                           DataCell(
-                                            Center(
-                                              child: InkWell(
-                                                onTap: () => Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (context) => PersonDetailPage(person: s, isStudent: true),
+                                            Padding(
+                                              padding: const EdgeInsets.only(left: 8),
+                                              child: Align(
+                                                alignment: Alignment.centerLeft,
+                                                child: InkWell(
+                                                  onTap: () => openStudentDetail(s),
+                                                  child: smcText(
+                                                    textToDisplay: s.studentId,
+                                                    textSize: 12,
+                                                    textBoldness: 4,
+                                                    colorOfText: Colors.blue,
+                                                    decoration: TextDecoration.underline,
                                                   ),
-                                                ),
-                                                child: smcText(
-                                                  textToDisplay: s.studentId,
-                                                  textSize: 12,
-                                                  textBoldness: 4,
-                                                  colorOfText: Colors.blue,
-                                                  decoration: TextDecoration.underline,
                                                 ),
                                               ),
                                             ),
                                           ),
-                                          DataCell(Center(child: smcText(textToDisplay: s.fullName, textSize: 12, colorOfText: const Color(0xFF2E3954), maxLines: 1))),
+                                          DataCell(
+                                            Padding(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                                              child: Row(
+                                                children: [
+                                                  _buildStudentAvatar(s),
+                                                  const SizedBox(width: 10),
+                                                  Expanded(
+                                                    child: smcText(
+                                                      textToDisplay: s.fullName,
+                                                      textSize: 12,
+                                                      colorOfText: const Color(0xFF2E3954),
+                                                      maxLines: 1,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
                                           DataCell(
                                             Center(
                                               child: Container(
@@ -2900,19 +3070,6 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                             ),
                                           ),
                                           DataCell(Center(child: smcText(textToDisplay: s.category, textSize: 12, colorOfText: const Color(0xFF2E3954)))),
-                                          DataCell(
-                                            Center(
-                                              child: s.photographUrl.isNotEmpty
-                                                  ? InkWell(
-                                                      onTap: () async {
-                                                        final uri = Uri.parse(s.photographUrl);
-                                                        if (await canLaunchUrl(uri)) await launchUrl(uri);
-                                                      },
-                                                      child: const Icon(Icons.image_outlined, size: 18, color: ColorConst.primaryBlue),
-                                                    )
-                                                  : const Icon(Icons.image_not_supported_outlined, size: 18, color: Colors.grey),
-                                            ),
-                                          ),
                                           DataCell(
                                             Center(
                                               child: PopupMenuButton<String>(
@@ -2942,59 +3099,63 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                           height: 58,
                           padding: const EdgeInsets.symmetric(horizontal: 14),
                           decoration: const BoxDecoration(border: Border(top: BorderSide(color: Color(0xFFE3EAF8)))),
-                          child: Row(
-                            children: [
-                              smcText(
-                                textToDisplay: totalRows == 0
-                                    ? 'Showing 0 entries'
-                                    : 'Showing ${startIndex + 1} to $endIndex of $totalRows entries',
-                                textSize: 12,
-                                colorOfText: const Color(0xFF7D87A3),
-                              ),
-                              const Spacer(),
-                              const smcText(textToDisplay: 'Rows per page:', textSize: 12, colorOfText: Color(0xFF7D87A3)),
-                              const SizedBox(width: 8),
-                              DropdownButton<int>(
-                                value: studentRowsPerPage,
-                                items: const [
-                                  DropdownMenuItem(value: 10, child: Text('10')),
-                                  DropdownMenuItem(value: 25, child: Text('25')),
-                                  DropdownMenuItem(value: 50, child: Text('50')),
-                                ],
-                                onChanged: (value) {
-                                  if (value != null) {
-                                    setState(() {
-                                      studentRowsPerPage = value;
-                                      studentCurrentPage = 1;
-                                    });
-                                  }
-                                },
-                              ),
-                              const SizedBox(width: 12),
-                              IconButton(
-                                onPressed: safePage > 1 ? () => setState(() => studentCurrentPage = 1) : null,
-                                icon: const Icon(Icons.first_page_rounded),
-                              ),
-                              IconButton(
-                                onPressed: safePage > 1 ? () => setState(() => studentCurrentPage = safePage - 1) : null,
-                                icon: const Icon(Icons.chevron_left_rounded),
-                              ),
-                              Container(
-                                width: 34,
-                                height: 34,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(color: const Color(0xFFEAF0FF), borderRadius: BorderRadius.circular(8)),
-                                child: smcText(textToDisplay: '$safePage', textSize: 12, textBoldness: 4, colorOfText: ColorConst.primaryBlue),
-                              ),
-                              IconButton(
-                                onPressed: safePage < totalPages ? () => setState(() => studentCurrentPage = safePage + 1) : null,
-                                icon: const Icon(Icons.chevron_right_rounded),
-                              ),
-                              IconButton(
-                                onPressed: safePage < totalPages ? () => setState(() => studentCurrentPage = totalPages) : null,
-                                icon: const Icon(Icons.last_page_rounded),
-                              ),
-                            ],
+                          alignment: Alignment.centerLeft,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                smcText(
+                                  textToDisplay: totalRows == 0
+                                      ? 'Showing 0 entries'
+                                      : 'Showing ${startIndex + 1} to $endIndex of $totalRows entries',
+                                  textSize: 12,
+                                  colorOfText: const Color(0xFF7D87A3),
+                                ),
+                                const SizedBox(width: 16),
+                                const smcText(textToDisplay: 'Rows per page:', textSize: 12, colorOfText: Color(0xFF7D87A3)),
+                                const SizedBox(width: 8),
+                                DropdownButton<int>(
+                                  value: studentRowsPerPage,
+                                  items: const [
+                                    DropdownMenuItem(value: 10, child: Text('10')),
+                                    DropdownMenuItem(value: 25, child: Text('25')),
+                                    DropdownMenuItem(value: 50, child: Text('50')),
+                                  ],
+                                  onChanged: (value) {
+                                    if (value != null) {
+                                      setState(() {
+                                        studentRowsPerPage = value;
+                                        studentCurrentPage = 1;
+                                      });
+                                    }
+                                  },
+                                ),
+                                const SizedBox(width: 12),
+                                IconButton(
+                                  onPressed: safePage > 1 ? () => setState(() => studentCurrentPage = 1) : null,
+                                  icon: const Icon(Icons.first_page_rounded),
+                                ),
+                                IconButton(
+                                  onPressed: safePage > 1 ? () => setState(() => studentCurrentPage = safePage - 1) : null,
+                                  icon: const Icon(Icons.chevron_left_rounded),
+                                ),
+                                Container(
+                                  width: 34,
+                                  height: 34,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(color: const Color(0xFFEAF0FF), borderRadius: BorderRadius.circular(8)),
+                                  child: smcText(textToDisplay: '$safePage', textSize: 12, textBoldness: 4, colorOfText: ColorConst.primaryBlue),
+                                ),
+                                IconButton(
+                                  onPressed: safePage < totalPages ? () => setState(() => studentCurrentPage = safePage + 1) : null,
+                                  icon: const Icon(Icons.chevron_right_rounded),
+                                ),
+                                IconButton(
+                                  onPressed: safePage < totalPages ? () => setState(() => studentCurrentPage = totalPages) : null,
+                                  icon: const Icon(Icons.last_page_rounded),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],
@@ -3433,37 +3594,339 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     required String title,
     required IconData icon,
     required bool isSelected,
+    required bool sidebarExpanded,
     required VoidCallback onTap,
   }) {
+    final Color iconColor =
+        isSelected ? ColorConst.primaryBlue : ColorConst.textSecondary;
+    final Color textColor =
+        isSelected ? ColorConst.primaryBlue : ColorConst.textPrimary;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        height: 42,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        height: sidebarExpanded ? 42 : 58,
+        width: sidebarExpanded ? double.infinity : double.infinity,
+        padding: EdgeInsets.symmetric(
+          horizontal: sidebarExpanded ? 12 : 4,
+          vertical: sidebarExpanded ? 0 : 6,
+        ),
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFFEAF0FF) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 18,
-              color:
-              isSelected ? ColorConst.primaryBlue : ColorConst.textSecondary,
-            ),
-            const SizedBox(width: 10),
-            smcText(
-              textToDisplay: title,
-              textSize: 14,
-              textBoldness: isSelected ? 4 : 3,
-              colorOfText:
-              isSelected ? ColorConst.primaryBlue : ColorConst.textPrimary,
-            ),
-          ],
+        child: sidebarExpanded
+            ? Row(
+                children: [
+                  Icon(icon, size: 18, color: iconColor),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: smcText(
+                      textToDisplay: title,
+                      textSize: 14,
+                      textBoldness: isSelected ? 4 : 3,
+                      colorOfText: textColor,
+                      maxLines: 1,
+                    ),
+                  ),
+                ],
+              )
+            : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, size: 18, color: iconColor),
+                  const SizedBox(height: 4),
+                  smcText(
+                    textToDisplay: title,
+                    textSize: 9,
+                    textBoldness: isSelected ? 4 : 3,
+                    colorOfText: textColor,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+class _StudentPhotoAvatar extends StatefulWidget {
+  const _StudentPhotoAvatar({
+    required this.photoUrl,
+    this.fallbackInitial = '?',
+    this.radius = 18,
+    this.previewWidth,
+    this.previewHeight,
+  });
+
+  final String photoUrl;
+  final String fallbackInitial;
+  final double radius;
+  final double? previewWidth;
+  final double? previewHeight;
+
+  bool get isPreview => previewWidth != null && previewHeight != null;
+
+  static final Map<String, Uint8List> _memoryCache = <String, Uint8List>{};
+
+  static bool _isFirebaseStorageUrl(String url) {
+    return url.startsWith('gs://') ||
+        url.contains('firebasestorage.googleapis.com');
+  }
+
+  @override
+  State<_StudentPhotoAvatar> createState() => _StudentPhotoAvatarState();
+}
+
+class _StudentPhotoAvatarState extends State<_StudentPhotoAvatar> {
+  Uint8List? _photoBytes;
+  bool _loading = true;
+  bool _useCachedNetworkImage = false;
+  bool _useNetworkImage = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPhoto();
+  }
+
+  @override
+  void didUpdateWidget(covariant _StudentPhotoAvatar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.photoUrl != widget.photoUrl) {
+      _photoBytes = null;
+      _loading = true;
+      _useCachedNetworkImage = false;
+      _useNetworkImage = false;
+      _loadPhoto();
+    }
+  }
+
+  Future<void> _loadPhoto() async {
+    final String url = widget.photoUrl;
+
+    if (url.isEmpty) {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+      return;
+    }
+
+    final cached = _StudentPhotoAvatar._memoryCache[url];
+    if (cached != null) {
+      if (mounted) {
+        setState(() {
+          _photoBytes = cached;
+          _loading = false;
+        });
+      }
+      return;
+    }
+
+    // Flutter web fetch (getData / CachedNetworkImage) requires Storage CORS.
+    // HTML <img> via Image.network does not.
+    if (kIsWeb) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _useNetworkImage = true;
+        });
+      }
+      return;
+    }
+
+    if (_StudentPhotoAvatar._isFirebaseStorageUrl(url)) {
+      try {
+        final ref = FirebaseStorage.instance.refFromURL(url);
+        final data = await ref.getData(3 * 1024 * 1024);
+        if (!mounted) {
+          return;
+        }
+        if (data != null && data.isNotEmpty) {
+          _StudentPhotoAvatar._memoryCache[url] = data;
+          setState(() {
+            _photoBytes = data;
+            _loading = false;
+          });
+          return;
+        }
+      } catch (_) {
+        // Fall through to CachedNetworkImage.
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _loading = false;
+      _useCachedNetworkImage = true;
+    });
+  }
+
+  Widget _buildInitialAvatar() {
+    return CircleAvatar(
+      radius: widget.radius,
+      backgroundColor: const Color(0xFFEAF0FF),
+      child: Text(
+        widget.fallbackInitial,
+        style: const TextStyle(
+          color: ColorConst.primaryBlue,
+          fontWeight: FontWeight.w700,
+          fontSize: 14,
         ),
       ),
     );
+  }
+
+  Widget _previewFrame({required Widget child}) {
+    return Container(
+      width: widget.previewWidth,
+      height: widget.previewHeight,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: ColorConst.borderSoft),
+        color: const Color(0xFFF7F9FF),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+  }
+
+  Widget _buildErrorPreview() {
+    return _previewFrame(
+      child: const Center(
+        child: Icon(
+          Icons.broken_image_outlined,
+          color: ColorConst.textSecondary,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingIndicator({double? size}) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: const Center(
+        child: CircularProgressIndicator(strokeWidth: 2),
+      ),
+    );
+  }
+
+  Widget _buildMemoryImage() {
+    if (widget.isPreview) {
+      return _previewFrame(
+        child: Image.memory(
+          _photoBytes!,
+          fit: BoxFit.cover,
+        ),
+      );
+    }
+
+    return CircleAvatar(
+      radius: widget.radius,
+      backgroundColor: const Color(0xFFEAF0FF),
+      backgroundImage: MemoryImage(_photoBytes!),
+    );
+  }
+
+  Widget _buildNetworkImage() {
+    Widget buildImage({double? width, double? height}) {
+      return Image.network(
+        widget.photoUrl,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) {
+            return child;
+          }
+          return _buildLoadingIndicator(size: width ?? height);
+        },
+        errorBuilder: (context, error, stackTrace) {
+          if (widget.isPreview) {
+            return const Center(
+              child: Icon(
+                Icons.broken_image_outlined,
+                color: ColorConst.textSecondary,
+              ),
+            );
+          }
+          return _buildInitialAvatar();
+        },
+      );
+    }
+
+    if (widget.isPreview) {
+      return _previewFrame(child: buildImage());
+    }
+
+    final double size = widget.radius * 2;
+    return ClipOval(
+      child: buildImage(width: size, height: size),
+    );
+  }
+
+  Widget _buildCachedNetworkImage() {
+    if (widget.isPreview) {
+      return _previewFrame(
+        child: CachedNetworkImage(
+          imageUrl: widget.photoUrl,
+          fit: BoxFit.cover,
+          placeholder: (_, __) => _buildLoadingIndicator(),
+          errorWidget: (context, url, error) {
+            return const Center(
+              child: Icon(
+                Icons.broken_image_outlined,
+                color: ColorConst.textSecondary,
+              ),
+            );
+          },
+        ),
+      );
+    }
+
+    final double size = widget.radius * 2;
+    return ClipOval(
+      child: CachedNetworkImage(
+        imageUrl: widget.photoUrl,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        placeholder: (_, __) => _buildLoadingIndicator(size: size),
+        errorWidget: (context, url, error) => _buildInitialAvatar(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.photoUrl.isEmpty) {
+      return widget.isPreview ? _buildErrorPreview() : _buildInitialAvatar();
+    }
+
+    if (_photoBytes != null) {
+      return _buildMemoryImage();
+    }
+
+    if (_loading) {
+      return widget.isPreview
+          ? _previewFrame(child: _buildLoadingIndicator())
+          : _buildLoadingIndicator(size: widget.radius * 2);
+    }
+
+    if (_useNetworkImage) {
+      return _buildNetworkImage();
+    }
+
+    if (_useCachedNetworkImage) {
+      return _buildCachedNetworkImage();
+    }
+
+    return widget.isPreview ? _buildErrorPreview() : _buildInitialAvatar();
   }
 }
