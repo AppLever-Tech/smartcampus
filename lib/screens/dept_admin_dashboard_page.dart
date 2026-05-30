@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -18,7 +17,6 @@ import 'package:smartcampus/services/org_role_firestore_service.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 import '../models/course_model.dart';
 import '../services/course_firestore_service.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:smartcampus/courses/add_course_page.dart';
 class DeptAdminDashboardPage extends StatefulWidget {
   final String orgId;
@@ -50,6 +48,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   List<DepartmentMasterItem> departments = [];
   List<FacultyModel> facultyList = [];
   List<StudentModel> studentList = [];
+  int totalCourses = 0;
   String organizationDisplayName = '';
   bool canEditOrDelete = false;
   String? selectedBatch;
@@ -78,6 +77,12 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   void initState() {
     super.initState();
     refresh();
+    courseService.getCourses().listen((courses) {
+      if (!mounted) return;
+      setState(() {
+        totalCourses = courses.length;
+      });
+    });
   }
 
   @override
@@ -146,6 +151,38 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute<void>(builder: (_) => const LandingPage()),
           (route) => false,
+    );
+  }
+
+  void onImportStudents() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const smcText(
+          textToDisplay: 'Import Students',
+          textSize: 18,
+          textBoldness: 4,
+          colorOfText: ColorConst.textPrimary,
+        ),
+        content: const smcText(
+          textToDisplay:
+              'Student import is not wired yet. Next step is to add a CSV upload and map columns to student fields.',
+          textSize: 14,
+          colorOfText: ColorConst.textSecondary,
+          maxLines: 5,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const smcText(
+              textToDisplay: 'Close',
+              textSize: 14,
+              textBoldness: 3,
+              colorOfText: ColorConst.primaryBlue,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -341,7 +378,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     // Basic Profile
     final studentIdCtrl = TextEditingController(text: studentToEdit?.studentId ?? '');
     final fullNameCtrl = TextEditingController(text: studentToEdit?.fullName ?? '');
-    String selectedGender = studentToEdit?.gender ?? 'Male';
+    String? selectedGender = studentToEdit?.gender;
     DateTime? selectedDob;
     if (studentToEdit?.dateOfBirth != null && studentToEdit!.dateOfBirth.isNotEmpty) {
       try {
@@ -356,9 +393,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
     // Identity / Category
     final aadhaarCtrl = TextEditingController(text: studentToEdit?.aadhaarNumber ?? '');
-    String selectedCategory = studentToEdit?.category ?? 'Gen';
-    String selectedNationality = studentToEdit?.nationality ?? 'Indian';
-    String selectedBloodGroup = studentToEdit?.bloodGroup ?? 'A+';
+    String? selectedCategory = studentToEdit?.category;
+    String? selectedNationality = studentToEdit?.nationality;
+    String? selectedBloodGroup = studentToEdit?.bloodGroup;
 
     // Contact
     final mobileCtrl = TextEditingController(text: studentToEdit?.mobile ?? '');
@@ -376,18 +413,24 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     bool saving = false;
     Uint8List? photographBytes;
     String? photographUrl = studentToEdit?.photographUrl;
+    String? photographError;
+    String? bloodGroupError;
+    int currentStep = 0;
+    const int totalSteps = 3;
 
-    await showModalBottomSheet<void>(
+    await showDialog<void>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
       builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setModalState) {
+        final media = MediaQuery.of(ctx);
+        final maxHeight = (media.size.height * 0.9).clamp(520.0, 820.0);
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: 720, maxHeight: maxHeight),
+            child: StatefulBuilder(
+              builder: (ctx, setModalState) {
             InputDecoration _fieldDecor(String label, {String? hint}) =>
                 InputDecoration(
                   labelText: label,
@@ -435,56 +478,243 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
               ),
             );
 
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 16,
-                right: 16,
-                top: 4,
-                bottom: MediaQuery.viewInsetsOf(ctx).bottom + 12,
-              ),
-              child: Form(
-                key: formKey,
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Center(
-                        child: Container(
-                          width: 32,
-                          height: 3,
-                          margin: const EdgeInsets.only(bottom: 12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFDCE2F4),
-                            borderRadius: BorderRadius.circular(4),
+            Future<void> _saveStudent() async {
+              if (!formKey.currentState!.validate()) return;
+
+              if (studentToEdit == null) {
+                final bool? confirm = await showDialog<bool>(
+                  context: ctx,
+                  builder: (dialogCtx) => AlertDialog(
+                    title: const smcText(
+                      textToDisplay: 'Create Student',
+                      textSize: 18,
+                      textBoldness: 4,
+                      colorOfText: ColorConst.textPrimary,
+                    ),
+                    content: const smcText(
+                      textToDisplay:
+                          'Are you sure you want to save this student record?',
+                      textSize: 14,
+                      colorOfText: ColorConst.textSecondary,
+                      maxLines: 3,
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogCtx, false),
+                        child: const smcText(
+                          textToDisplay: 'Cancel',
+                          textSize: 14,
+                          textBoldness: 3,
+                          colorOfText: ColorConst.textSecondary,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogCtx, true),
+                        child: const smcText(
+                          textToDisplay: 'Save',
+                          textSize: 14,
+                          textBoldness: 4,
+                          colorOfText: ColorConst.primaryBlue,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm != true) return;
+              }
+
+              setModalState(() => saving = true);
+
+              if (photographBytes != null) {
+                final ref = FirebaseStorage.instance
+                    .ref()
+                    .child('student_photos')
+                    .child(
+                      '${studentIdCtrl.text.trim().toUpperCase()}_${DateTime.now().millisecondsSinceEpoch}.jpg',
+                    );
+                await ref.putData(
+                  photographBytes!,
+                  SettableMetadata(contentType: 'image/jpeg'),
+                );
+                photographUrl = await ref.getDownloadURL();
+              }
+
+              final student = StudentModel(
+                documentId: studentToEdit?.documentId,
+                studentId: studentIdCtrl.text.trim().toUpperCase(),
+                fullName: fullNameCtrl.text.trim(),
+                gender: selectedGender ?? '',
+                dateOfBirth: selectedDob?.toIso8601String().split('T')[0] ?? '',
+                photographUrl: photographUrl ?? '',
+                aadhaarNumber: aadhaarCtrl.text.trim(),
+                category: selectedCategory ?? '',
+                nationality: selectedNationality ?? '',
+                bloodGroup: selectedBloodGroup ?? '',
+                mobile: mobileCtrl.text.trim(),
+                email: emailCtrl.text.trim().toLowerCase(),
+                permanentAddress: permanentAddrCtrl.text.trim(),
+                correspondenceAddress: correspondenceAddrCtrl.text.trim(),
+                emergencyContactName: emergNameCtrl.text.trim(),
+                emergencyContactRelation: emergRelationCtrl.text.trim(),
+                emergencyContactMobile: emergMobileCtrl.text.trim(),
+                orgId: widget.orgId,
+                deptId: widget.deptId,
+                createdAt: studentToEdit?.createdAt ?? DateTime.now().toIso8601String(),
+              );
+
+              try {
+                if (studentToEdit != null) {
+                  await studentService.updateStudent(
+                    documentId: studentToEdit.documentId!,
+                    updated: student,
+                  );
+                } else {
+                  await studentService.createStudent(student);
+                }
+                if (!ctx.mounted) return;
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    backgroundColor: Colors.green.shade600,
+                    content: smcText(
+                      textToDisplay:
+                          'Student ${studentToEdit == null ? 'added' : 'updated'} successfully.',
+                      textSize: 14,
+                      colorOfText: Colors.white,
+                    ),
+                  ),
+                );
+                await refresh();
+              } catch (e) {
+                if (!ctx.mounted) return;
+                setModalState(() => saving = false);
+                final errorMsg = e.toString().replaceFirst('Exception: ', '');
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    backgroundColor: Colors.red.shade600,
+                    content: smcText(
+                      textToDisplay: 'Error: $errorMsg',
+                      textSize: 13,
+                      colorOfText: Colors.white,
+                      maxLines: 3,
+                    ),
+                  ),
+                );
+              }
+            }
+
+            void _onNext() {
+              if (currentStep >= totalSteps - 1) return;
+              if (!formKey.currentState!.validate()) return;
+              if (currentStep == 0 &&
+                  photographBytes == null &&
+                  (photographUrl == null || photographUrl!.trim().isEmpty)) {
+                setModalState(() {
+                  photographError = 'Photograph is required';
+                });
+                return;
+              }
+              if (currentStep == 1 &&
+                  (selectedBloodGroup == null ||
+                      selectedBloodGroup!.trim().isEmpty)) {
+                setModalState(() {
+                  bloodGroupError = 'Please select blood group';
+                });
+                return;
+              }
+              setModalState(() {
+                photographError = null;
+                bloodGroupError = null;
+                currentStep += 1;
+              });
+            }
+
+            void _onBack() {
+              if (currentStep <= 0) return;
+              setModalState(() {
+                currentStep -= 1;
+              });
+            }
+
+            Widget _buildPhotographPreview() {
+              if (photographBytes != null) {
+                return Column(
+                  children: [
+                    const SizedBox(height: 10),
+                    Center(
+                      child: Container(
+                        width: 280,
+                        height: 420,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: ColorConst.borderSoft),
+                          color: const Color(0xFFF7F9FF),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: Image.memory(
+                          photographBytes!,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }
+
+              if (photographUrl != null && photographUrl!.trim().isNotEmpty) {
+                return Column(
+                  children: [
+                    const SizedBox(height: 10),
+                    Center(
+                      child: Container(
+                        width: 280,
+                        height: 420,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: ColorConst.borderSoft),
+                          color: const Color(0xFFF7F9FF),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: Image.network(
+                          photographUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Center(
+                            child: Icon(
+                              Icons.broken_image_outlined,
+                              color: ColorConst.textSecondary,
+                            ),
                           ),
                         ),
                       ),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: smcText(
-                              textToDisplay: isViewOnly ? 'Student Details' : (studentToEdit == null ? 'Create Student' : 'Edit Student'),
-                              textSize: 18,
-                              textBoldness: 5,
-                              colorOfText: ColorConst.textPrimary,
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.close_rounded, size: 20),
-                            color: ColorConst.textSecondary,
-                            onPressed: () => Navigator.pop(ctx),
-                          ),
-                        ],
-                      ),
+                    ),
+                  ],
+                );
+              }
 
-                      _sectionHeader('Basic Profile Information', Icons.person_outline_rounded),
+              return const SizedBox.shrink();
+            }
+
+            Widget _buildStepContent() {
+              switch (currentStep) {
+                case 0:
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _sectionHeader(
+                        'Basic Profile Information',
+                        Icons.person_outline_rounded,
+                      ),
                       TextFormField(
                         controller: studentIdCtrl,
                         readOnly: isViewOnly,
-                        decoration: _fieldDecor('Student ID (USN) *', hint: 'e.g. 1AB20CS001'),
+                        decoration: _fieldDecor(
+                          'Student ID (USN) *',
+                          hint: 'e.g. 1AB20CS001',
+                        ),
                         textCapitalization: TextCapitalization.characters,
-                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Student ID is required' : null,
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Student ID is required'
+                            : null,
                       ),
                       const SizedBox(height: 8),
                       TextFormField(
@@ -492,49 +722,82 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         readOnly: isViewOnly,
                         decoration: _fieldDecor('Full Name *'),
                         textCapitalization: TextCapitalization.words,
-                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Full name is required' : null,
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Full name is required'
+                            : null,
                       ),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
                         value: selectedGender,
                         decoration: _fieldDecor('Gender *'),
-                        items: ['Male', 'Female', 'Other'].map((g) => DropdownMenuItem(value: g, child: Text(g, style: const TextStyle(fontSize: 13)))).toList(),
-                        onChanged: isViewOnly ? null : (v) => setModalState(() => selectedGender = v!),
+                        items: ['Male', 'Female', 'Other']
+                            .map(
+                              (g) => DropdownMenuItem(
+                                value: g,
+                                child: Text(
+                                  g,
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: isViewOnly
+                            ? null
+                            : (v) =>
+                                setModalState(() => selectedGender = v),
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Please select gender'
+                            : null,
                       ),
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: dobCtrl,
                         readOnly: true,
                         decoration: _fieldDecor('Date of Birth *').copyWith(
-                          suffixIcon: const Icon(Icons.calendar_today_outlined, size: 16),
+                          suffixIcon: const Icon(
+                            Icons.calendar_today_outlined,
+                            size: 16,
+                          ),
                         ),
-                        onTap: isViewOnly ? null : () async {
-                          final picked = await showDatePicker(
-                            context: ctx,
-                            initialDate: DateTime(2005),
-                            firstDate: DateTime(1990),
-                            lastDate: DateTime.now(),
-                          );
-                          if (picked != null) {
-                            setModalState(() {
-                              selectedDob = picked;
-                              dobCtrl.text = '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
-                            });
-                          }
-                        },
-                        validator: (_) => selectedDob == null ? 'Date of birth is required' : null,
+                        onTap: isViewOnly
+                            ? null
+                            : () async {
+                                final picked = await showDatePicker(
+                                  context: ctx,
+                                  initialDate: DateTime(2005),
+                                  firstDate: DateTime(1990),
+                                  lastDate: DateTime.now(),
+                                );
+                                if (picked != null) {
+                                  setModalState(() {
+                                    selectedDob = picked;
+                                    dobCtrl.text =
+                                        '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
+                                  });
+                                }
+                              },
+                        validator: (_) => selectedDob == null
+                            ? 'Date of birth is required'
+                            : null,
                       ),
                       const SizedBox(height: 8),
-
                       GestureDetector(
-                        onTap: isViewOnly ? null : () async {
-                          final picker = ImagePicker();
-                          final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
-                          if (picked != null) {
-                            final bytes = await picked.readAsBytes();
-                            setModalState(() => photographBytes = bytes);
-                          }
-                        },
+                        onTap: isViewOnly
+                            ? null
+                            : () async {
+                                final picker = ImagePicker();
+                                final picked = await picker.pickImage(
+                                  source: ImageSource.gallery,
+                                  imageQuality: 70,
+                                );
+                                if (picked != null) {
+                                  final bytes = await picked.readAsBytes();
+                                  setModalState(() {
+                                    photographBytes = bytes;
+                                    photographError = null;
+                                  });
+                                }
+                              },
                         child: Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(8),
@@ -543,13 +806,40 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(color: ColorConst.borderSoft),
                           ),
-                          child: photographBytes != null
-                              ? Image.memory(photographBytes!, height: 80, fit: BoxFit.cover)
-                              : Row(children: [const Icon(Icons.photo_camera_outlined, size: 16), const SizedBox(width: 8), Text(isViewOnly ? 'Photograph' : 'Upload Photograph', style: const TextStyle(fontSize: 12))]),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.photo_camera_outlined,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                isViewOnly ? 'Photograph' : 'Upload Photograph',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-
-                      _sectionHeader('Identity & Category', Icons.verified_user_outlined),
+                      if (photographError != null) ...[
+                        const SizedBox(height: 6),
+                        smcText(
+                          textToDisplay: photographError!,
+                          textSize: 12,
+                          colorOfText: const Color(0xFFC62828),
+                        ),
+                      ],
+                      _buildPhotographPreview(),
+                    ],
+                  );
+                case 1:
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _sectionHeader(
+                        'Identity & Category',
+                        Icons.verified_user_outlined,
+                      ),
                       TextFormField(
                         controller: aadhaarCtrl,
                         readOnly: isViewOnly,
@@ -560,48 +850,127 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       DropdownButtonFormField<String>(
                         value: selectedCategory,
                         decoration: _fieldDecor('Category *'),
-                        items: ['Gen', 'OBC', 'SC', 'ST'].map((c) => DropdownMenuItem(value: c, child: Text(c, style: const TextStyle(fontSize: 13)))).toList(),
-                        onChanged: isViewOnly ? null : (v) => setModalState(() => selectedCategory = v!),
+                        items: ['Gen', 'OBC', 'SC', 'ST']
+                            .map(
+                              (c) => DropdownMenuItem(
+                                value: c,
+                                child: Text(
+                                  c,
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: isViewOnly
+                            ? null
+                            : (v) => setModalState(() => selectedCategory = v),
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Please select category'
+                            : null,
                       ),
                       const SizedBox(height: 6),
                       DropdownButtonFormField<String>(
                         value: selectedNationality,
                         decoration: _fieldDecor('Nationality *'),
-                        items: ['Indian', 'NRI', 'Foreigner'].map((n) => DropdownMenuItem(value: n, child: Text(n, style: const TextStyle(fontSize: 13)))).toList(),
-                        onChanged: isViewOnly ? null : (v) => setModalState(() => selectedNationality = v!),
+                        items: ['Indian', 'NRI', 'Foreigner']
+                            .map(
+                              (n) => DropdownMenuItem(
+                                value: n,
+                                child: Text(
+                                  n,
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: isViewOnly
+                            ? null
+                            : (v) =>
+                                setModalState(() => selectedNationality = v),
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Please select nationality'
+                            : null,
                       ),
                       const SizedBox(height: 6),
                       const Padding(
                         padding: EdgeInsets.only(left: 4, bottom: 4),
-                        child: smcText(textToDisplay: 'Blood Group *', textSize: 12, colorOfText: ColorConst.textSecondary),
+                        child: smcText(
+                          textToDisplay: 'Blood Group *',
+                          textSize: 12,
+                          colorOfText: ColorConst.textSecondary,
+                        ),
                       ),
                       Wrap(
                         spacing: 4,
                         runSpacing: 0,
-                        children: ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].map((bg) {
+                        children: [
+                          'A+',
+                          'A-',
+                          'B+',
+                          'B-',
+                          'O+',
+                          'O-',
+                          'AB+',
+                          'AB-'
+                        ].map((bg) {
                           return Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Radio<String>(
                                 value: bg,
                                 groupValue: selectedBloodGroup,
-                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
                                 activeColor: ColorConst.primaryBlue,
-                                onChanged: isViewOnly ? null : (v) => setModalState(() => selectedBloodGroup = v!),
+                                onChanged: isViewOnly
+                                    ? null
+                                    : (v) => setModalState(
+                                          () {
+                                            selectedBloodGroup = v;
+                                            bloodGroupError = null;
+                                          },
+                                        ),
                               ),
-                              smcText(textToDisplay: bg, textSize: 12, colorOfText: ColorConst.textPrimary),
+                              smcText(
+                                textToDisplay: bg,
+                                textSize: 12,
+                                colorOfText: ColorConst.textPrimary,
+                              ),
                               const SizedBox(width: 4),
                             ],
                           );
                         }).toList(),
                       ),
-
-                      _sectionHeader('Contact Details', Icons.contact_phone_outlined),
+                      if (bloodGroupError != null) ...[
+                        const SizedBox(height: 4),
+                        smcText(
+                          textToDisplay: bloodGroupError!,
+                          textSize: 12,
+                          colorOfText: const Color(0xFFC62828),
+                        ),
+                      ],
+                      _sectionHeader(
+                        'Contact Details',
+                        Icons.contact_phone_outlined,
+                      ),
                       TextFormField(
                         controller: mobileCtrl,
                         readOnly: isViewOnly,
                         decoration: _fieldDecor('Mobile Number *'),
                         keyboardType: TextInputType.phone,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(10),
+                        ],
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) {
+                            return 'Mobile number is required';
+                          }
+                          if (v.trim().length != 10) {
+                            return 'Enter valid 10-digit mobile number';
+                          }
+                          return null;
+                        },
                       ),
                       const SizedBox(height: 6),
                       TextFormField(
@@ -609,14 +978,34 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         readOnly: isViewOnly,
                         decoration: _fieldDecor('Email Address *'),
                         keyboardType: TextInputType.emailAddress,
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) {
+                            return 'Email is required';
+                          }
+                          final emailRegex =
+                              RegExp(r'^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$');
+                          if (!emailRegex.hasMatch(v.trim())) {
+                            return 'Enter a valid email address';
+                          }
+                          return null;
+                        },
                       ),
-
+                      _buildPhotographPreview(),
+                    ],
+                  );
+                default:
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       _sectionHeader('Address', Icons.home_outlined),
                       TextFormField(
                         controller: permanentAddrCtrl,
                         readOnly: isViewOnly,
                         decoration: _fieldDecor('Permanent Address'),
                         maxLines: 1,
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Permanent address is required'
+                            : null,
                       ),
                       const SizedBox(height: 6),
                       TextFormField(
@@ -624,103 +1013,178 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         readOnly: isViewOnly,
                         decoration: _fieldDecor('Correspondence Address'),
                         maxLines: 1,
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Correspondence address is required'
+                            : null,
                       ),
-
-                      _sectionHeader('Emergency Contact (Parent/Guardian)', Icons.emergency_outlined),
-                      TextFormField(controller: emergNameCtrl, readOnly: isViewOnly, decoration: _fieldDecor('Contact Person Name')),
+                      _sectionHeader(
+                        'Emergency Contact (Parent/Guardian)',
+                        Icons.emergency_outlined,
+                      ),
+                      TextFormField(
+                        controller: emergNameCtrl,
+                        readOnly: isViewOnly,
+                        decoration: _fieldDecor('Contact Person Name'),
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Contact person name is required'
+                            : null,
+                      ),
                       const SizedBox(height: 6),
-                      TextFormField(controller: emergRelationCtrl, readOnly: isViewOnly, decoration: _fieldDecor('Relation')),
+                      TextFormField(
+                        controller: emergRelationCtrl,
+                        readOnly: isViewOnly,
+                        decoration: _fieldDecor('Relation'),
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Relation is required'
+                            : null,
+                      ),
                       const SizedBox(height: 6),
-                      TextFormField(controller: emergMobileCtrl, readOnly: isViewOnly, decoration: _fieldDecor('Emergency Mobile'), keyboardType: TextInputType.phone),
+                      TextFormField(
+                        controller: emergMobileCtrl,
+                        readOnly: isViewOnly,
+                        decoration: _fieldDecor('Emergency Mobile'),
+                        keyboardType: TextInputType.phone,
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Emergency mobile is required'
+                            : null,
+                      ),
+                      _buildPhotographPreview(),
+                    ],
+                  );
+              }
+            }
 
-                      const SizedBox(height: 12),
-                      if (!isViewOnly)
-                      SizedBox(
-                        width: double.infinity,
-                        height: 40,
-                        child: ElevatedButton(
-                          onPressed: saving ? null : () async {
-                            if (!formKey.currentState!.validate()) return;
-                            setModalState(() => saving = true);
-
-                            if (photographBytes != null) {
-                              final ref = FirebaseStorage.instance
-                                  .ref()
-                                  .child('student_photos')
-                                  .child('${studentIdCtrl.text.trim().toUpperCase()}_${DateTime.now().millisecondsSinceEpoch}.jpg');
-                              await ref.putData(photographBytes!, SettableMetadata(contentType: 'image/jpeg'));
-                              photographUrl = await ref.getDownloadURL();
-                            }
-
-                            final student = StudentModel(
-                              documentId: studentToEdit?.documentId,
-                              studentId: studentIdCtrl.text.trim().toUpperCase(),
-                              fullName: fullNameCtrl.text.trim(),
-                              gender: selectedGender,
-                              dateOfBirth: selectedDob?.toIso8601String().split('T')[0] ?? '',
-                              photographUrl: photographUrl ?? '',
-                              aadhaarNumber: aadhaarCtrl.text.trim(),
-                              category: selectedCategory,
-                              nationality: selectedNationality,
-                              bloodGroup: selectedBloodGroup,
-                              mobile: mobileCtrl.text.trim(),
-                              email: emailCtrl.text.trim().toLowerCase(),
-                              permanentAddress: permanentAddrCtrl.text.trim(),
-                              correspondenceAddress: correspondenceAddrCtrl.text.trim(),
-                              emergencyContactName: emergNameCtrl.text.trim(),
-                              emergencyContactRelation: emergRelationCtrl.text.trim(),
-                              emergencyContactMobile: emergMobileCtrl.text.trim(),
-                              orgId: widget.orgId,
-                              deptId: widget.deptId,
-                              createdAt: studentToEdit?.createdAt ?? DateTime.now().toIso8601String(),
-                            );
-
-                            try {
-                              if (studentToEdit != null) {
-                                await studentService.updateStudent(documentId: studentToEdit.documentId!, updated: student);
-                              } else {
-                                await studentService.createStudent(student);
-                              }
-                              if (!ctx.mounted) return;
-                              Navigator.pop(ctx);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  backgroundColor: Colors.green.shade600,
-                                  content: smcText(
-                                    textToDisplay: 'Student ${studentToEdit == null ? 'added' : 'updated'} successfully.',
-                                    textSize: 14,
-                                    colorOfText: Colors.white,
-                                  ),
-                                ),
-                              );
-                              await refresh();
-                            } catch (e) {
-                              if (!ctx.mounted) return;
-                              setModalState(() => saving = false);
-                              final errorMsg = e.toString().replaceFirst('Exception: ', '');
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  backgroundColor: Colors.red.shade600,
-                                  content: smcText(
-                                    textToDisplay: 'Error: $errorMsg',
-                                    textSize: 13,
-                                    colorOfText: Colors.white,
-                                    maxLines: 3,
-                                  ),
-                                ),
-                              );
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(backgroundColor: ColorConst.primaryBlue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                          child: saving ? const CircularProgressIndicator(color: Colors.white) : smcText(textToDisplay: studentToEdit == null ? 'Save Student' : 'Update Student', textSize: 15, colorOfText: Colors.white),
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 18,
+                right: 18,
+                top: 14,
+                bottom: media.viewInsets.bottom + 12,
+              ),
+              child: Form(
+                key: formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              smcText(
+                                textToDisplay: isViewOnly
+                                    ? 'Student Details'
+                                    : (studentToEdit == null
+                                        ? 'Create Student'
+                                        : 'Edit Student'),
+                                textSize: 18,
+                                textBoldness: 5,
+                                colorOfText: ColorConst.textPrimary,
+                              ),
+                              smcText(
+                                textToDisplay:
+                                    'Step ${currentStep + 1} of $totalSteps',
+                                textSize: 12,
+                                colorOfText: ColorConst.textSecondary,
+                              ),
+                            ],
+                          ),
                         ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 20),
+                          color: ColorConst.textSecondary,
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: _buildStepContent(),
+                      ),
+                    ),
+
+                    if (!isViewOnly) ...[
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          TextButton(
+                            onPressed: currentStep == 0 ? null : _onBack,
+                            child: const smcText(
+                              textToDisplay: 'Back',
+                              textSize: 14,
+                              textBoldness: 4,
+                              colorOfText: ColorConst.textSecondary,
+                            ),
+                          ),
+                          const Spacer(),
+                          SizedBox(
+                            height: 40,
+                            child: ElevatedButton(
+                              onPressed: saving
+                                  ? null
+                                  : (currentStep == totalSteps - 1
+                                      ? _saveStudent
+                                      : _onNext),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: ColorConst.primaryBlue,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              child: saving
+                                  ? const CircularProgressIndicator(
+                                      color: Colors.white,
+                                    )
+                                  : smcText(
+                                      textToDisplay:
+                                          currentStep == totalSteps - 1
+                                              ? (studentToEdit == null
+                                                  ? 'Save Student'
+                                                  : 'Update Student')
+                                              : 'Next',
+                                      textSize: 15,
+                                      colorOfText: Colors.white,
+                                    ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          TextButton(
+                            onPressed: currentStep == 0 ? null : _onBack,
+                            child: const smcText(
+                              textToDisplay: 'Back',
+                              textSize: 14,
+                              textBoldness: 4,
+                              colorOfText: ColorConst.textSecondary,
+                            ),
+                          ),
+                          const Spacer(),
+                          TextButton(
+                            onPressed:
+                                currentStep == totalSteps - 1 ? null : _onNext,
+                            child: const smcText(
+                              textToDisplay: 'Next',
+                              textSize: 14,
+                              textBoldness: 4,
+                              colorOfText: ColorConst.primaryBlue,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
-                  ),
+                  ],
                 ),
               ),
             );
-          },
+              },
+            ),
+          ),
         );
       },
     );
@@ -1381,20 +1845,6 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                     ),
                     const SizedBox(height: 8),
                     _menuTile(
-                      title: 'Students',
-                      icon: Icons.school_outlined,
-                      isSelected: selectedMenuIndex == 1,
-                      onTap: () => setState(() => selectedMenuIndex = 1),
-                    ),
-                    const SizedBox(height: 8),
-                    _menuTile(
-                      title: 'Faculties',
-                      icon: Icons.people_alt_outlined,
-                      isSelected: selectedMenuIndex == 2,
-                      onTap: () => setState(() => selectedMenuIndex = 2),
-                    ),
-                    const SizedBox(height: 8),
-                    _menuTile(
                       title: 'Courses',
                       icon: Icons.people_alt_outlined,
                       isSelected: selectedMenuIndex == 3,
@@ -1427,36 +1877,6 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Welcome + Organization Info
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              smcText(
-                                textToDisplay:
-                                'Welcome back, ${widget.adminName.isEmpty ? 'Admin' : widget.adminName}',
-                                textSize: 18,
-                                textBoldness: 5,
-                                colorOfText: ColorConst.textPrimary,
-                                maxLines: 2,
-                              ),
-                              const SizedBox(height: 4),
-                              smcText(
-                                textToDisplay:
-                                'Organisation: ${organizationDisplayName.isEmpty ? widget.orgId : organizationDisplayName}',
-                                textSize: 13,
-                                colorOfText: ColorConst.textSecondary,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 16),
-
                     Expanded(
                       child: loading
                           ? const Center(child: CircularProgressIndicator())
@@ -1512,6 +1932,13 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
               icon: Icons.people_alt_rounded,
               color: Colors.green,
             ),
+            const SizedBox(width: 16),
+            _buildStatCard(
+              title: 'Total Courses',
+              count: totalCourses.toString(),
+              icon: Icons.menu_book_rounded,
+              color: Colors.purple,
+            ),
           ],
         ),
       ],
@@ -1564,39 +1991,6 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            const Expanded(
-              child: smcText(
-                textToDisplay: 'Students in your department',
-                textSize: 14,
-                textBoldness: 3,
-                colorOfText: ColorConst.textSecondary,
-              ),
-            ),
-            ElevatedButton.icon(
-              onPressed: openCreateStudentSheet,
-              icon: const Icon(Icons.school_rounded, size: 18, color: Colors.white),
-              label: const smcText(
-                textToDisplay: 'Create Student',
-                textSize: 14,
-                textBoldness: 4,
-                colorOfText: Colors.white,
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: ColorConst.primaryBlue,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
         Expanded(child: buildStudentTable()),
       ],
     );
@@ -2180,207 +2574,29 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     );
   }
   InputDecoration _inputDecoration(String hint) {
-
     return InputDecoration(
-
       hintText: hint,
-
       filled: true,
-
       fillColor: Colors.white,
-
       contentPadding: const EdgeInsets.symmetric(
         horizontal: 16,
         vertical: 18,
       ),
-
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
       ),
-
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(
           color: Color(0xFFE4E8F0),
-
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
         ),
       ),
-    );
-  }
-
-  Widget _buildSelectedView() {
-    switch (selectedMenuIndex) {
-      case 1:
-        return _buildStudentsView();
-      case 2:
-        return _buildFacultiesView();
-      default:
-        return _buildDashboardView();
-    }
-  }
-
-  Widget _buildDashboardView() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const smcText(
-          textToDisplay: 'Department Overview',
-          textSize: 16,
-          textBoldness: 5,
-          colorOfText: ColorConst.textPrimary,
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            _buildStatCard(
-              title: 'Total Students',
-              count: studentList.length.toString(),
-              icon: Icons.school_rounded,
-              color: Colors.blue,
-            ),
-            const SizedBox(width: 16),
-            _buildStatCard(
-              title: 'Total Faculty',
-              count: facultyList.length.toString(),
-              icon: Icons.people_alt_rounded,
-              color: Colors.green,
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatCard({required String title, required String count, required IconData icon, required Color color}) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE3EAF8)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: color, size: 24),
-            ),
-            const SizedBox(width: 16),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                smcText(
-                  textToDisplay: title,
-                  textSize: 13,
-                  colorOfText: ColorConst.textSecondary,
-                ),
-                smcText(
-                  textToDisplay: count,
-                  textSize: 20,
-                  textBoldness: 5,
-                  colorOfText: ColorConst.textPrimary,
-                ),
-              ],
-            ),
-          ],
-
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(
+          color: ColorConst.primaryBlue,
         ),
       ),
-    );
-  }
-
-  Widget _buildStudentsView() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Expanded(
-              child: smcText(
-                textToDisplay: 'Students in your department',
-                textSize: 14,
-                textBoldness: 3,
-                colorOfText: ColorConst.textSecondary,
-              ),
-            ),
-            ElevatedButton.icon(
-              onPressed: openCreateStudentSheet,
-              icon: const Icon(Icons.school_rounded, size: 18, color: Colors.white),
-              label: const smcText(
-                textToDisplay: 'Create Student',
-                textSize: 14,
-                textBoldness: 4,
-                colorOfText: Colors.white,
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: ColorConst.primaryBlue,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Expanded(child: buildStudentTable()),
-      ],
-    );
-  }
-
-  Widget _buildFacultiesView() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Expanded(
-              child: smcText(
-                textToDisplay: 'Faculty in your department',
-                textSize: 14,
-                textBoldness: 3,
-                colorOfText: ColorConst.textSecondary,
-              ),
-            ),
-            ElevatedButton.icon(
-              onPressed: openCreateFacultySheet,
-              icon: const Icon(Icons.person_add_alt_1_rounded, size: 18, color: Colors.white),
-              label: const smcText(
-                textToDisplay: 'Create Faculty',
-                textSize: 14,
-                textBoldness: 4,
-                colorOfText: Colors.white,
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: ColorConst.primaryBlue,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Expanded(child: buildFacultyTable()),
-      ],
     );
   }
 
@@ -2430,38 +2646,80 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                 child: const Icon(Icons.school_outlined, color: ColorConst.primaryBlue),
               ),
               const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const smcText(
+                          textToDisplay: 'Student List',
+                          textSize: 16,
+                          textBoldness: 5,
+                          colorOfText: Color(0xFF1F2F52),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF4FF),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: smcText(
+                            textToDisplay: '${studentList.length}',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: ColorConst.primaryBlue,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    const smcText(
+                      textToDisplay: 'View and manage all students in your department.',
+                      textSize: 12,
+                      colorOfText: Color(0xFF7D87A3),
+                    ),
+                  ],
+                ),
+              ),
+              Row(
                 children: [
-                  Row(
-                    children: [
-                      const smcText(
-                        textToDisplay: 'Student List',
-                        textSize: 16,
-                        textBoldness: 5,
-                        colorOfText: Color(0xFF1F2F52),
+                  ElevatedButton.icon(
+                    onPressed: openCreateStudentSheet,
+                    icon: const Icon(Icons.school_rounded, size: 18, color: Colors.white),
+                    label: const smcText(
+                      textToDisplay: 'Create Student',
+                      textSize: 14,
+                      textBoldness: 4,
+                      colorOfText: Colors.white,
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: ColorConst.primaryBlue,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEFF4FF),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: smcText(
-                          textToDisplay: '${studentList.length}',
-                          textSize: 12,
-                          textBoldness: 4,
-                          colorOfText: ColorConst.primaryBlue,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                  const SizedBox(height: 2),
-                  const smcText(
-                    textToDisplay: 'View and manage all students in your department.',
-                    textSize: 12,
-                    colorOfText: Color(0xFF7D87A3),
+                  const SizedBox(width: 10),
+                  OutlinedButton.icon(
+                    onPressed: onImportStudents,
+                    icon: const Icon(Icons.upload_file_rounded, size: 18),
+                    label: const smcText(
+                      textToDisplay: 'Import Students',
+                      textSize: 14,
+                      textBoldness: 4,
+                      colorOfText: ColorConst.primaryBlue,
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: ColorConst.primaryBlue,
+                      side: const BorderSide(color: ColorConst.primaryBlue),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                   ),
                 ],
               ),

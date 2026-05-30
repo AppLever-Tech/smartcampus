@@ -324,30 +324,7 @@ class LandingPageState extends State<LandingPage> {
                   },
                 ),
                 const SizedBox(height: 18),
-                Container(
-                  height: 180,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEFF3FF),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Align(
-                        alignment: Alignment.bottomCenter,
-                        child: Image.asset(
-                          'assets/images/org.png',
-                          width: double.infinity,
-                          height: 180,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                buildIconOverlayAuthActions(),
+                buildCampusIllustrationWithActions(),
               ],
             ),
           ),
@@ -360,6 +337,50 @@ class LandingPageState extends State<LandingPage> {
     );
   }
 
+  Widget buildCampusIllustrationWithActions() {
+    return Container(
+      height: 200,
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF3FF),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Image.asset(
+              'assets/images/org.png',
+              width: double.infinity,
+              height: 200,
+              fit: BoxFit.cover,
+              alignment: Alignment.bottomCenter,
+            ),
+          ),
+          Positioned(
+            left: 12,
+            right: 12,
+            bottom: 72,
+            child: buildIconOverlayAuthActions(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void openAuthPanel({required bool signUp}) {
+    setState(() {
+      isSignUpFlow = signUp;
+      showWelcomeBackUi = true;
+      showOtpInput = false;
+      otpController.clear();
+      otpErrorText = null;
+      errorText = null;
+      pendingUuidForOtp = null;
+    });
+  }
+
   Widget buildIconOverlayAuthActions() {
     return Row(
       children: [
@@ -367,17 +388,7 @@ class LandingPageState extends State<LandingPage> {
           child: SizedBox(
             height: 48,
             child: ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  isSignUpFlow = false;
-                  showWelcomeBackUi = true;
-                  showOtpInput = false;
-                  otpController.clear();
-                  otpErrorText = null;
-                  errorText = null;
-                  pendingUuidForOtp = null;
-                });
-              },
+              onPressed: () => openAuthPanel(signUp: false),
               style: ElevatedButton.styleFrom(
                 elevation: 1.5,
                 backgroundColor: ColorConst.primaryBlue,
@@ -387,48 +398,10 @@ class LandingPageState extends State<LandingPage> {
                 ),
               ),
               child: const smcText(
-                textToDisplay: 'Sign In',
+                textToDisplay: 'Sign In / Up',
                 textSize: 15,
                 textBoldness: 3,
                 colorOfText: Colors.white,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: SizedBox(
-            height: 48,
-            child: OutlinedButton(
-              onPressed: () {
-                setState(() {
-                  isSignUpFlow = true;
-                  showWelcomeBackUi = true;
-                  showOtpInput = false;
-                  otpController.clear();
-                  otpErrorText = null;
-                  errorText = null;
-                  pendingUuidForOtp = null;
-                });
-              },
-              style: OutlinedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: ColorConst.primaryBlue,
-                side: const BorderSide(
-                  color: ColorConst.primaryBlue,
-                  width: 1.4,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              child: const smcText(
-                textToDisplay: 'Sign Up',
-                textSize: 15,
-                textBoldness: 3,
-                colorOfText: ColorConst.primaryBlue,
                 textAlign: TextAlign.center,
                 maxLines: 1,
               ),
@@ -497,59 +470,57 @@ class LandingPageState extends State<LandingPage> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 18),
-          const FeatureTile(
-            icon: Icons.groups_rounded,
-            iconBgColor: Color(0xFFE8EDFF),
-            iconColor: ColorConst.primaryBlue,
-            title: 'Students',
-            subtitle: 'Your campus, your way.',
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: FeatureTile(
+                  icon: Icons.groups_rounded,
+                  iconBgColor: const Color(0xFFE8EDFF),
+                  iconColor: ColorConst.primaryBlue,
+                  title: 'Students',
+                  subtitle: 'Your campus,\nyour way.',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FeatureTile(
+                  icon: Icons.edit_note_rounded,
+                  iconBgColor: const Color(0xFFE3F7EE),
+                  iconColor: const Color(0xFF16A46B),
+                  title: 'Faculty',
+                  subtitle: 'Teach, manage\nand inspire.',
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
-          const FeatureTile(
-            icon: Icons.edit_note_rounded,
-            iconBgColor: Color(0xFFE3F7EE),
-            iconColor: Color(0xFF16A46B),
-            title: 'Faculty',
-            subtitle: 'Teach, manage and inspire.',
-          ),
-          const SizedBox(height: 12),
-          const FeatureTile(
-            icon: Icons.menu_book_rounded,
-            iconBgColor: Color(0xFFF0E8FF),
-            iconColor: Color(0xFF8B53F6),
-            title: 'Subjects',
-            subtitle: 'Access notes, assignments and more.',
-          ),
-          const SizedBox(height: 12),
-          const FeatureTile(
-            icon: Icons.work_outline_rounded,
-            iconBgColor: Color(0xFFFFEAEB),
-            iconColor: Color(0xFFF05A64),
-            title: 'Departments',
-            subtitle: 'Streamline operations and collaboration.',
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: FeatureTile(
+                  icon: Icons.menu_book_rounded,
+                  iconBgColor: const Color(0xFFF0E8FF),
+                  iconColor: const Color(0xFF8B53F6),
+                  title: 'Subjects',
+                  subtitle: 'Access notes,\nassignments and more.',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FeatureTile(
+                  icon: Icons.work_outline_rounded,
+                  iconBgColor: const Color(0xFFFFEAEB),
+                  iconColor: const Color(0xFFF05A64),
+                  title: 'Departments',
+                  subtitle: 'Streamline operations\nand collaboration.',
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 18),
-          Container(
-            height: 170,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEFF3FF),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            clipBehavior: Clip.antiAlias,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: Image.asset(
-                'assets/images/org.png',
-                width: double.infinity,
-                height: 170,
-                fit: BoxFit.contain,
-                alignment: Alignment.bottomCenter,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          buildIconOverlayAuthActions(),
+          buildCampusIllustrationWithActions(),
         ] else ...[
           buildRightLoginCard(),
         ],
@@ -855,6 +826,20 @@ class LandingPageState extends State<LandingPage> {
                       textAlign: TextAlign.center,
                       maxLines: 1,
                     ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: () => openAuthPanel(signUp: !isSignUpFlow),
+            child: smcText(
+              textToDisplay: isSignUpFlow
+                  ? 'Already have an account? Sign In'
+                  : "Don't have an account? Sign Up",
+              textSize: 13,
+              textBoldness: 3,
+              colorOfText: ColorConst.primaryBlue,
+              textAlign: TextAlign.center,
+              maxLines: 2,
             ),
           ),
           const SizedBox(height: 14),
