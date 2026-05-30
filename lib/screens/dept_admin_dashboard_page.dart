@@ -18,6 +18,9 @@ import 'package:smartcampus/widgets/smc_text.dart';
 import '../models/course_model.dart';
 import '../services/course_firestore_service.dart';
 import 'package:smartcampus/courses/add_course_page.dart';
+import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
+import 'package:excel/excel.dart' as excel;
 class DeptAdminDashboardPage extends StatefulWidget {
   final String orgId;
   final String deptId;
@@ -154,38 +157,78 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     );
   }
 
-  void onImportStudents() {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const smcText(
-          textToDisplay: 'Import Students',
-          textSize: 18,
-          textBoldness: 4,
-          colorOfText: ColorConst.textPrimary,
-        ),
-        content: const smcText(
-          textToDisplay:
-              'Student import is not wired yet. Next step is to add a CSV upload and map columns to student fields.',
-          textSize: 14,
-          colorOfText: ColorConst.textSecondary,
-          maxLines: 5,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const smcText(
-              textToDisplay: 'Close',
-              textSize: 14,
-              textBoldness: 3,
-              colorOfText: ColorConst.primaryBlue,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Future<void> onImportStudents() async {
+    try {
+      FilePickerResult? result =
+      await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['xlsx'],
+        withData: true,
+      );
 
+      if (result == null) return;
+
+      final bytes = result.files.single.bytes;
+
+      if (bytes == null) return;
+
+      final excelFile = excel.Excel.decodeBytes(bytes);
+
+      int importedCount = 0;
+
+      for (var sheet in excelFile.tables.keys) {
+        final rows = excelFile.tables[sheet]!.rows;
+
+        for (int i = 1; i < rows.length; i++) {
+          final row = rows[i];
+
+          final student = StudentModel(
+            studentId: row[0]?.value.toString() ?? '',
+            fullName: row[1]?.value.toString() ?? '',
+            gender: row[2]?.value.toString() ?? '',
+            dateOfBirth: row[3]?.value.toString() ?? '',
+            aadhaarNumber: row[4]?.value.toString() ?? '',
+            category: row[5]?.value.toString() ?? '',
+            nationality: row[6]?.value.toString() ?? '',
+            bloodGroup: row[7]?.value.toString() ?? '',
+            mobile: row[8]?.value.toString() ?? '',
+            email: row[9]?.value.toString() ?? '',
+            permanentAddress: row[10]?.value.toString() ?? '',
+            correspondenceAddress: row[11]?.value.toString() ?? '',
+            emergencyContactName: row[12]?.value.toString() ?? '',
+            emergencyContactRelation: row[13]?.value.toString() ?? '',
+            emergencyContactMobile: row[14]?.value.toString() ?? '',
+            photographUrl: '',
+            orgId: widget.orgId,
+            deptId: widget.deptId,
+            createdAt: DateTime.now().toIso8601String(),
+          );
+
+          await studentService.createStudent(student);
+
+          importedCount++;
+        }
+
+        break;
+      }
+
+      await refresh();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '$importedCount students imported successfully',
+          ),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Import failed: $e'),
+        ),
+      );
+    }
+  }
   void onSupport() {
     showDialog<void>(
       context: context,
