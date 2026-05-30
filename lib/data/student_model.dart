@@ -67,7 +67,12 @@ class StudentModel {
       fullName: (data['full_name'] ?? '').toString().trim(),
       gender: (data['gender'] ?? '').toString().trim(),
       dateOfBirth: (data['date_of_birth'] ?? '').toString().trim(),
-      photographUrl: (data['photograph_url'] ?? '').toString().trim(),
+      photographUrl: (data['photograph_url'] ??
+              data['photographUrl'] ??
+              data['photo_url'] ??
+              '')
+          .toString()
+          .trim(),
       aadhaarNumber: (data['aadhaar_number'] ?? '').toString().trim(),
       category: (data['category'] ?? 'Gen').toString().trim(),
       nationality: (data['nationality'] ?? 'Indian').toString().trim(),
