@@ -22,6 +22,7 @@ import '../services/course_firestore_service.dart';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' as excel;
+import 'package:smartcampus/widgets/student_import_dialog.dart';
 class DeptAdminDashboardPage extends StatefulWidget {
   final String orgId;
   final String deptId;
@@ -202,7 +203,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     );
   }
 
-  Future<void> onImportStudents() async {
+  Future<void> openStudentImportDialog() async {
     try {
       FilePickerResult? result =
       await FilePicker.platform.pickFiles(
@@ -3112,19 +3113,37 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                     ),
                   ),
                   const SizedBox(width: 10),
+
                   OutlinedButton.icon(
-                    onPressed: onImportStudents,
-                    icon: const Icon(Icons.upload_file_rounded, size: 18),
-                    label: const smcText(
-                      textToDisplay: 'Import',
-                      textSize: 14,
-                      textBoldness: 4,
-                      colorOfText: ColorConst.primaryBlue,
+                    onPressed: () async {
+                      await showDialog(
+                        context: context,
+                        builder: (_) => StudentImportDialog(
+                          orgId: widget.orgId,
+                          deptId: widget.deptId,
+                        ),
+                      );
+
+                      await refresh();
+                    },
+
+                    icon: const Icon(
+                      Icons.upload_file_rounded,
                     ),
+
+                    label: const Text(
+                      'Import Students',
+                    ),
+
                     style: OutlinedButton.styleFrom(
                       foregroundColor: ColorConst.primaryBlue,
-                      side: const BorderSide(color: ColorConst.primaryBlue),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      side: const BorderSide(
+                        color: ColorConst.primaryBlue,
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),

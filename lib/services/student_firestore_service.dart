@@ -75,6 +75,27 @@ class StudentFirestoreService {
         .set(updated.toMap(), SetOptions(merge: true));
   }
 
+  Future<StudentModel?> findStudent({
+    required String orgId,
+    required String studentId,
+  }) async {
+
+    final snap = await _db
+        .collection(_collection)
+        .where('org_id', isEqualTo: orgId)
+        .where('student_id', isEqualTo: studentId)
+        .limit(1)
+        .get();
+
+    if(snap.docs.isEmpty){
+      return null;
+    }
+
+    return StudentModel.fromMap(
+      snap.docs.first.data(),
+      documentId: snap.docs.first.id,
+    );
+  }
   // ── Delete ─────────────────────────────────────────────────────
 
   Future<void> deleteStudent(String documentId) async {
