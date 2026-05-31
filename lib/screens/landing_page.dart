@@ -382,66 +382,77 @@ class LandingPageState extends State<LandingPage> {
   }
 
   Widget buildIconOverlayAuthActions() {
-    return Row(
-      children: [
-        Expanded(
-          child: SizedBox(
-            height: 48,
-            child: ElevatedButton(
-              onPressed: () => openAuthPanel(signUp: false),
-              style: ElevatedButton.styleFrom(
-                elevation: 1.5,
-                backgroundColor: ColorConst.primaryBlue,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              child: const smcText(
-                textToDisplay: 'Sign In / Up',
-                textSize: 15,
-                textBoldness: 3,
-                colorOfText: Colors.white,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: SizedBox(
-            height: 48,
-            child: OutlinedButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Smart Campus helps manage students, faculty and departments.',
+    return Center(
+      child: FractionallySizedBox(
+        widthFactor: 0.5,
+        child: Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: () => openAuthPanel(signUp: false),
+                  style: ElevatedButton.styleFrom(
+                    elevation: 1.5,
+                    backgroundColor: ColorConst.primaryBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                );
-              },
-              style: OutlinedButton.styleFrom(
-                foregroundColor: ColorConst.textPrimary,
-                backgroundColor: Colors.white,
-                side: const BorderSide(color: ColorConst.borderSoft, width: 1.2),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  child: const smcText(
+                    textToDisplay: 'Sign In / Up',
+                    textSize: 17,
+                    textBoldness: 3,
+                    colorOfText: Colors.white,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                  ),
                 ),
               ),
-              child: const smcText(
-                textToDisplay: 'Know More',
-                textSize: 14,
-                textBoldness: 3,
-                colorOfText: ColorConst.textPrimary,
-                textAlign: TextAlign.center,
-                maxLines: 1,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: SizedBox(
+                height: 48,
+                child: OutlinedButton(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Smart Campus helps manage students, faculty and departments.',
+                        ),
+                      ),
+                    );
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: ColorConst.textPrimary,
+                    backgroundColor: Colors.white,
+                    side: const BorderSide(color: ColorConst.borderSoft, width: 1),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const smcText(
+                    textToDisplay: 'Know More',
+                    textSize: 17,
+                    textBoldness: 3,
+                    colorOfText: ColorConst.textPrimary,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                  ),
+                ),
               ),
             ),
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 

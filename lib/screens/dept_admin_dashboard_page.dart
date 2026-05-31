@@ -65,9 +65,10 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   }
   // Search and Pagination for Students
   final TextEditingController studentSearchController = TextEditingController();
-  int studentRowsPerPage = 10;
+  int studentRowsPerPage = 100;
   int studentCurrentPage = 1;
-  String studentGenderFilter = 'All';
+  String studentBatchFilter = 'All Batches';
+  String studentGenderFilter = 'All Gender';
 
   // Search and Pagination for Faculty
   final TextEditingController facultySearchController = TextEditingController();
@@ -104,6 +105,27 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
   void openStudentDetail(StudentModel student) {
     setState(() => selectedStudentDetail = student);
+  }
+
+  bool _isSelectedStudent(StudentModel student) {
+    final selected = selectedStudentDetail;
+    if (selected == null) {
+      return false;
+    }
+    if (student.documentId != null &&
+        selected.documentId != null &&
+        student.documentId!.isNotEmpty) {
+      return student.documentId == selected.documentId;
+    }
+    return student.studentId == selected.studentId;
+  }
+
+  Key _studentDetailKey(StudentModel student) {
+    return ValueKey<String>(
+      student.documentId?.isNotEmpty == true
+          ? student.documentId!
+          : student.studentId,
+    );
   }
 
   Future<void> refresh() async {
@@ -393,6 +415,12 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     final studentIdCtrl = TextEditingController(text: studentToEdit?.studentId ?? '');
     final fullNameCtrl = TextEditingController(text: studentToEdit?.fullName ?? '');
     String? selectedGender = studentToEdit?.gender;
+    const studentBatchOptions = ['2023-25', '2024-26', '2025-27'];
+    String? selectedStudentBatch = studentToEdit?.batch;
+    if (selectedStudentBatch != null &&
+        !studentBatchOptions.contains(selectedStudentBatch)) {
+      selectedStudentBatch = null;
+    }
     DateTime? selectedDob;
     if (studentToEdit?.dateOfBirth != null && studentToEdit!.dateOfBirth.isNotEmpty) {
       try {
@@ -560,6 +588,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                 gender: selectedGender ?? '',
                 dateOfBirth: selectedDob?.toIso8601String().split('T')[0] ?? '',
                 photographUrl: photographUrl ?? '',
+                batch: selectedStudentBatch ?? '',
                 aadhaarNumber: aadhaarCtrl.text.trim(),
                 category: selectedCategory ?? '',
                 nationality: selectedNationality ?? '',
@@ -573,7 +602,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                 emergencyContactMobile: emergMobileCtrl.text.trim(),
                 orgId: widget.orgId,
                 deptId: widget.deptId,
-                createdAt: studentToEdit?.createdAt ?? DateTime.now().toIso8601String(),
+                createdOn: studentToEdit?.createdOn ??
+                    DateTime.now().toIso8601String(),
               );
 
               try {
@@ -779,6 +809,30 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                               },
                         validator: (_) => selectedDob == null
                             ? 'Date of birth is required'
+                            : null,
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        value: selectedStudentBatch,
+                        decoration: _fieldDecor('Batch *'),
+                        items: studentBatchOptions
+                            .map(
+                              (batch) => DropdownMenuItem(
+                                value: batch,
+                                child: Text(
+                                  batch,
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: isViewOnly
+                            ? null
+                            : (v) => setModalState(
+                                  () => selectedStudentBatch = v,
+                                ),
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Please select batch'
                             : null,
                       ),
                       const SizedBox(height: 8),
@@ -2050,10 +2104,14 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
               Expanded(
                 flex: 4,
                 child: PersonDetailPage(
+                  key: _studentDetailKey(selectedStudentDetail!),
                   person: selectedStudentDetail!,
                   isStudent: true,
                   embedded: true,
                   onClose: closeStudentDetail,
+                  onEditStudent: () => openCreateStudentSheet(
+                    studentToEdit: selectedStudentDetail!,
+                  ),
                 ),
               ),
             ],
@@ -2070,10 +2128,14 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
             _buildStudentPanelDivider(constraints.maxWidth),
             Expanded(
               child: PersonDetailPage(
+                key: _studentDetailKey(selectedStudentDetail!),
                 person: selectedStudentDetail!,
                 isStudent: true,
                 embedded: true,
                 onClose: closeStudentDetail,
+                onEditStudent: () => openCreateStudentSheet(
+                  studentToEdit: selectedStudentDetail!,
+                ),
               ),
             ),
           ],
@@ -2748,12 +2810,15 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
   Widget buildStudentTable() {
     final String searchTerm = studentSearchController.text.trim().toLowerCase();
-    final List<StudentModel> genderFiltered = studentGenderFilter == 'All'
+    final List<StudentModel> batchFiltered = studentBatchFilter == 'All Batches'
         ? studentList
-        : studentList.where((s) => s.gender == studentGenderFilter).toList();
+        : studentList.where((s) => s.batch == studentBatchFilter).toList();
+    final List<StudentModel> genderFiltered = studentGenderFilter == 'All Gender'
+        ? batchFiltered
+        : batchFiltered.where((s) => s.gender == studentGenderFilter).toList();
     final List<StudentModel> searched = genderFiltered.where((s) {
       if (searchTerm.isEmpty) return true;
-      return '${s.studentId} ${s.fullName} ${s.gender} ${s.category}'
+      return '${s.studentId} ${s.fullName} ${s.email} ${s.mobile} ${s.batch} ${s.gender}'
           .toLowerCase()
           .contains(searchTerm);
     }).toList()
@@ -2835,47 +2900,47 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                   ],
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              ElevatedButton.icon(
-                onPressed: openCreateStudentSheet,
-                icon: const Icon(Icons.school_rounded, size: 18, color: Colors.white),
-                label: const smcText(
-                  textToDisplay: 'Create Student',
-                  textSize: 14,
-                  textBoldness: 4,
-                  colorOfText: Colors.white,
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: ColorConst.primaryBlue,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              const SizedBox(width: 12),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: openCreateStudentSheet,
+                    icon: const Icon(Icons.school_rounded, size: 18, color: Colors.white),
+                    label: const smcText(
+                      textToDisplay: 'Create',
+                      textSize: 14,
+                      textBoldness: 4,
+                      colorOfText: Colors.white,
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: ColorConst.primaryBlue,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              OutlinedButton.icon(
-                onPressed: onImportStudents,
-                icon: const Icon(Icons.upload_file_rounded, size: 18),
-                label: const smcText(
-                  textToDisplay: 'Import Students',
-                  textSize: 14,
-                  textBoldness: 4,
-                  colorOfText: ColorConst.primaryBlue,
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: ColorConst.primaryBlue,
-                  side: const BorderSide(color: ColorConst.primaryBlue),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                  const SizedBox(width: 10),
+                  OutlinedButton.icon(
+                    onPressed: onImportStudents,
+                    icon: const Icon(Icons.upload_file_rounded, size: 18),
+                    label: const smcText(
+                      textToDisplay: 'Import',
+                      textSize: 14,
+                      textBoldness: 4,
+                      colorOfText: ColorConst.primaryBlue,
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: ColorConst.primaryBlue,
+                      side: const BorderSide(color: ColorConst.primaryBlue),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ],
           ),
@@ -2888,81 +2953,128 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: const Color(0xFFE8EDFA)),
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: SizedBox(
-                    height: 44,
-                    child: TextField(
-                      controller: studentSearchController,
-                      onChanged: (_) => setState(() => studentCurrentPage = 1),
-                      decoration: InputDecoration(
-                        hintText: 'Search students...',
-                        prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Color(0xFF8A96B2)),
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: ColorConst.primaryBlue),
-                        ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final bool stackFilters = constraints.maxWidth < 560;
+                final Widget searchField = SizedBox(
+                  height: 44,
+                  child: TextField(
+                    controller: studentSearchController,
+                    onChanged: (_) => setState(() => studentCurrentPage = 1),
+                    decoration: InputDecoration(
+                      hintText: 'Search students...',
+                      prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Color(0xFF8A96B2)),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: ColorConst.primaryBlue),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: SizedBox(
-                    height: 44,
-                    child: DropdownButtonFormField<String>(
-                      value: studentGenderFilter,
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: ColorConst.primaryBlue),
-                        ),
+                );
+                final Widget batchDropdown = SizedBox(
+                  height: 44,
+                  child: DropdownButtonFormField<String>(
+                    isExpanded: true,
+                    value: studentBatchFilter,
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
                       ),
-                      items: ['All', 'Male', 'Female', 'Other']
-                          .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                          .toList(),
-                      onChanged: (v) {
-                        if (v != null) {
-                          setState(() {
-                            studentGenderFilter = v;
-                            studentCurrentPage = 1;
-                          });
-                        }
-                      },
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: ColorConst.primaryBlue),
+                      ),
                     ),
+                    items: ['All Batches', '2023-25', '2024-26', '2025-27']
+                        .map(
+                          (batch) => DropdownMenuItem(
+                            value: batch,
+                            child: Text(
+                              batch,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) {
+                        setState(() {
+                          studentBatchFilter = v;
+                          studentCurrentPage = 1;
+                        });
+                      }
+                    },
                   ),
-                ),
-                const SizedBox(width: 12),
-                SizedBox(
+                );
+                final Widget genderDropdown = SizedBox(
+                  height: 44,
+                  child: DropdownButtonFormField<String>(
+                    isExpanded: true,
+                    value: studentGenderFilter,
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: ColorConst.primaryBlue),
+                      ),
+                    ),
+                    items: ['All Gender', 'Male', 'Female', 'Other']
+                        .map(
+                          (g) => DropdownMenuItem(
+                            value: g,
+                            child: Text(
+                              g,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) {
+                        setState(() {
+                          studentGenderFilter = v;
+                          studentCurrentPage = 1;
+                        });
+                      }
+                    },
+                  ),
+                );
+                final Widget resetButton = SizedBox(
                   height: 44,
                   child: OutlinedButton(
                     onPressed: () {
                       setState(() {
                         studentSearchController.clear();
-                        studentGenderFilter = 'All';
+                        studentBatchFilter = 'All Batches';
+                        studentGenderFilter = 'All Gender';
                         studentCurrentPage = 1;
                       });
                     },
@@ -2973,8 +3085,39 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       colorOfText: Color(0xFF4F5E7D),
                     ),
                   ),
-                ),
-              ],
+                );
+
+                if (stackFilters) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      searchField,
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(child: batchDropdown),
+                          const SizedBox(width: 12),
+                          Expanded(child: genderDropdown),
+                          const SizedBox(width: 12),
+                          resetButton,
+                        ],
+                      ),
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(flex: 3, child: searchField),
+                    const SizedBox(width: 12),
+                    Expanded(flex: 2, child: batchDropdown),
+                    const SizedBox(width: 12),
+                    Expanded(flex: 2, child: genderDropdown),
+                    const SizedBox(width: 12),
+                    resetButton,
+                  ],
+                );
+              },
             ),
           ),
           const SizedBox(height: 12),
@@ -3000,10 +3143,11 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                             builder: (context, constraints) {
                               final double tableWidth = constraints.maxWidth;
                               return SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: ConstrainedBox(
-                                  constraints: BoxConstraints(minWidth: tableWidth),
-                                  child: DataTable(
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(minWidth: tableWidth),
+                                    child: DataTable(
                                     showCheckboxColumn: false,
                                     headingRowHeight: 50,
                                     dataRowMinHeight: 52,
@@ -3014,29 +3158,46 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                     border: TableBorder.all(color: const Color(0xFFE3EAF8), width: 1),
                                     headingRowColor: MaterialStateProperty.all(const Color(0xFFF4F7FF)),
                                     columns: const [
+                                      DataColumn(label: SizedBox(width: 50, child: Center(child: smcText(textToDisplay: 'S.No', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
                                       DataColumn(label: SizedBox(width: 100, child: Padding(padding: EdgeInsets.only(left: 8), child: Align(alignment: Alignment.centerLeft, child: smcText(textToDisplay: 'USN / ID', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B)))))),
-                                      DataColumn(label: SizedBox(width: 220, child: Center(child: smcText(textToDisplay: 'Name', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
-                                      DataColumn(label: SizedBox(width: 100, child: Center(child: smcText(textToDisplay: 'Gender', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
-                                      DataColumn(label: SizedBox(width: 120, child: Center(child: smcText(textToDisplay: 'Category', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
+                                      DataColumn(label: SizedBox(width: 200, child: Center(child: smcText(textToDisplay: 'Name', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
+                                      DataColumn(label: SizedBox(width: 180, child: Center(child: smcText(textToDisplay: 'Email', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
+                                      DataColumn(label: SizedBox(width: 110, child: Center(child: smcText(textToDisplay: 'Mobile #', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
+                                      DataColumn(label: SizedBox(width: 90, child: Center(child: smcText(textToDisplay: 'Batch', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
+                                      DataColumn(label: SizedBox(width: 90, child: Center(child: smcText(textToDisplay: 'Gender', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
                                       DataColumn(label: SizedBox(width: 80, child: Center(child: smcText(textToDisplay: 'Actions', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
                                     ],
-                                    rows: pageRows.map((s) {
+                                    rows: pageRows.asMap().entries.map((entry) {
+                                      final int index = entry.key;
+                                      final StudentModel s = entry.value;
+                                      final int serialNo = startIndex + index + 1;
+                                      final bool isSelected = _isSelectedStudent(s);
                                       return DataRow(
+                                        selected: isSelected,
+                                        onSelectChanged: (_) => openStudentDetail(s),
+                                        color: isSelected
+                                            ? WidgetStateProperty.all(const Color(0xFFE8F0FE))
+                                            : null,
                                         cells: [
+                                          DataCell(
+                                            Center(
+                                              child: smcText(
+                                                textToDisplay: '$serialNo',
+                                                textSize: 12,
+                                                colorOfText: const Color(0xFF2E3954),
+                                              ),
+                                            ),
+                                          ),
                                           DataCell(
                                             Padding(
                                               padding: const EdgeInsets.only(left: 8),
                                               child: Align(
                                                 alignment: Alignment.centerLeft,
-                                                child: InkWell(
-                                                  onTap: () => openStudentDetail(s),
-                                                  child: smcText(
-                                                    textToDisplay: s.studentId,
-                                                    textSize: 12,
-                                                    textBoldness: 4,
-                                                    colorOfText: Colors.blue,
-                                                    decoration: TextDecoration.underline,
-                                                  ),
+                                                child: smcText(
+                                                  textToDisplay: s.studentId,
+                                                  textSize: 12,
+                                                  textBoldness: 4,
+                                                  colorOfText: const Color(0xFF2E3954),
                                                 ),
                                               ),
                                             ),
@@ -3062,6 +3223,36 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                           ),
                                           DataCell(
                                             Center(
+                                              child: smcText(
+                                                textToDisplay: s.email,
+                                                textSize: 12,
+                                                colorOfText: const Color(0xFF2E3954),
+                                                maxLines: 1,
+                                              ),
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Center(
+                                              child: smcText(
+                                                textToDisplay: s.mobile,
+                                                textSize: 12,
+                                                colorOfText: const Color(0xFF2E3954),
+                                                maxLines: 1,
+                                              ),
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Center(
+                                              child: smcText(
+                                                textToDisplay: s.batch.isEmpty ? '—' : s.batch,
+                                                textSize: 12,
+                                                colorOfText: const Color(0xFF2E3954),
+                                                maxLines: 1,
+                                              ),
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Center(
                                               child: Container(
                                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                                 decoration: BoxDecoration(color: const Color(0xFFEFF4FF), borderRadius: BorderRadius.circular(999)),
@@ -3069,7 +3260,6 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                               ),
                                             ),
                                           ),
-                                          DataCell(Center(child: smcText(textToDisplay: s.category, textSize: 12, colorOfText: const Color(0xFF2E3954)))),
                                           DataCell(
                                             Center(
                                               child: PopupMenuButton<String>(
@@ -3084,10 +3274,12 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                                 ],
                                               ),
                                             ),
+                                            onTap: () {},
                                           ),
                                         ],
                                       );
                                     }).toList(),
+                                    ),
                                   ),
                                 ),
                               );
@@ -3098,64 +3290,75 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         Container(
                           height: 58,
                           padding: const EdgeInsets.symmetric(horizontal: 14),
-                          decoration: const BoxDecoration(border: Border(top: BorderSide(color: Color(0xFFE3EAF8)))),
-                          alignment: Alignment.centerLeft,
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: [
-                                smcText(
-                                  textToDisplay: totalRows == 0
-                                      ? 'Showing 0 entries'
-                                      : 'Showing ${startIndex + 1} to $endIndex of $totalRows entries',
-                                  textSize: 12,
-                                  colorOfText: const Color(0xFF7D87A3),
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            border: Border(top: BorderSide(color: Color(0xFFE3EAF8))),
+                          ),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              return SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      smcText(
+                                        textToDisplay: totalRows == 0
+                                            ? 'Showing 0 entries'
+                                            : 'Showing ${startIndex + 1} to $endIndex of $totalRows entries',
+                                        textSize: 12,
+                                        colorOfText: const Color(0xFF7D87A3),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      const smcText(textToDisplay: 'Rows per page:', textSize: 12, colorOfText: Color(0xFF7D87A3)),
+                                      const SizedBox(width: 8),
+                                      DropdownButton<int>(
+                                        value: studentRowsPerPage,
+                                        items: const [
+                                          DropdownMenuItem(value: 10, child: Text('10')),
+                                          DropdownMenuItem(value: 25, child: Text('25')),
+                                          DropdownMenuItem(value: 50, child: Text('50')),
+                                          DropdownMenuItem(value: 100, child: Text('100')),
+                                        ],
+                                        onChanged: (value) {
+                                          if (value != null) {
+                                            setState(() {
+                                              studentRowsPerPage = value;
+                                              studentCurrentPage = 1;
+                                            });
+                                          }
+                                        },
+                                      ),
+                                      const SizedBox(width: 12),
+                                      IconButton(
+                                        onPressed: safePage > 1 ? () => setState(() => studentCurrentPage = 1) : null,
+                                        icon: const Icon(Icons.first_page_rounded),
+                                      ),
+                                      IconButton(
+                                        onPressed: safePage > 1 ? () => setState(() => studentCurrentPage = safePage - 1) : null,
+                                        icon: const Icon(Icons.chevron_left_rounded),
+                                      ),
+                                      Container(
+                                        width: 34,
+                                        height: 34,
+                                        alignment: Alignment.center,
+                                        decoration: BoxDecoration(color: const Color(0xFFEAF0FF), borderRadius: BorderRadius.circular(8)),
+                                        child: smcText(textToDisplay: '$safePage', textSize: 12, textBoldness: 4, colorOfText: ColorConst.primaryBlue),
+                                      ),
+                                      IconButton(
+                                        onPressed: safePage < totalPages ? () => setState(() => studentCurrentPage = safePage + 1) : null,
+                                        icon: const Icon(Icons.chevron_right_rounded),
+                                      ),
+                                      IconButton(
+                                        onPressed: safePage < totalPages ? () => setState(() => studentCurrentPage = totalPages) : null,
+                                        icon: const Icon(Icons.last_page_rounded),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                                const SizedBox(width: 16),
-                                const smcText(textToDisplay: 'Rows per page:', textSize: 12, colorOfText: Color(0xFF7D87A3)),
-                                const SizedBox(width: 8),
-                                DropdownButton<int>(
-                                  value: studentRowsPerPage,
-                                  items: const [
-                                    DropdownMenuItem(value: 10, child: Text('10')),
-                                    DropdownMenuItem(value: 25, child: Text('25')),
-                                    DropdownMenuItem(value: 50, child: Text('50')),
-                                  ],
-                                  onChanged: (value) {
-                                    if (value != null) {
-                                      setState(() {
-                                        studentRowsPerPage = value;
-                                        studentCurrentPage = 1;
-                                      });
-                                    }
-                                  },
-                                ),
-                                const SizedBox(width: 12),
-                                IconButton(
-                                  onPressed: safePage > 1 ? () => setState(() => studentCurrentPage = 1) : null,
-                                  icon: const Icon(Icons.first_page_rounded),
-                                ),
-                                IconButton(
-                                  onPressed: safePage > 1 ? () => setState(() => studentCurrentPage = safePage - 1) : null,
-                                  icon: const Icon(Icons.chevron_left_rounded),
-                                ),
-                                Container(
-                                  width: 34,
-                                  height: 34,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(color: const Color(0xFFEAF0FF), borderRadius: BorderRadius.circular(8)),
-                                  child: smcText(textToDisplay: '$safePage', textSize: 12, textBoldness: 4, colorOfText: ColorConst.primaryBlue),
-                                ),
-                                IconButton(
-                                  onPressed: safePage < totalPages ? () => setState(() => studentCurrentPage = safePage + 1) : null,
-                                  icon: const Icon(Icons.chevron_right_rounded),
-                                ),
-                                IconButton(
-                                  onPressed: safePage < totalPages ? () => setState(() => studentCurrentPage = totalPages) : null,
-                                  icon: const Icon(Icons.last_page_rounded),
-                                ),
-                              ],
-                            ),
+                              );
+                            },
                           ),
                         ),
                       ],
@@ -3395,10 +3598,11 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                             builder: (context, constraints) {
                               final double tableWidth = constraints.maxWidth;
                               return SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: ConstrainedBox(
-                                  constraints: BoxConstraints(minWidth: tableWidth),
-                                  child: DataTable(
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(minWidth: tableWidth),
+                                    child: DataTable(
                                     showCheckboxColumn: false,
                                     headingRowHeight: 50,
                                     dataRowMinHeight: 52,
@@ -3480,6 +3684,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                         ],
                                       );
                                     }).toList(),
+                                    ),
                                   ),
                                 ),
                               );
@@ -3490,60 +3695,74 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         Container(
                           height: 58,
                           padding: const EdgeInsets.symmetric(horizontal: 14),
-                          decoration: const BoxDecoration(border: Border(top: BorderSide(color: Color(0xFFE3EAF8)))),
-                          child: Row(
-                            children: [
-                              smcText(
-                                textToDisplay: totalRows == 0
-                                    ? 'Showing 0 entries'
-                                    : 'Showing ${startIndex + 1} to $endIndex of $totalRows entries',
-                                textSize: 12,
-                                colorOfText: const Color(0xFF7D87A3),
-                              ),
-                              const Spacer(),
-                              const smcText(textToDisplay: 'Rows per page:', textSize: 12, colorOfText: Color(0xFF7D87A3)),
-                              const SizedBox(width: 8),
-                              DropdownButton<int>(
-                                value: facultyRowsPerPage,
-                                items: const [
-                                  DropdownMenuItem(value: 10, child: Text('10')),
-                                  DropdownMenuItem(value: 25, child: Text('25')),
-                                  DropdownMenuItem(value: 50, child: Text('50')),
-                                ],
-                                onChanged: (value) {
-                                  if (value != null) {
-                                    setState(() {
-                                      facultyRowsPerPage = value;
-                                      facultyCurrentPage = 1;
-                                    });
-                                  }
-                                },
-                              ),
-                              const SizedBox(width: 12),
-                              IconButton(
-                                onPressed: safePage > 1 ? () => setState(() => facultyCurrentPage = 1) : null,
-                                icon: const Icon(Icons.first_page_rounded),
-                              ),
-                              IconButton(
-                                onPressed: safePage > 1 ? () => setState(() => facultyCurrentPage = safePage - 1) : null,
-                                icon: const Icon(Icons.chevron_left_rounded),
-                              ),
-                              Container(
-                                width: 34,
-                                height: 34,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(color: const Color(0xFFEAF0FF), borderRadius: BorderRadius.circular(8)),
-                                child: smcText(textToDisplay: '$safePage', textSize: 12, textBoldness: 4, colorOfText: ColorConst.primaryBlue),
-                              ),
-                              IconButton(
-                                onPressed: safePage < totalPages ? () => setState(() => facultyCurrentPage = safePage + 1) : null,
-                                icon: const Icon(Icons.chevron_right_rounded),
-                              ),
-                              IconButton(
-                                onPressed: safePage < totalPages ? () => setState(() => facultyCurrentPage = totalPages) : null,
-                                icon: const Icon(Icons.last_page_rounded),
-                              ),
-                            ],
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            border: Border(top: BorderSide(color: Color(0xFFE3EAF8))),
+                          ),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              return SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      smcText(
+                                        textToDisplay: totalRows == 0
+                                            ? 'Showing 0 entries'
+                                            : 'Showing ${startIndex + 1} to $endIndex of $totalRows entries',
+                                        textSize: 12,
+                                        colorOfText: const Color(0xFF7D87A3),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      const smcText(textToDisplay: 'Rows per page:', textSize: 12, colorOfText: Color(0xFF7D87A3)),
+                                      const SizedBox(width: 8),
+                                      DropdownButton<int>(
+                                        value: facultyRowsPerPage,
+                                        items: const [
+                                          DropdownMenuItem(value: 10, child: Text('10')),
+                                          DropdownMenuItem(value: 25, child: Text('25')),
+                                          DropdownMenuItem(value: 50, child: Text('50')),
+                                        ],
+                                        onChanged: (value) {
+                                          if (value != null) {
+                                            setState(() {
+                                              facultyRowsPerPage = value;
+                                              facultyCurrentPage = 1;
+                                            });
+                                          }
+                                        },
+                                      ),
+                                      const SizedBox(width: 12),
+                                      IconButton(
+                                        onPressed: safePage > 1 ? () => setState(() => facultyCurrentPage = 1) : null,
+                                        icon: const Icon(Icons.first_page_rounded),
+                                      ),
+                                      IconButton(
+                                        onPressed: safePage > 1 ? () => setState(() => facultyCurrentPage = safePage - 1) : null,
+                                        icon: const Icon(Icons.chevron_left_rounded),
+                                      ),
+                                      Container(
+                                        width: 34,
+                                        height: 34,
+                                        alignment: Alignment.center,
+                                        decoration: BoxDecoration(color: const Color(0xFFEAF0FF), borderRadius: BorderRadius.circular(8)),
+                                        child: smcText(textToDisplay: '$safePage', textSize: 12, textBoldness: 4, colorOfText: ColorConst.primaryBlue),
+                                      ),
+                                      IconButton(
+                                        onPressed: safePage < totalPages ? () => setState(() => facultyCurrentPage = safePage + 1) : null,
+                                        icon: const Icon(Icons.chevron_right_rounded),
+                                      ),
+                                      IconButton(
+                                        onPressed: safePage < totalPages ? () => setState(() => facultyCurrentPage = totalPages) : null,
+                                        icon: const Icon(Icons.last_page_rounded),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ],

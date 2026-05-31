@@ -9,6 +9,7 @@ class StudentModel {
   final String gender;          // 'Male' | 'Female' | 'Other'
   final String dateOfBirth;     // ISO-8601 date string "YYYY-MM-DD"
   final String photographUrl;   // Firestore Storage download URL
+  final String batch;           // e.g. '2023-25'
 
   // ── India-Specific Compliance / Identity ──────────────────────
   final String aadhaarNumber;
@@ -33,7 +34,7 @@ class StudentModel {
   final String orgId;
   final String deptId;
   final String status;          // 'Active' | 'Inactive'
-  final String createdAt;       // ISO-8601 timestamp
+  final String createdOn;       // ISO-8601 datetime string (stored with time)
 
   const StudentModel({
     this.documentId,
@@ -42,6 +43,7 @@ class StudentModel {
     required this.gender,
     required this.dateOfBirth,
     this.photographUrl = '',
+    this.batch = '',
     this.aadhaarNumber = '',
     this.category = 'Gen',
     this.nationality = 'Indian',
@@ -56,7 +58,7 @@ class StudentModel {
     required this.orgId,
     required this.deptId,
     this.status = 'Active',
-    required this.createdAt,
+    required this.createdOn,
   });
 
   // ── Firestore serialisation ────────────────────────────────────
@@ -73,6 +75,7 @@ class StudentModel {
               '')
           .toString()
           .trim(),
+      batch: (data['batch'] ?? '').toString().trim(),
       aadhaarNumber: (data['aadhaar_number'] ?? '').toString().trim(),
       category: (data['category'] ?? 'Gen').toString().trim(),
       nationality: (data['nationality'] ?? 'Indian').toString().trim(),
@@ -87,7 +90,9 @@ class StudentModel {
       orgId: (data['org_id'] ?? '').toString().trim(),
       deptId: (data['dept_id'] ?? '').toString().trim(),
       status: (data['status'] ?? 'Active').toString().trim(),
-      createdAt: (data['created_at'] ?? '').toString().trim(),
+      createdOn: (data['created_on'] ?? data['created_at'] ?? '')
+          .toString()
+          .trim(),
     );
   }
 
@@ -98,6 +103,7 @@ class StudentModel {
     String? gender,
     String? dateOfBirth,
     String? photographUrl,
+    String? batch,
     String? aadhaarNumber,
     String? category,
     String? nationality,
@@ -112,7 +118,7 @@ class StudentModel {
     String? orgId,
     String? deptId,
     String? status,
-    String? createdAt,
+    String? createdOn,
   }) {
     return StudentModel(
       documentId: documentId ?? this.documentId,
@@ -121,6 +127,7 @@ class StudentModel {
       gender: gender ?? this.gender,
       dateOfBirth: dateOfBirth ?? this.dateOfBirth,
       photographUrl: photographUrl ?? this.photographUrl,
+      batch: batch ?? this.batch,
       aadhaarNumber: aadhaarNumber ?? this.aadhaarNumber,
       category: category ?? this.category,
       nationality: nationality ?? this.nationality,
@@ -135,7 +142,7 @@ class StudentModel {
       orgId: orgId ?? this.orgId,
       deptId: deptId ?? this.deptId,
       status: status ?? this.status,
-      createdAt: createdAt ?? this.createdAt,
+      createdOn: createdOn ?? this.createdOn,
     );
   }
 
@@ -146,6 +153,7 @@ class StudentModel {
       'gender': gender,
       'date_of_birth': dateOfBirth,
       'photograph_url': photographUrl,
+      'batch': batch,
       'aadhaar_number': aadhaarNumber,
       'category': category,
       'nationality': nationality,
@@ -160,7 +168,7 @@ class StudentModel {
       'org_id': orgId,
       'dept_id': deptId,
       'status': status,
-      'created_at': createdAt,
+      'created_on': createdOn,
     };
   }
 }

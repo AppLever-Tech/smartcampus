@@ -9,6 +9,7 @@ class PersonDetailPage extends StatefulWidget {
   final bool isStudent;
   final bool embedded;
   final VoidCallback? onClose;
+  final VoidCallback? onEditStudent;
 
   const PersonDetailPage({
     super.key,
@@ -16,6 +17,7 @@ class PersonDetailPage extends StatefulWidget {
     required this.isStudent,
     this.embedded = false,
     this.onClose,
+    this.onEditStudent,
   });
 
   @override
@@ -219,32 +221,23 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
   }
 
   Widget _buildBasicDetails() {
-    final Map<String, String> details = {};
     if (widget.isStudent) {
-      final s = widget.person as StudentModel;
-      details['Full Name'] = s.fullName;
-      details['USN'] = s.studentId;
-      details['Email'] = s.email;
-      details['Mobile'] = s.mobile;
-      details['Gender'] = s.gender;
-      details['DOB'] = s.dateOfBirth;
-      details['Category'] = s.category;
-      details['Aadhaar'] = s.aadhaarNumber;
-      details['Permanent Address'] = s.permanentAddress;
-      details['Correspondence Address'] = s.correspondenceAddress;
-    } else {
-      final f = widget.person as FacultyModel;
-      details['Full Name'] = f.fullName;
-      details['Faculty ID'] = f.facultyId;
-      details['Email'] = f.email;
-      details['Mobile'] = f.mobile;
-      details['Gender'] = f.gender;
-      details['DOB'] = f.dateOfBirth;
-      details['Aadhaar'] = f.aadhaarNumber;
-      details['PAN'] = f.panNumber;
-      details['Permanent Address'] = f.permanentAddress;
-      details['Current Address'] = f.currentAddress;
+      return _buildStudentBasicDetails();
     }
+
+    final f = widget.person as FacultyModel;
+    final Map<String, String> details = {
+      'Full Name': f.fullName,
+      'Faculty ID': f.facultyId,
+      'Email': f.email,
+      'Mobile': f.mobile,
+      'Gender': f.gender,
+      'DOB': f.dateOfBirth,
+      'Aadhaar': f.aadhaarNumber,
+      'PAN': f.panNumber,
+      'Permanent Address': f.permanentAddress,
+      'Current Address': f.currentAddress,
+    };
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -263,32 +256,295 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
     );
   }
 
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildStudentBasicDetails() {
+    final StudentModel s = widget.person as StudentModel;
+    final String photoUrl = _normalizePhotoUrl(s.photographUrl);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            width: 150,
-            child: smcText(
-              textToDisplay: label,
-              textSize: 13,
-              textBoldness: 4,
-              colorOfText: ColorConst.textSecondary,
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: _buildDetailsSection(
+                    title: 'Basic Profile Information',
+                    icon: Icons.person_outline_rounded,
+                    headerTrailing: widget.onEditStudent == null
+                        ? null
+                        : OutlinedButton.icon(
+                            onPressed: widget.onEditStudent,
+                            icon: const Icon(
+                              Icons.edit_outlined,
+                              size: 14,
+                              color: ColorConst.primaryBlue,
+                            ),
+                            label: const smcText(
+                              textToDisplay: 'Edit',
+                              textSize: 11,
+                              textBoldness: 4,
+                              colorOfText: ColorConst.primaryBlue,
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: ColorConst.primaryBlue,
+                              side: const BorderSide(color: ColorConst.primaryBlue),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                    children: [
+                      _buildDetailRow('Student ID (USN)', s.studentId),
+                      _buildDetailRow('Full Name', s.fullName),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: _buildDetailField('Gender', s.gender),
+                            ),
+                            const SizedBox(width: 24),
+                            Expanded(
+                              child: _buildDetailField('Batch', s.batch),
+                            ),
+                          ],
+                        ),
+                      ),
+                      _buildDetailRow(
+                        'Date of Birth',
+                        _formatDisplayDate(s.dateOfBirth),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  flex: 2,
+                  child: _buildDetailsSection(
+                    title: 'Photograph',
+                    icon: Icons.photo_camera_outlined,
+                    stretchContent: true,
+                    children: [
+                      photoUrl.isNotEmpty
+                          ? Center(
+                              child: FittedBox(
+                                fit: BoxFit.contain,
+                                child: _buildPhotographPreview(
+                                  photoUrl,
+                                  width: 130,
+                                  height: 195,
+                                ),
+                              ),
+                            )
+                          : const Center(
+                              child: Icon(
+                                Icons.image_not_supported_outlined,
+                                size: 40,
+                                color: ColorConst.textSecondary,
+                              ),
+                            ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
-          Expanded(
-            child: smcText(
-              textToDisplay: value.isEmpty ? '—' : value,
-              textSize: 13,
-              textBoldness: 3,
-              colorOfText: ColorConst.textPrimary,
-              maxLines: 5,
-            ),
+          const SizedBox(height: 16),
+          _buildDetailsSection(
+            title: 'Identity & Category',
+            icon: Icons.verified_user_outlined,
+            children: [
+              _buildDetailRow('Aadhaar / Govt ID', s.aadhaarNumber),
+              _buildDetailRow('Category', s.category),
+              _buildDetailRow('Nationality', s.nationality),
+              _buildDetailRow('Blood Group', s.bloodGroup),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildDetailsSection(
+            title: 'Contact Details',
+            icon: Icons.contact_phone_outlined,
+            children: [
+              _buildDetailRow('Mobile Number', s.mobile),
+              _buildDetailRow('Email Address', s.email),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildDetailsSection(
+            title: 'Address',
+            icon: Icons.home_outlined,
+            children: [
+              _buildDetailRow('Permanent Address', s.permanentAddress),
+              _buildDetailRow('Correspondence Address', s.correspondenceAddress),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildDetailsSection(
+            title: 'Emergency Contact (Parent/Guardian)',
+            icon: Icons.emergency_outlined,
+            children: [
+              _buildDetailRow('Contact Person Name', s.emergencyContactName),
+              _buildDetailRow('Relation', s.emergencyContactRelation),
+              _buildDetailRow('Emergency Mobile', s.emergencyContactMobile),
+            ],
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildDetailsSection({
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+    bool stretchContent = false,
+    Widget? headerTrailing,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE3EAF8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: stretchContent ? MainAxisSize.max : MainAxisSize.min,
+        children: [
+          _sectionHeader(title, icon, trailing: headerTrailing),
+          if (stretchContent)
+            Expanded(
+              child: children.length == 1
+                  ? children.first
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: children,
+                    ),
+            )
+          else
+            ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionHeader(String title, IconData icon, {Widget? trailing}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: ColorConst.primaryBlue),
+          const SizedBox(width: 6),
+          Expanded(
+            child: smcText(
+              textToDisplay: title,
+              textSize: 12,
+              textBoldness: 4,
+              colorOfText: ColorConst.primaryBlue,
+            ),
+          ),
+          if (trailing != null) trailing,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPhotographPreview(
+    String photoUrl, {
+    double width = 280,
+    double height = 420,
+  }) {
+    return Container(
+      key: ValueKey<String>(photoUrl),
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: ColorConst.borderSoft),
+        color: const Color(0xFFF7F9FF),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Image.network(
+        photoUrl,
+        key: ValueKey<String>('img-$photoUrl'),
+        fit: BoxFit.cover,
+        webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
+        gaplessPlayback: false,
+        errorBuilder: (_, __, ___) => const Center(
+          child: Icon(
+            Icons.broken_image_outlined,
+            color: ColorConst.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _normalizePhotoUrl(String rawUrl) {
+    final value = rawUrl.trim();
+    if (value.isEmpty) {
+      return '';
+    }
+    if (value.startsWith('gs://')) {
+      return value;
+    }
+    if (value.startsWith('//')) {
+      return 'https:$value';
+    }
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      return value;
+    }
+    return '';
+  }
+
+  String _formatDisplayDate(String rawDate) {
+    if (rawDate.trim().isEmpty) {
+      return '';
+    }
+    final parts = rawDate.split('-');
+    if (parts.length == 3) {
+      return '${parts[2]}/${parts[1]}/${parts[0]}';
+    }
+    return rawDate;
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: _buildDetailField(label, value),
+    );
+  }
+
+  Widget _buildDetailField(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        smcText(
+          textToDisplay: label,
+          textSize: 12,
+          textBoldness: 4,
+          colorOfText: ColorConst.textSecondary,
+        ),
+        const SizedBox(height: 4),
+        smcText(
+          textToDisplay: value.isEmpty ? '—' : value,
+          textSize: 13,
+          textBoldness: 3,
+          colorOfText: ColorConst.textPrimary,
+          maxLines: 5,
+        ),
+      ],
     );
   }
 
