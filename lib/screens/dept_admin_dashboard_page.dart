@@ -237,7 +237,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
             photographUrl: '',
             orgId: widget.orgId,
             deptId: widget.deptId,
-            createdAt: DateTime.now().toIso8601String(),
+            createdOn: DateTime.now().toIso8601String(),
           );
 
           await studentService.createStudent(student);
