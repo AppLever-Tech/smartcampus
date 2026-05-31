@@ -44,6 +44,8 @@ dependencies:
   url_launcher: ^6.3.2
   cool_alert: ^2.0.1
   cached_network_image: ^3.4.1
+  file_picker: ^8.0.0
+  excel: ^4.0.2
 
 dev_dependencies:
   flutter_test:
