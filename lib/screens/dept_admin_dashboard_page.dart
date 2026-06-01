@@ -19,7 +19,6 @@ import 'package:smartcampus/services/org_role_firestore_service.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 import '../models/course_model.dart';
 import '../services/course_firestore_service.dart';
-import 'package:smartcampus/courses/add_course_page.dart';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' as excel;
@@ -53,12 +52,11 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   List<DepartmentMasterItem> departments = [];
   List<FacultyModel> facultyList = [];
   List<StudentModel> studentList = [];
+  List<CourseModel> courseList = [];
+  bool coursesLoaded = false;
   int totalCourses = 0;
   String organizationDisplayName = '';
   bool canEditOrDelete = false;
-  String? selectedBatch;
-  String? selectedSemester;
-  String? selectedCourse;
 
   Stream<QuerySnapshot> getCoursesStream() {
 
@@ -79,6 +77,14 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   int facultyCurrentPage = 1;
   String facultyGenderFilter = 'All';
 
+  // Search and Pagination for Courses
+  final TextEditingController courseSearchController = TextEditingController();
+  int courseRowsPerPage = 100;
+  int courseCurrentPage = 1;
+  String courseSchemeFilter = 'All Schemes';
+  String courseSemesterFilter = 'All Semesters';
+  String courseTypeFilter = 'All Course Types';
+
   StudentModel? selectedStudentDetail;
   bool sidebarExpanded = false;
   double studentListPanelRatio = 0.55;
@@ -90,7 +96,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     courseService.getCourses().listen((courses) {
       if (!mounted) return;
       setState(() {
+        courseList = courses;
         totalCourses = courses.length;
+        coursesLoaded = true;
       });
     });
   }
@@ -99,6 +107,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   void dispose() {
     studentSearchController.dispose();
     facultySearchController.dispose();
+    courseSearchController.dispose();
     super.dispose();
   }
 
@@ -265,6 +274,699 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       );
     }
   }
+  Future<void> openCreateCourse() async {
+    final formKey = GlobalKey<FormState>();
+    const schemeOptions = ['2023', '2024', '2025', '2026', '2027'];
+    const semesterOptions = ['I', 'II', 'III', 'IV'];
+    const courseTypeOptions = ['IPCC', 'PCC', 'PCCL', 'AEC', 'BSC'];
+
+    String? selectedScheme;
+    String? selectedSemester;
+    String? selectedCourseType;
+    final courseCodeCtrl = TextEditingController();
+    final courseTitleCtrl = TextEditingController();
+    final creditsCtrl = TextEditingController();
+    final lectureHrsCtrl = TextEditingController(text: '0');
+    final tutorialHrsCtrl = TextEditingController(text: '0');
+    final practicalHrsCtrl = TextEditingController(text: '0');
+    final othersHrsCtrl = TextEditingController(text: '0');
+    final cieMarksCtrl = TextEditingController(text: '0');
+    final seeExamDurationCtrl = TextEditingController();
+    final seeTheoryMarksCtrl = TextEditingController(text: '0');
+    final seeLabMarksCtrl = TextEditingController(text: '0');
+    bool saving = false;
+    int currentStep = 0;
+    const int totalSteps = 2;
+
+    int parseNumericField(String value) => int.tryParse(value.trim()) ?? 0;
+
+    String? validateHoursField(String? value) {
+      if (value == null || value.trim().isEmpty) {
+        return 'This field is required';
+      }
+      final n = int.tryParse(value.trim());
+      if (n == null || n < 0) return 'Enter a valid number';
+      return null;
+    }
+
+    String? validateMarksField(String? value) {
+      if (value == null || value.trim().isEmpty) return null;
+      final n = int.tryParse(value.trim());
+      if (n == null || n < 0) return 'Enter a valid number';
+      return null;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        final media = MediaQuery.of(ctx);
+        final maxHeight = (media.size.height * 0.9).clamp(480.0, 820.0);
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: 720, maxHeight: maxHeight),
+            child: StatefulBuilder(
+              builder: (ctx, setModalState) {
+                InputDecoration fieldDecor(String label, {String? hint}) =>
+                    InputDecoration(
+                      labelText: label,
+                      hintText: hint,
+                      labelStyle: const TextStyle(
+                        fontSize: 12,
+                        color: ColorConst.textSecondary,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: ColorConst.borderSoft),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: ColorConst.borderSoft),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(
+                          color: ColorConst.primaryBlue,
+                          width: 1.2,
+                        ),
+                      ),
+                      filled: true,
+                      fillColor: const Color(0xFFF9FAFD),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                    );
+
+                Widget sectionHeader(String title, IconData icon) => Padding(
+                      padding: const EdgeInsets.only(top: 8, bottom: 4),
+                      child: Row(
+                        children: [
+                          Icon(icon, size: 14, color: ColorConst.primaryBlue),
+                          const SizedBox(width: 6),
+                          smcText(
+                            textToDisplay: title,
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: ColorConst.primaryBlue,
+                          ),
+                        ],
+                      ),
+                    );
+
+                InputDecoration fieldDecorInput() => InputDecoration(
+                      filled: true,
+                      fillColor: const Color(0xFFF9FAFD),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 10,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: ColorConst.borderSoft),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: ColorConst.borderSoft),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(
+                          color: ColorConst.primaryBlue,
+                          width: 1.2,
+                        ),
+                      ),
+                    );
+
+                Widget labeledField(
+                  String label,
+                  TextEditingController controller, {
+                  int labelMaxLines = 1,
+                  TextInputType keyboardType = TextInputType.number,
+                  List<TextInputFormatter>? inputFormatters,
+                  String? Function(String?)? validator,
+                  void Function(String)? onChanged,
+                  bool readOnly = false,
+                }) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      smcText(
+                        textToDisplay: label,
+                        textSize: 12,
+                        textBoldness: 3,
+                        colorOfText: ColorConst.textSecondary,
+                        maxLines: labelMaxLines,
+                      ),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: controller,
+                        readOnly: readOnly,
+                        decoration: fieldDecorInput(),
+                        keyboardType: keyboardType,
+                        inputFormatters: inputFormatters,
+                        validator: validator,
+                        onChanged: onChanged,
+                      ),
+                    ],
+                  );
+                }
+
+                int computeSeeMarks() {
+                  final int theory = parseNumericField(seeTheoryMarksCtrl.text);
+                  final int lab = parseNumericField(seeLabMarksCtrl.text);
+                  if (theory > 0) return theory;
+                  return lab;
+                }
+
+                int computeTotalMarks() =>
+                    parseNumericField(cieMarksCtrl.text) + computeSeeMarks();
+
+                void _onNext() {
+                  if (currentStep >= totalSteps - 1) return;
+                  if (!formKey.currentState!.validate()) return;
+                  setModalState(() => currentStep += 1);
+                }
+
+                void _onBack() {
+                  if (currentStep <= 0) return;
+                  setModalState(() => currentStep -= 1);
+                }
+
+                Widget _buildStepContent() {
+                  switch (currentStep) {
+                    case 1:
+                      final int totalMarks = computeTotalMarks();
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          sectionHeader(
+                            'Examination Scheme',
+                            Icons.fact_check_outlined,
+                          ),
+                          labeledField(
+                            'Continuous Internal Evaluation (CIE) Marks',
+                            cieMarksCtrl,
+                            labelMaxLines: 2,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            validator: validateMarksField,
+                            onChanged: (_) => setModalState(() {}),
+                          ),
+                          const SizedBox(height: 16),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFCFDFF),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFE8EDFA)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const smcText(
+                                  textToDisplay: 'Semester End Examinations (SEE)',
+                                  textSize: 13,
+                                  textBoldness: 4,
+                                  colorOfText: Color(0xFF1F2F52),
+                                ),
+                                const SizedBox(height: 12),
+                                labeledField(
+                                  'Exam Duration (Hrs)',
+                                  seeExamDurationCtrl,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                  ],
+                                  validator: validateHoursField,
+                                  onChanged: (_) => setModalState(() {}),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: labeledField(
+                                        'Theory Marks',
+                                        seeTheoryMarksCtrl,
+                                        inputFormatters: [
+                                          FilteringTextInputFormatter.digitsOnly,
+                                        ],
+                                        validator: validateMarksField,
+                                        onChanged: (v) {
+                                          if (parseNumericField(v) > 0) {
+                                            seeLabMarksCtrl.text = '0';
+                                          }
+                                          setModalState(() {});
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: labeledField(
+                                        'Lab Marks',
+                                        seeLabMarksCtrl,
+                                        inputFormatters: [
+                                          FilteringTextInputFormatter.digitsOnly,
+                                        ],
+                                        validator: validateMarksField,
+                                        onChanged: (v) {
+                                          if (parseNumericField(v) > 0) {
+                                            seeTheoryMarksCtrl.text = '0';
+                                          }
+                                          setModalState(() {});
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                const smcText(
+                                  textToDisplay:
+                                      'Enter either Theory or Lab marks for SEE (not both).',
+                                  textSize: 11,
+                                  colorOfText: Color(0xFF8A96B2),
+                                  maxLines: 2,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF4FF),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFD6E2FF)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Expanded(
+                                  child: smcText(
+                                    textToDisplay: 'Total Marks (CIE + SEE)',
+                                    textSize: 13,
+                                    textBoldness: 4,
+                                    colorOfText: Color(0xFF1F2F52),
+                                    maxLines: 2,
+                                  ),
+                                ),
+                                smcText(
+                                  textToDisplay: '$totalMarks',
+                                  textSize: 20,
+                                  textBoldness: 5,
+                                  colorOfText: ColorConst.primaryBlue,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    default:
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          sectionHeader(
+                            'Course Information',
+                            Icons.menu_book_outlined,
+                          ),
+                          DropdownButtonFormField<String>(
+                            value: selectedScheme,
+                            decoration: fieldDecor('Scheme *'),
+                            items: schemeOptions
+                                .map(
+                                  (s) => DropdownMenuItem(
+                                    value: s,
+                                    child: Text(
+                                      s,
+                                      style: const TextStyle(fontSize: 13),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (v) => setModalState(() => selectedScheme = v),
+                            validator: (v) => (v == null || v.trim().isEmpty)
+                                ? 'Please select scheme'
+                                : null,
+                          ),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            value: selectedSemester,
+                            decoration: fieldDecor('Semester *'),
+                            items: semesterOptions
+                                .map(
+                                  (s) => DropdownMenuItem(
+                                    value: s,
+                                    child: Text(
+                                      s,
+                                      style: const TextStyle(fontSize: 13),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (v) => setModalState(() => selectedSemester = v),
+                            validator: (v) => (v == null || v.trim().isEmpty)
+                                ? 'Please select semester'
+                                : null,
+                          ),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            value: selectedCourseType,
+                            decoration: fieldDecor('Course Type *'),
+                            items: courseTypeOptions
+                                .map(
+                                  (t) => DropdownMenuItem(
+                                    value: t,
+                                    child: Text(
+                                      t,
+                                      style: const TextStyle(fontSize: 13),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (v) => setModalState(() => selectedCourseType = v),
+                            validator: (v) => (v == null || v.trim().isEmpty)
+                                ? 'Please select course type'
+                                : null,
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: courseCodeCtrl,
+                            decoration: fieldDecor(
+                              'Course Code *',
+                              hint: 'e.g. CS301',
+                            ),
+                            textCapitalization: TextCapitalization.characters,
+                            validator: (v) => (v == null || v.trim().isEmpty)
+                                ? 'Course code is required'
+                                : null,
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: courseTitleCtrl,
+                            decoration: fieldDecor('Course Title *'),
+                            textCapitalization: TextCapitalization.words,
+                            validator: (v) => (v == null || v.trim().isEmpty)
+                                ? 'Course title is required'
+                                : null,
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: creditsCtrl,
+                            decoration: fieldDecor('No. of Credits *'),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty) {
+                                return 'Number of credits is required';
+                              }
+                              final n = int.tryParse(v.trim());
+                              if (n == null || n < 1) {
+                                return 'Enter a valid credit count';
+                              }
+                              return null;
+                            },
+                          ),
+                          sectionHeader(
+                            'Teaching Hours per Week',
+                            Icons.schedule_outlined,
+                          ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: labeledField(
+                                  'Lecture (Hrs)',
+                                  lectureHrsCtrl,
+                                  validator: validateHoursField,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: labeledField(
+                                  'Tutorial (Hrs)',
+                                  tutorialHrsCtrl,
+                                  validator: validateHoursField,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: labeledField(
+                                  'Practical (Hrs)',
+                                  practicalHrsCtrl,
+                                  validator: validateHoursField,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: labeledField(
+                                  'Others (PBL/ABL/SL/Others)',
+                                  othersHrsCtrl,
+                                  labelMaxLines: 2,
+                                  validator: validateHoursField,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      );
+                  }
+                }
+
+                Future<void> saveCourse() async {
+                  if (!formKey.currentState!.validate()) return;
+
+                  final int theoryMarks = parseNumericField(seeTheoryMarksCtrl.text);
+                  final int labMarks = parseNumericField(seeLabMarksCtrl.text);
+                  if (theoryMarks > 0 && labMarks > 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Enter either Theory or Lab marks for SEE, not both.',
+                        ),
+                      ),
+                    );
+                    return;
+                  }
+
+                  final bool? confirm = await showDialog<bool>(
+                    context: ctx,
+                    builder: (dialogCtx) => AlertDialog(
+                      title: const smcText(
+                        textToDisplay: 'Create Course',
+                        textSize: 18,
+                        textBoldness: 4,
+                        colorOfText: ColorConst.textPrimary,
+                      ),
+                      content: const smcText(
+                        textToDisplay:
+                            'Are you sure you want to save this course?',
+                        textSize: 14,
+                        colorOfText: ColorConst.textSecondary,
+                        maxLines: 3,
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogCtx, false),
+                          child: const smcText(
+                            textToDisplay: 'Cancel',
+                            textSize: 14,
+                            textBoldness: 3,
+                            colorOfText: ColorConst.textSecondary,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogCtx, true),
+                          child: const smcText(
+                            textToDisplay: 'Save',
+                            textSize: 14,
+                            textBoldness: 4,
+                            colorOfText: ColorConst.primaryBlue,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm != true) return;
+
+                  setModalState(() => saving = true);
+
+                  final course = CourseModel(
+                    id: '',
+                    batch: selectedScheme ?? '',
+                    semester: selectedSemester ?? '',
+                    courseTitle: courseTitleCtrl.text.trim(),
+                    faculty: '',
+                    courseCode: courseCodeCtrl.text.trim().toUpperCase(),
+                    credits: creditsCtrl.text.trim(),
+                    courseType: selectedCourseType ?? '',
+                    syllabus: '',
+                    lectureHrs: parseNumericField(lectureHrsCtrl.text),
+                    tutorialHrs: parseNumericField(tutorialHrsCtrl.text),
+                    practicalHrs: parseNumericField(practicalHrsCtrl.text),
+                    othersHrs: parseNumericField(othersHrsCtrl.text),
+                    cieMarks: parseNumericField(cieMarksCtrl.text),
+                    seeExamDuration: seeExamDurationCtrl.text.trim(),
+                    seeTheoryMarks: theoryMarks,
+                    seeLabMarks: labMarks,
+                    totalMarks: computeTotalMarks(),
+                  );
+
+                  try {
+                    await courseService.addCourse(course);
+                    if (!ctx.mounted) return;
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        backgroundColor: Colors.green.shade600,
+                        content: const smcText(
+                          textToDisplay: 'Course added successfully.',
+                          textSize: 14,
+                          colorOfText: Colors.white,
+                        ),
+                      ),
+                    );
+                  } catch (e) {
+                    if (!ctx.mounted) return;
+                    setModalState(() => saving = false);
+                    final errorMsg = e.toString().replaceFirst('Exception: ', '');
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        backgroundColor: Colors.red.shade600,
+                        content: smcText(
+                          textToDisplay: 'Error: $errorMsg',
+                          textSize: 13,
+                          colorOfText: Colors.white,
+                          maxLines: 3,
+                        ),
+                      ),
+                    );
+                  }
+                }
+
+                return Padding(
+                  padding: EdgeInsets.only(
+                    left: 18,
+                    right: 18,
+                    top: 14,
+                    bottom: media.viewInsets.bottom + 12,
+                  ),
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const smcText(
+                                    textToDisplay: 'Create Course',
+                                    textSize: 18,
+                                    textBoldness: 5,
+                                    colorOfText: ColorConst.textPrimary,
+                                  ),
+                                  smcText(
+                                    textToDisplay:
+                                        'Step ${currentStep + 1} of $totalSteps',
+                                    textSize: 12,
+                                    colorOfText: ColorConst.textSecondary,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close_rounded, size: 20),
+                              color: ColorConst.textSecondary,
+                              onPressed: () => Navigator.pop(ctx),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            child: _buildStepContent(),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            TextButton(
+                              onPressed: saving
+                                  ? null
+                                  : (currentStep == 0
+                                      ? () => Navigator.pop(ctx)
+                                      : _onBack),
+                              child: smcText(
+                                textToDisplay: currentStep == 0 ? 'Cancel' : 'Back',
+                                textSize: 14,
+                                textBoldness: 4,
+                                colorOfText: ColorConst.textSecondary,
+                              ),
+                            ),
+                            const Spacer(),
+                            SizedBox(
+                              height: 40,
+                              child: ElevatedButton(
+                                onPressed: saving
+                                    ? null
+                                    : (currentStep == totalSteps - 1
+                                        ? saveCourse
+                                        : _onNext),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: ColorConst.primaryBlue,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                child: saving
+                                    ? const CircularProgressIndicator(
+                                        color: Colors.white,
+                                      )
+                                    : smcText(
+                                        textToDisplay: currentStep == totalSteps - 1
+                                            ? 'Create'
+                                            : 'Next',
+                                        textSize: 15,
+                                        colorOfText: Colors.white,
+                                      ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> onImportCourses() async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Course import will be available soon.')),
+    );
+  }
+
   void onSupport() {
     showDialog<void>(
       context: context,
@@ -2257,565 +2959,10 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   }
 
   Widget _buildCoursesView() {
-
-    return StreamBuilder<List<CourseModel>>(
-
-      stream: courseService.getCourses(),
-
-      builder: (context, snapshot) {
-
-        if (!snapshot.hasData) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
-        }
-
-        final courses = snapshot.data!;
-
-        List<String> availableCourses = [];
-
-        if (selectedBatch != null &&
-            selectedSemester != null) {
-
-          availableCourses = courses
-              .where((course) =>
-          course.batch == selectedBatch &&
-              course.semester ==
-                  selectedSemester)
-              .map((e) => e.courseTitle)
-              .toSet()
-              .toList();
-        }
-
-        CourseModel? selectedCourseData;
-
-        if (selectedCourse != null) {
-
-          try {
-
-            selectedCourseData =
-                courses.firstWhere(
-                      (course) =>
-                  course.courseTitle ==
-                      selectedCourse &&
-                      course.batch ==
-                          selectedBatch &&
-                      course.semester ==
-                          selectedSemester,
-                );
-
-          } catch (e) {}
-        }
-
-        return SingleChildScrollView(
-
-          padding:
-          const EdgeInsets.all(24),
-
-          child: Column(
-
-            crossAxisAlignment:
-            CrossAxisAlignment.start,
-
-            children: [
-
-              Row(
-
-                mainAxisAlignment:
-                MainAxisAlignment.spaceBetween,
-
-                children: [
-
-                  Column(
-
-                    crossAxisAlignment:
-                    CrossAxisAlignment.start,
-
-                    children: [
-
-                      const Text(
-                        'Course List',
-                        style: TextStyle(
-                          fontSize: 26,
-                          fontWeight:
-                          FontWeight.bold,
-                        ),
-                      ),
-
-                      const SizedBox(height: 8),
-
-                      Text(
-                        'View and manage all courses in your department.',
-                        style: TextStyle(
-                          color:
-                          Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  ElevatedButton.icon(
-
-                    onPressed: () async {
-
-                      await Navigator.push(
-                        context,
-
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              AddCoursePage(),
-                        ),
-                      );
-                    },
-
-                    icon:
-                    const Icon(Icons.add),
-
-                    label:
-                    const Text('Add Course'),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              // =========================
-              // TABLE 1
-              // =========================
-
-              Container(
-
-                padding:
-                const EdgeInsets.all(20),
-
-                decoration: BoxDecoration(
-
-                  color: Colors.white,
-
-                  borderRadius:
-                  BorderRadius.circular(20),
-
-                  border: Border.all(
-                    color:
-                    const Color(0xFFE4E8F0),
-                  ),
-                ),
-
-                child: Column(
-
-                  children: [
-
-                    Container(
-
-                      padding:
-                      const EdgeInsets.all(16),
-
-                      decoration: BoxDecoration(
-
-                        color:
-                        const Color(0xFFF5F7FB),
-
-                        borderRadius:
-                        BorderRadius.circular(
-                            12),
-                      ),
-
-                      child: const Row(
-
-                        children: [
-
-                          Expanded(
-                            child: Text(
-                              'Batch',
-                            ),
-                          ),
-
-                          Expanded(
-                            child: Text(
-                              'Semester',
-                            ),
-                          ),
-
-                          Expanded(
-                            child: Text(
-                              'Course',
-                            ),
-                          ),
-
-                          Expanded(
-                            child: Text(
-                              'Faculty',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    Row(
-
-                      children: [
-
-                        Expanded(
-
-                          child:
-                          DropdownButtonFormField<
-                              String>(
-
-                            value: selectedBatch,
-
-                            decoration:
-                            _inputDecoration(
-                                'Batch'),
-
-                            items: [
-
-                              '2023-25',
-                              '2024-26',
-                              '2025-27'
-
-                            ].map((e) {
-
-                              return DropdownMenuItem(
-                                value: e,
-                                child: Text(e),
-                              );
-
-                            }).toList(),
-
-                            onChanged: (value) {
-
-                              setState(() {
-
-                                selectedBatch =
-                                    value;
-
-                                selectedCourse =
-                                null;
-                              });
-                            },
-                          ),
-                        ),
-
-                        const SizedBox(width: 16),
-
-                        Expanded(
-
-                          child:
-                          DropdownButtonFormField<
-                              String>(
-
-                            value:
-                            selectedSemester,
-
-                            decoration:
-                            _inputDecoration(
-                                'Semester'),
-
-                            items: [
-
-                              'I',
-                              'II',
-                              'III',
-                              'IV'
-
-                            ].map((e) {
-
-                              return DropdownMenuItem(
-                                value: e,
-                                child: Text(e),
-                              );
-
-                            }).toList(),
-
-                            onChanged: (value) {
-
-                              setState(() {
-
-                                selectedSemester =
-                                    value;
-
-                                selectedCourse =
-                                null;
-                              });
-                            },
-                          ),
-                        ),
-
-                        const SizedBox(width: 16),
-
-                        Expanded(
-
-                          child:
-                          DropdownButtonFormField<
-                              String>(
-
-                            value:
-                            selectedCourse,
-
-                            decoration:
-                            _inputDecoration(
-                                'Course'),
-
-                            items:
-                            availableCourses
-                                .map((e) {
-
-                              return DropdownMenuItem(
-                                value: e,
-                                child: Text(e),
-                              );
-
-                            }).toList(),
-
-                            onChanged: (value) {
-
-                              setState(() {
-
-                                selectedCourse =
-                                    value;
-                              });
-                            },
-                          ),
-                        ),
-
-                        const SizedBox(width: 16),
-
-                        Expanded(
-
-                          child: Container(
-
-                            height: 58,
-
-                            alignment:
-                            Alignment.centerLeft,
-
-                            padding:
-                            const EdgeInsets
-                                .symmetric(
-                              horizontal: 16,
-                            ),
-
-                            decoration:
-                            BoxDecoration(
-
-                              borderRadius:
-                              BorderRadius
-                                  .circular(14),
-
-                              border: Border.all(
-                                color:
-                                const Color(
-                                    0xFFE4E8F0),
-                              ),
-                            ),
-
-                            child: Text(
-
-                              selectedCourseData
-                                  ?.faculty ??
-                                  '-',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // =========================
-              // TABLE 2
-              // =========================
-
-              if (selectedCourseData != null)
-
-                Container(
-
-                  padding:
-                  const EdgeInsets.all(20),
-
-                  decoration: BoxDecoration(
-
-                    color: Colors.white,
-
-                    borderRadius:
-                    BorderRadius.circular(
-                        20),
-
-                    border: Border.all(
-                      color:
-                      const Color(0xFFE4E8F0),
-                    ),
-                  ),
-
-                  child: Column(
-
-                    children: [
-
-                      Container(
-
-                        padding:
-                        const EdgeInsets.all(
-                            16),
-
-                        decoration: BoxDecoration(
-
-                          color:
-                          const Color(
-                              0xFFF5F7FB),
-
-                          borderRadius:
-                          BorderRadius.circular(
-                              12),
-                        ),
-
-                        child: const Row(
-
-                          children: [
-
-                            Expanded(
-                              child: Text(
-                                  'Course Code'),
-                            ),
-
-                            Expanded(
-                              child: Text(
-                                  'Course Title'),
-                            ),
-
-                            Expanded(
-                              child: Text(
-                                  'Credits'),
-                            ),
-
-                            Expanded(
-                              child: Text(
-                                  'Course Type'),
-                            ),
-
-                            Expanded(
-                              child: Text(
-                                  'Syllabus'),
-                            ),
-
-                            Expanded(
-                              child: Text(
-                                  'Faculty'),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      Row(
-
-                        children: [
-
-                          Expanded(
-                            child: Text(
-                              selectedCourseData
-                                  .courseCode,
-                            ),
-                          ),
-
-                          Expanded(
-                            child: Text(
-                              selectedCourseData
-                                  .courseTitle,
-                            ),
-                          ),
-
-                          Expanded(
-                            child: Text(
-                              selectedCourseData
-                                  .credits,
-                            ),
-                          ),
-
-                          Expanded(
-                            child: Text(
-                              selectedCourseData
-                                  .courseType,
-                            ),
-                          ),
-
-                          Expanded(
-
-                            child: InkWell(
-
-                              onTap: () async {
-
-                                final Uri url =
-                                Uri.parse(
-                                  selectedCourseData!
-                                      .syllabus,
-                                );
-
-                                await launchUrl(
-                                    url);
-                              },
-
-                              child: const Text(
-
-                                'Open Link',
-
-                                style: TextStyle(
-                                  color: Colors.blue,
-                                  decoration:
-                                  TextDecoration
-                                      .underline,
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          Expanded(
-                            child: Text(
-                              selectedCourseData
-                                  .faculty,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-  InputDecoration _inputDecoration(String hint) {
-    return InputDecoration(
-      hintText: hint,
-      filled: true,
-      fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 18,
-      ),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(
-          color: Color(0xFFE4E8F0),
-        ),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(
-          color: ColorConst.primaryBlue,
-        ),
-      ),
-    );
+    if (!coursesLoaded) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return buildCourseTable();
   }
 
   // ── Student Table ───────────────────────────────────────────
@@ -3402,6 +3549,785 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                 ),
                               );
                             },
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildCourseTable() {
+    final String searchTerm = courseSearchController.text.trim().toLowerCase();
+    final List<CourseModel> schemeFiltered = courseSchemeFilter == 'All Schemes'
+        ? courseList
+        : courseList.where((c) => c.batch == courseSchemeFilter).toList();
+    final List<CourseModel> semesterFiltered = courseSemesterFilter == 'All Semesters'
+        ? schemeFiltered
+        : schemeFiltered.where((c) => c.semester == courseSemesterFilter).toList();
+    final List<CourseModel> typeFiltered = courseTypeFilter == 'All Course Types'
+        ? semesterFiltered
+        : semesterFiltered.where((c) => c.courseType == courseTypeFilter).toList();
+    final List<CourseModel> searched = typeFiltered.where((c) {
+      if (searchTerm.isEmpty) return true;
+      return '${c.courseCode} ${c.courseTitle} ${c.batch} ${c.semester} ${c.faculty} ${c.courseType}'
+          .toLowerCase()
+          .contains(searchTerm);
+    }).toList()
+      ..sort(
+        (a, b) => a.courseTitle.toLowerCase().compareTo(b.courseTitle.toLowerCase()),
+      );
+
+    final int totalRows = searched.length;
+    final int totalPages = totalRows == 0 ? 1 : ((totalRows - 1) ~/ courseRowsPerPage) + 1;
+    final int safePage = courseCurrentPage.clamp(1, totalPages);
+    final int startIndex = (safePage - 1) * courseRowsPerPage;
+    final int endIndex = (startIndex + courseRowsPerPage).clamp(0, totalRows);
+    final List<CourseModel> pageRows =
+        totalRows == 0 ? <CourseModel>[] : searched.sublist(startIndex, endIndex);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE4EBFB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF0FF),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(Icons.menu_book_rounded, color: ColorConst.primaryBlue),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Flexible(
+                          child: smcText(
+                            textToDisplay: 'Courses',
+                            textSize: 16,
+                            textBoldness: 5,
+                            colorOfText: Color(0xFF1F2F52),
+                            maxLines: 1,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF4FF),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: smcText(
+                            textToDisplay: '${courseList.length}',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: ColorConst.primaryBlue,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    const smcText(
+                      textToDisplay: 'View and manage all courses in your department.',
+                      textSize: 12,
+                      colorOfText: Color(0xFF7D87A3),
+                      maxLines: 2,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: openCreateCourse,
+                    icon: const Icon(Icons.menu_book_rounded, size: 18, color: Colors.white),
+                    label: const smcText(
+                      textToDisplay: 'Create',
+                      textSize: 14,
+                      textBoldness: 4,
+                      colorOfText: Colors.white,
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: ColorConst.primaryBlue,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  OutlinedButton.icon(
+                    onPressed: onImportCourses,
+                    icon: const Icon(Icons.upload_file_rounded, size: 18),
+                    label: const smcText(
+                      textToDisplay: 'Import',
+                      textSize: 14,
+                      textBoldness: 4,
+                      colorOfText: ColorConst.primaryBlue,
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: ColorConst.primaryBlue,
+                      side: const BorderSide(color: ColorConst.primaryBlue),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFCFDFF),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE8EDFA)),
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final bool stackFilters = constraints.maxWidth < 720;
+                final Widget searchField = SizedBox(
+                  height: 44,
+                  child: TextField(
+                    controller: courseSearchController,
+                    onChanged: (_) => setState(() => courseCurrentPage = 1),
+                    decoration: InputDecoration(
+                      hintText: 'Search courses...',
+                      prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Color(0xFF8A96B2)),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: ColorConst.primaryBlue),
+                      ),
+                    ),
+                  ),
+                );
+                final Widget schemeDropdown = SizedBox(
+                  height: 44,
+                  child: DropdownButtonFormField<String>(
+                    isExpanded: true,
+                    value: courseSchemeFilter,
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: ColorConst.primaryBlue),
+                      ),
+                    ),
+                    items: ['All Schemes', '2023', '2024', '2025', '2026', '2027']
+                        .map(
+                          (scheme) => DropdownMenuItem(
+                            value: scheme,
+                            child: Text(
+                              scheme,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) {
+                        setState(() {
+                          courseSchemeFilter = v;
+                          courseCurrentPage = 1;
+                        });
+                      }
+                    },
+                  ),
+                );
+                final Widget semesterDropdown = SizedBox(
+                  height: 44,
+                  child: DropdownButtonFormField<String>(
+                    isExpanded: true,
+                    value: courseSemesterFilter,
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: ColorConst.primaryBlue),
+                      ),
+                    ),
+                    items: ['All Semesters', 'I', 'II', 'III', 'IV']
+                        .map(
+                          (semester) => DropdownMenuItem(
+                            value: semester,
+                            child: Text(
+                              semester,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) {
+                        setState(() {
+                          courseSemesterFilter = v;
+                          courseCurrentPage = 1;
+                        });
+                      }
+                    },
+                  ),
+                );
+                final Widget courseTypeDropdown = SizedBox(
+                  height: 44,
+                  child: DropdownButtonFormField<String>(
+                    isExpanded: true,
+                    value: courseTypeFilter,
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: ColorConst.primaryBlue),
+                      ),
+                    ),
+                    items: [
+                      'All Course Types',
+                      'IPCC',
+                      'PCC',
+                      'PCCL',
+                      'AEC',
+                      'BSC',
+                    ]
+                        .map(
+                          (type) => DropdownMenuItem(
+                            value: type,
+                            child: Text(
+                              type,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) {
+                        setState(() {
+                          courseTypeFilter = v;
+                          courseCurrentPage = 1;
+                        });
+                      }
+                    },
+                  ),
+                );
+                final Widget resetButton = SizedBox(
+                  height: 44,
+                  child: OutlinedButton(
+                    onPressed: () {
+                      setState(() {
+                        courseSearchController.clear();
+                        courseSchemeFilter = 'All Schemes';
+                        courseSemesterFilter = 'All Semesters';
+                        courseTypeFilter = 'All Course Types';
+                        courseCurrentPage = 1;
+                      });
+                    },
+                    child: const smcText(
+                      textToDisplay: 'Reset',
+                      textSize: 12,
+                      textBoldness: 3,
+                      colorOfText: Color(0xFF4F5E7D),
+                    ),
+                  ),
+                );
+
+                if (stackFilters) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      searchField,
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(child: schemeDropdown),
+                          const SizedBox(width: 12),
+                          Expanded(child: semesterDropdown),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(child: courseTypeDropdown),
+                          const SizedBox(width: 12),
+                          resetButton,
+                        ],
+                      ),
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(flex: 3, child: searchField),
+                    const SizedBox(width: 12),
+                    Expanded(flex: 2, child: schemeDropdown),
+                    const SizedBox(width: 12),
+                    Expanded(flex: 2, child: semesterDropdown),
+                    const SizedBox(width: 12),
+                    Expanded(flex: 2, child: courseTypeDropdown),
+                    const SizedBox(width: 12),
+                    resetButton,
+                  ],
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE3EAF8)),
+              ),
+              child: totalRows == 0
+                  ? const Center(
+                      child: smcText(
+                        textToDisplay: 'No courses found.',
+                        textSize: 13,
+                        colorOfText: Color(0xFF8A96B2),
+                      ),
+                    )
+                  : Column(
+                      children: [
+                        Expanded(
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final double tableWidth = constraints.maxWidth;
+                              const double minTableWidth = 720;
+
+                              List<double> courseColumnWidths(double totalWidth) {
+                                const flex = <double>[
+                                  5,
+                                  8,
+                                  7,
+                                  10,
+                                  11,
+                                  26,
+                                  8,
+                                  9,
+                                  9,
+                                  9,
+                                  9,
+                                ];
+                                final double sum =
+                                    flex.fold(0, (a, b) => a + b);
+                                final List<double> widths = flex
+                                    .map((f) => totalWidth * f / sum)
+                                    .toList();
+                                final double widthSum =
+                                    widths.fold(0.0, (a, b) => a + b);
+                                widths[widths.length - 1] +=
+                                    totalWidth - widthSum;
+                                return widths;
+                              }
+
+                              Widget buildCourseTable(double width) {
+                                final List<double> colWidths =
+                                    courseColumnWidths(width);
+                                const Color borderColor = Color(0xFFE3EAF8);
+                                const Color headerColor = Color(0xFFF4F7FF);
+                                const double groupHeaderHeight = 30;
+                                const double columnHeaderHeight = 44;
+                                const double dataRowHeight = 52;
+
+                                final double prefixColumnsWidth = colWidths
+                                    .sublist(0, 7)
+                                    .fold(0.0, (a, b) => a + b);
+                                final double teachingHoursWidth = colWidths
+                                    .sublist(7)
+                                    .fold(0.0, (a, b) => a + b);
+
+                                final Map<int, TableColumnWidth> columnWidthsMap = {
+                                  for (int i = 0; i < colWidths.length; i++)
+                                    i: FixedColumnWidth(colWidths[i]),
+                                };
+
+                                String cellText(String value) =>
+                                    value.trim().isEmpty ? '—' : value.trim();
+
+                                Widget headerLabel(
+                                  String text, {
+                                  Alignment alignment = Alignment.center,
+                                  int maxLines = 2,
+                                }) {
+                                  return Container(
+                                    height: columnHeaderHeight,
+                                    alignment: alignment,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                    ),
+                                    child: smcText(
+                                      textToDisplay: text,
+                                      textSize: 12,
+                                      textBoldness: 4,
+                                      colorOfText: const Color(0xFF5C6B8B),
+                                      maxLines: maxLines,
+                                    ),
+                                  );
+                                }
+
+                                Widget dataCell(
+                                  Widget child, {
+                                  Alignment alignment = Alignment.center,
+                                }) {
+                                  return Container(
+                                    height: dataRowHeight,
+                                    alignment: alignment,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 8,
+                                    ),
+                                    color: Colors.white,
+                                    child: child,
+                                  );
+                                }
+
+                                Widget teachingHoursDataCell(int hours) {
+                                  return dataCell(
+                                    smcText(
+                                      textToDisplay: '$hours',
+                                      textSize: 12,
+                                      textBoldness: hours == 0 ? 1 : 5,
+                                      colorOfText: const Color(0xFF2E3954),
+                                      maxLines: 1,
+                                    ),
+                                  );
+                                }
+
+                                final List<TableRow> tableRows = [
+                                  TableRow(
+                                    decoration: const BoxDecoration(
+                                      color: headerColor,
+                                    ),
+                                    children: List.generate(
+                                      colWidths.length,
+                                      (_) => const SizedBox(
+                                        height: groupHeaderHeight,
+                                      ),
+                                    ),
+                                  ),
+                                  TableRow(
+                                    decoration: const BoxDecoration(
+                                      color: headerColor,
+                                    ),
+                                    children: [
+                                      headerLabel('S.No'),
+                                      headerLabel('Scheme'),
+                                      headerLabel('Semester'),
+                                      headerLabel('Course Type'),
+                                      headerLabel(
+                                        'Course Code',
+                                        alignment: Alignment.centerLeft,
+                                      ),
+                                      headerLabel(
+                                        'Course Title',
+                                        alignment: Alignment.centerLeft,
+                                      ),
+                                      headerLabel('Credits'),
+                                      headerLabel('Lecture'),
+                                      headerLabel('Tutorial'),
+                                      headerLabel('Practical'),
+                                      headerLabel('Others'),
+                                    ],
+                                  ),
+                                  ...pageRows.asMap().entries.map((entry) {
+                                    final int index = entry.key;
+                                    final CourseModel c = entry.value;
+                                    final int serialNo = startIndex + index + 1;
+
+                                    return TableRow(
+                                      children: [
+                                        dataCell(
+                                          smcText(
+                                            textToDisplay: '$serialNo',
+                                            textSize: 12,
+                                            colorOfText: const Color(0xFF2E3954),
+                                          ),
+                                        ),
+                                        dataCell(
+                                          smcText(
+                                            textToDisplay: cellText(c.batch),
+                                            textSize: 12,
+                                            colorOfText: const Color(0xFF2E3954),
+                                            maxLines: 1,
+                                          ),
+                                        ),
+                                        dataCell(
+                                          smcText(
+                                            textToDisplay: cellText(c.semester),
+                                            textSize: 12,
+                                            colorOfText: const Color(0xFF2E3954),
+                                            maxLines: 1,
+                                          ),
+                                        ),
+                                        dataCell(
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 10,
+                                              vertical: 5,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFEFF4FF),
+                                              borderRadius:
+                                                  BorderRadius.circular(999),
+                                            ),
+                                            child: smcText(
+                                              textToDisplay:
+                                                  cellText(c.courseType),
+                                              textSize: 11,
+                                              textBoldness: 3,
+                                              colorOfText: const Color(0xFF3558DA),
+                                              maxLines: 1,
+                                            ),
+                                          ),
+                                        ),
+                                        dataCell(
+                                          smcText(
+                                            textToDisplay: cellText(c.courseCode),
+                                            textSize: 12,
+                                            textBoldness: 4,
+                                            colorOfText: const Color(0xFF2E3954),
+                                            maxLines: 1,
+                                          ),
+                                          alignment: Alignment.centerLeft,
+                                        ),
+                                        dataCell(
+                                          smcText(
+                                            textToDisplay: cellText(c.courseTitle),
+                                            textSize: 12,
+                                            colorOfText: const Color(0xFF2E3954),
+                                            maxLines: 2,
+                                          ),
+                                          alignment: Alignment.centerLeft,
+                                        ),
+                                        dataCell(
+                                          smcText(
+                                            textToDisplay: cellText(c.credits),
+                                            textSize: 12,
+                                            colorOfText: const Color(0xFF2E3954),
+                                            maxLines: 1,
+                                          ),
+                                        ),
+                                        teachingHoursDataCell(c.lectureHrs),
+                                        teachingHoursDataCell(c.tutorialHrs),
+                                        teachingHoursDataCell(c.practicalHrs),
+                                        teachingHoursDataCell(c.othersHrs),
+                                      ],
+                                    );
+                                  }),
+                                ];
+
+                                return SizedBox(
+                                  width: width,
+                                  child: Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      Table(
+                                        columnWidths: columnWidthsMap,
+                                        border: TableBorder.all(
+                                          color: borderColor,
+                                          width: 1,
+                                        ),
+                                        defaultVerticalAlignment:
+                                            TableCellVerticalAlignment.middle,
+                                        children: tableRows,
+                                      ),
+                                      Positioned(
+                                        left: prefixColumnsWidth,
+                                        top: 0,
+                                        width: teachingHoursWidth,
+                                        height: groupHeaderHeight,
+                                        child: Container(
+                                          decoration: const BoxDecoration(
+                                            color: headerColor,
+                                            border: Border(
+                                              left: BorderSide(
+                                                color: borderColor,
+                                              ),
+                                              top: BorderSide(
+                                                color: borderColor,
+                                              ),
+                                              right: BorderSide(
+                                                color: borderColor,
+                                              ),
+                                              bottom: BorderSide(
+                                                color: borderColor,
+                                              ),
+                                            ),
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: const smcText(
+                                            textToDisplay:
+                                                'Teaching Hours / Week',
+                                            textSize: 12,
+                                            textBoldness: 4,
+                                            colorOfText: Color(0xFF5C6B8B),
+                                            maxLines: 1,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+
+                              if (tableWidth < minTableWidth) {
+                                return SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: buildCourseTable(minTableWidth),
+                                );
+                              }
+
+                              return SingleChildScrollView(
+                                child: buildCourseTable(tableWidth),
+                              );
+                            },
+                          ),
+                        ),
+                        Container(
+                          height: 58,
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            border: Border(top: BorderSide(color: Color(0xFFE3EAF8))),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              smcText(
+                                textToDisplay: totalRows == 0
+                                    ? 'Showing 0 entries'
+                                    : 'Showing ${startIndex + 1} to $endIndex of $totalRows entries',
+                                        textSize: 12,
+                                        colorOfText: const Color(0xFF7D87A3),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      const smcText(
+                                        textToDisplay: 'Rows per page:',
+                                        textSize: 12,
+                                        colorOfText: Color(0xFF7D87A3),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      DropdownButton<int>(
+                                        value: courseRowsPerPage,
+                                        items: const [
+                                          DropdownMenuItem(value: 10, child: Text('10')),
+                                          DropdownMenuItem(value: 25, child: Text('25')),
+                                          DropdownMenuItem(value: 50, child: Text('50')),
+                                          DropdownMenuItem(value: 100, child: Text('100')),
+                                        ],
+                                        onChanged: (value) {
+                                          if (value != null) {
+                                            setState(() {
+                                              courseRowsPerPage = value;
+                                              courseCurrentPage = 1;
+                                            });
+                                          }
+                                        },
+                                      ),
+                                      const SizedBox(width: 12),
+                                      IconButton(
+                                        onPressed: safePage > 1
+                                            ? () => setState(() => courseCurrentPage = 1)
+                                            : null,
+                                        icon: const Icon(Icons.first_page_rounded),
+                                      ),
+                                      IconButton(
+                                        onPressed: safePage > 1
+                                            ? () => setState(() => courseCurrentPage = safePage - 1)
+                                            : null,
+                                        icon: const Icon(Icons.chevron_left_rounded),
+                                      ),
+                                      Container(
+                                        width: 34,
+                                        height: 34,
+                                        alignment: Alignment.center,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFEAF0FF),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: smcText(
+                                          textToDisplay: '$safePage',
+                                          textSize: 12,
+                                          textBoldness: 4,
+                                          colorOfText: ColorConst.primaryBlue,
+                                        ),
+                                      ),
+                                      IconButton(
+                                        onPressed: safePage < totalPages
+                                            ? () => setState(() => courseCurrentPage = safePage + 1)
+                                            : null,
+                                        icon: const Icon(Icons.chevron_right_rounded),
+                                      ),
+                                      IconButton(
+                                        onPressed: safePage < totalPages
+                                            ? () => setState(() => courseCurrentPage = totalPages)
+                                            : null,
+                                        icon: const Icon(Icons.last_page_rounded),
+                                      ),
+                            ],
                           ),
                         ),
                       ],
