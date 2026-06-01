@@ -2595,6 +2595,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     );
   }
 
+
+
   // ── Build ─────────────────────────────────────────────────────
 
   @override
@@ -2747,6 +2749,20 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     }
   }
 
+  Map<String, int> get studentBatchCount {
+    final Map<String, int> counts = {};
+
+    for (final student in studentList) {
+      final batch = student.batch.isEmpty
+          ? 'Unknown'
+          : student.batch;
+
+      counts[batch] = (counts[batch] ?? 0) + 1;
+    }
+
+    return counts;
+  }
+
   Widget _buildDashboardView() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2758,45 +2774,64 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
           colorOfText: ColorConst.textPrimary,
         ),
         const SizedBox(height: 16),
-        Row(
+        Expanded(
+        child:Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildStatCard(
-              title: 'Total Students',
-              count: studentList.length.toString(),
-              icon: Icons.school_rounded,
-              color: Colors.blue,
+
+            Expanded(
+              flex: 1,
+              child: SizedBox(
+                height: 220,
+                child: _buildStudentStatCard(),
+              ),
             ),
-            const SizedBox(width: 16),
-            _buildStatCard(
-              title: 'Total Faculty',
-              count: facultyList.length.toString(),
-              icon: Icons.people_alt_rounded,
-              color: Colors.green,
+              const SizedBox(width:16),
+
+            Expanded(
+              flex: 1,
+              child: SizedBox(
+                height: 100,
+                child: _buildStatCard(
+                  title: 'Total Faculty',
+                  count: facultyList.length.toString(),
+                  icon: Icons.people_alt_rounded,
+                  color: Colors.green,
+                ),
+              ),
             ),
-            const SizedBox(width: 16),
-            _buildStatCard(
-              title: 'Total Courses',
-              count: totalCourses.toString(),
-              icon: Icons.menu_book_rounded,
-              color: Colors.purple,
-            ),
-          ],
-        ),
-      ],
-    );
-  }
+              const SizedBox(width:16),
+                  Expanded(
+                  flex: 1,
+                  child: SizedBox(
+                  height: 100,
+                  child: _buildStatCard(
+                  title: 'Total Courses',
+                  count: totalCourses.toString(),
+                  icon: Icons.menu_book_rounded,
+                  color: Colors.purple,
+                  ),
+                  ),
+                  ),
+                  ],
+                  )
+                  ),
+                  ],
+                  );
+            }
 
   Widget _buildStatCard({required String title, required String count, required IconData icon, required Color color}) {
-    return Expanded(
+    return Container(
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: const Color(0xFFE3EAF8)),
         ),
-        child: Row(
-          children: [
+        child: Center(
+          child: Row(
+           children: [
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -2824,6 +2859,257 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
             ),
           ],
         ),
+      ),
+      ),
+    );
+  }
+
+  Widget _buildStudentStatCard() {
+    return Container(
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFFE3EAF8),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+
+            Row(
+              children: [
+
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.school_rounded,
+                    color: Colors.blue,
+                  ),
+                ),
+
+                const SizedBox(width: 16),
+
+                Column(
+                  crossAxisAlignment:
+                  CrossAxisAlignment.start,
+                  children: [
+
+                    const Text(
+                      'Total Students',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+
+                    Text(
+                      studentList.length.toString(),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            Expanded(
+              child: _buildStudentVerticalChart(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStudentVerticalChart() {
+
+    final data =
+    studentBatchCount.entries.toList();
+
+    final maxValue =
+    data.map((e) => e.value)
+        .reduce((a,b)=>a>b?a:b);
+
+    return Row(
+      crossAxisAlignment:
+      CrossAxisAlignment.end,
+      mainAxisAlignment:
+      MainAxisAlignment.spaceEvenly,
+
+      children: data.map((entry) {
+
+        final height =
+            (entry.value / maxValue) * 45;
+
+        return Column(
+          mainAxisAlignment:
+          MainAxisAlignment.end,
+
+          children: [
+
+            Text(
+              entry.value.toString(),
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 4),
+
+            Container(
+              width: 26,
+              height: height,
+              decoration: BoxDecoration(
+                color: Colors.blue,
+                borderRadius:
+                BorderRadius.circular(6),
+              ),
+            ),
+
+            const SizedBox(height: 6),
+
+            Text(
+              entry.key,
+              style: const TextStyle(
+                fontSize: 10,
+              ),
+            ),
+          ],
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildGraphCard({
+    required String title,
+    required int total,
+    required Map<String,int> data,
+    required Color color,
+  }) {
+
+    final maxValue =
+    data.values.isEmpty
+        ? 1
+        : data.values.reduce(
+          (a,b)=>a>b?a:b,
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFFE3EAF8),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment:
+        CrossAxisAlignment.start,
+        children: [
+
+          Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+
+          const SizedBox(height: 4),
+
+          Text(
+            "$total",
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          Expanded(
+            child: Column(
+              children: data.entries.map((entry) {
+                return _buildBarRow(
+                  label: entry.key,
+                  value: entry.value,
+                  maxValue: maxValue,
+                  color: color,
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBarRow({
+    required String label,
+    required int value,
+    required int maxValue,
+    required Color color,
+  }) {
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment:
+        CrossAxisAlignment.start,
+        children: [
+
+          Row(
+            mainAxisAlignment:
+            MainAxisAlignment.spaceBetween,
+            children: [
+
+              Text(label),
+
+              Text(
+                value.toString(),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 6),
+
+          Container(
+            height: 18,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius:
+              BorderRadius.circular(8),
+            ),
+            child: FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: value / maxValue,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius:
+                  BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
