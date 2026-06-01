@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:smartcampus/const/color_const.dart';
 import 'package:smartcampus/screens/landing_page.dart';
 import 'package:smartcampus/screens/screen_brancher.dart';
+import 'package:smartcampus/widgets/mouse_drag_scroll_behavior.dart';
 
 import 'firebase_options.dart';
 
@@ -41,6 +42,7 @@ class SmartCampusApp extends StatelessWidget {
     return MaterialApp(
       title: 'SmartCampus',
       debugShowCheckedModeBanner: false,
+      scrollBehavior: const MouseDragScrollBehavior(),
       theme: ThemeData(
         scaffoldBackgroundColor: ColorConst.pageBackground,
         colorScheme: ColorScheme.fromSeed(seedColor: ColorConst.primaryBlue),

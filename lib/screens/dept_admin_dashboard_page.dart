@@ -23,6 +23,8 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' as excel;
 import 'package:smartcampus/widgets/student_import_dialog.dart';
+import 'package:smartcampus/widgets/mouse_drag_scroll_behavior.dart';
+
 class DeptAdminDashboardPage extends StatefulWidget {
   final String orgId;
   final String deptId;
@@ -80,6 +82,10 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
   // Search and Pagination for Courses
   final TextEditingController courseSearchController = TextEditingController();
+  final ScrollController courseTableHorizontalScrollController =
+      ScrollController();
+  final ScrollController courseTableVerticalScrollController =
+      ScrollController();
   int courseRowsPerPage = 100;
   int courseCurrentPage = 1;
   String courseSchemeFilter = 'All Schemes';
@@ -109,6 +115,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     studentSearchController.dispose();
     facultySearchController.dispose();
     courseSearchController.dispose();
+    courseTableHorizontalScrollController.dispose();
+    courseTableVerticalScrollController.dispose();
     super.dispose();
   }
 
@@ -3878,7 +3886,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         : semesterFiltered.where((c) => c.courseType == courseTypeFilter).toList();
     final List<CourseModel> searched = typeFiltered.where((c) {
       if (searchTerm.isEmpty) return true;
-      return '${c.courseCode} ${c.courseTitle} ${c.batch} ${c.semester} ${c.faculty} ${c.courseType}'
+      return '${c.courseCode} ${c.courseTitle} ${c.batch} ${c.semester} ${c.faculty} ${c.courseType} ${c.cieMarks} ${c.seeExamDuration} ${c.seeTheoryMarks} ${c.seeLabMarks} ${c.totalMarks}'
           .toLowerCase()
           .contains(searchTerm);
     }).toList()
@@ -4260,49 +4268,68 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                           child: LayoutBuilder(
                             builder: (context, constraints) {
                               final double tableWidth = constraints.maxWidth;
-                              const double minTableWidth = 720;
-
-                              List<double> courseColumnWidths(double totalWidth) {
-                                const flex = <double>[
-                                  5,
-                                  8,
-                                  7,
-                                  10,
-                                  11,
-                                  26,
-                                  8,
-                                  9,
-                                  9,
-                                  9,
-                                  9,
-                                ];
-                                final double sum =
-                                    flex.fold(0, (a, b) => a + b);
-                                final List<double> widths = flex
-                                    .map((f) => totalWidth * f / sum)
-                                    .toList();
-                                final double widthSum =
-                                    widths.fold(0.0, (a, b) => a + b);
-                                widths[widths.length - 1] +=
-                                    totalWidth - widthSum;
-                                return widths;
+                              const List<double> minColumnWidths = [
+                                52,
+                                76,
+                                76,
+                                108,
+                                128,
+                                220,
+                                68,
+                                72,
+                                72,
+                                72,
+                                72,
+                                88,
+                                128,
+                                112,
+                                108,
+                                92,
+                              ];
+                              final double minTableWidth = minColumnWidths
+                                  .fold(0.0, (a, b) => a + b);
+                              final double contentWidth = tableWidth < minTableWidth
+                                  ? minTableWidth
+                                  : tableWidth;
+                              final List<double> colWidths =
+                                  List<double>.from(minColumnWidths);
+                              if (contentWidth > minTableWidth) {
+                                colWidths[5] += contentWidth - minTableWidth;
                               }
 
-                              Widget buildCourseTable(double width) {
-                                final List<double> colWidths =
-                                    courseColumnWidths(width);
+                              int totalCreditsSum = 0;
+                              int totalLectureHrs = 0;
+                              int totalTutorialHrs = 0;
+                              int totalPracticalHrs = 0;
+                              int totalOthersHrs = 0;
+                              int totalCieMarks = 0;
+                              int totalSeeTheoryMarks = 0;
+                              int totalSeeLabMarks = 0;
+                              int totalMarksSum = 0;
+                              for (final CourseModel course in searched) {
+                                final String creditsRaw = course.credits.trim();
+                                if (creditsRaw.isNotEmpty) {
+                                  totalCreditsSum +=
+                                      int.tryParse(creditsRaw) ??
+                                      double.tryParse(creditsRaw)?.round() ??
+                                      0;
+                                }
+                                totalLectureHrs += course.lectureHrs;
+                                totalTutorialHrs += course.tutorialHrs;
+                                totalPracticalHrs += course.practicalHrs;
+                                totalOthersHrs += course.othersHrs;
+                                totalCieMarks += course.cieMarks;
+                                totalSeeTheoryMarks += course.seeTheoryMarks;
+                                totalSeeLabMarks += course.seeLabMarks;
+                                totalMarksSum += course.totalMarks;
+                              }
+
+                              Widget buildCourseTableContent() {
                                 const Color borderColor = Color(0xFFE3EAF8);
                                 const Color headerColor = Color(0xFFF4F7FF);
                                 const double groupHeaderHeight = 30;
                                 const double columnHeaderHeight = 44;
                                 const double dataRowHeight = 52;
-
-                                final double prefixColumnsWidth = colWidths
-                                    .sublist(0, 7)
-                                    .fold(0.0, (a, b) => a + b);
-                                final double teachingHoursWidth = colWidths
-                                    .sublist(7)
-                                    .fold(0.0, (a, b) => a + b);
 
                                 final Map<int, TableColumnWidth> columnWidthsMap = {
                                   for (int i = 0; i < colWidths.length; i++)
@@ -4349,30 +4376,157 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                   );
                                 }
 
-                                Widget teachingHoursDataCell(int hours) {
+                                Widget numericDataCell(
+                                  int value, {
+                                  bool boldWhenNonZero = false,
+                                }) {
                                   return dataCell(
                                     smcText(
-                                      textToDisplay: '$hours',
+                                      textToDisplay: '$value',
                                       textSize: 12,
-                                      textBoldness: hours == 0 ? 1 : 5,
+                                      textBoldness:
+                                          boldWhenNonZero && value != 0 ? 5 : 1,
                                       colorOfText: const Color(0xFF2E3954),
                                       maxLines: 1,
                                     ),
                                   );
                                 }
 
-                                final List<TableRow> tableRows = [
-                                  TableRow(
-                                    decoration: const BoxDecoration(
-                                      color: headerColor,
+                                Widget textDataCell(
+                                  String value, {
+                                  bool boldWhenNonEmpty = false,
+                                }) {
+                                  final String display = cellText(value);
+                                  final bool emphasize = boldWhenNonEmpty &&
+                                      value.trim().isNotEmpty &&
+                                      display != '—';
+                                  return dataCell(
+                                    smcText(
+                                      textToDisplay: display,
+                                      textSize: 12,
+                                      textBoldness: emphasize ? 5 : 1,
+                                      colorOfText: const Color(0xFF2E3954),
+                                      maxLines: 2,
                                     ),
-                                    children: List.generate(
-                                      colWidths.length,
-                                      (_) => const SizedBox(
+                                  );
+                                }
+
+                                Widget totalRowCell(
+                                  Widget child, {
+                                  Alignment alignment = Alignment.center,
+                                }) {
+                                  return Container(
+                                    height: dataRowHeight,
+                                    alignment: alignment,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 8,
+                                    ),
+                                    color: headerColor,
+                                    child: child,
+                                  );
+                                }
+
+                                Widget totalRowNumericCell(int value) {
+                                  return totalRowCell(
+                                    smcText(
+                                      textToDisplay: '$value',
+                                      textSize: 12,
+                                      textBoldness: 5,
+                                      colorOfText: const Color(0xFF2E3954),
+                                      maxLines: 1,
+                                    ),
+                                  );
+                                }
+
+                                const BorderSide headerBorderSide = BorderSide(
+                                  color: borderColor,
+                                  width: 1,
+                                );
+
+                                final double prefixColumnsWidth = colWidths
+                                    .sublist(0, 7)
+                                    .fold(0.0, (a, b) => a + b);
+                                final double teachingHoursWidth = colWidths
+                                    .sublist(7, 11)
+                                    .fold(0.0, (a, b) => a + b);
+                                final double examSchemeWidth = colWidths
+                                    .sublist(11, 15)
+                                    .fold(0.0, (a, b) => a + b);
+
+                                Widget buildGroupHeaderRow() {
+                                  return Row(
+                                    children: [
+                                      Container(
+                                        width: prefixColumnsWidth,
                                         height: groupHeaderHeight,
+                                        decoration: const BoxDecoration(
+                                          color: headerColor,
+                                          border: Border(
+                                            top: headerBorderSide,
+                                            left: headerBorderSide,
+                                            bottom: headerBorderSide,
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                  ),
+                                      Container(
+                                        width: teachingHoursWidth,
+                                        height: groupHeaderHeight,
+                                        alignment: Alignment.center,
+                                        decoration: const BoxDecoration(
+                                          color: headerColor,
+                                          border: Border(
+                                            top: headerBorderSide,
+                                            left: headerBorderSide,
+                                            right: headerBorderSide,
+                                            bottom: headerBorderSide,
+                                          ),
+                                        ),
+                                        child: const smcText(
+                                          textToDisplay: 'Teaching Hours / Week',
+                                          textSize: 12,
+                                          textBoldness: 4,
+                                          colorOfText: Color(0xFF5C6B8B),
+                                          maxLines: 1,
+                                        ),
+                                      ),
+                                      Container(
+                                        width: examSchemeWidth,
+                                        height: groupHeaderHeight,
+                                        alignment: Alignment.center,
+                                        decoration: const BoxDecoration(
+                                          color: headerColor,
+                                          border: Border(
+                                            top: headerBorderSide,
+                                            right: headerBorderSide,
+                                            bottom: headerBorderSide,
+                                          ),
+                                        ),
+                                        child: const smcText(
+                                          textToDisplay: 'Exam Scheme',
+                                          textSize: 12,
+                                          textBoldness: 4,
+                                          colorOfText: Color(0xFF5C6B8B),
+                                          maxLines: 1,
+                                        ),
+                                      ),
+                                      Container(
+                                        width: colWidths[15],
+                                        height: groupHeaderHeight,
+                                        decoration: const BoxDecoration(
+                                          color: headerColor,
+                                          border: Border(
+                                            top: headerBorderSide,
+                                            right: headerBorderSide,
+                                            bottom: headerBorderSide,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }
+
+                                final List<TableRow> tableRows = [
                                   TableRow(
                                     decoration: const BoxDecoration(
                                       color: headerColor,
@@ -4395,6 +4549,20 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                       headerLabel('Tutorial'),
                                       headerLabel('Practical'),
                                       headerLabel('Others'),
+                                      headerLabel('CIE Marks', maxLines: 2),
+                                      headerLabel(
+                                        'SEE Exam Duration',
+                                        maxLines: 2,
+                                      ),
+                                      headerLabel(
+                                        'SEE Theory Marks',
+                                        maxLines: 2,
+                                      ),
+                                      headerLabel(
+                                        'SEE Lab Marks',
+                                        maxLines: 2,
+                                      ),
+                                      headerLabel('Total Marks', maxLines: 2),
                                     ],
                                   ),
                                   ...pageRows.asMap().entries.map((entry) {
@@ -4475,78 +4643,133 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                             maxLines: 1,
                                           ),
                                         ),
-                                        teachingHoursDataCell(c.lectureHrs),
-                                        teachingHoursDataCell(c.tutorialHrs),
-                                        teachingHoursDataCell(c.practicalHrs),
-                                        teachingHoursDataCell(c.othersHrs),
+                                        numericDataCell(
+                                          c.lectureHrs,
+                                          boldWhenNonZero: true,
+                                        ),
+                                        numericDataCell(
+                                          c.tutorialHrs,
+                                          boldWhenNonZero: true,
+                                        ),
+                                        numericDataCell(
+                                          c.practicalHrs,
+                                          boldWhenNonZero: true,
+                                        ),
+                                        numericDataCell(
+                                          c.othersHrs,
+                                          boldWhenNonZero: true,
+                                        ),
+                                        numericDataCell(
+                                          c.cieMarks,
+                                          boldWhenNonZero: true,
+                                        ),
+                                        textDataCell(
+                                          c.seeExamDuration,
+                                          boldWhenNonEmpty: true,
+                                        ),
+                                        numericDataCell(
+                                          c.seeTheoryMarks,
+                                          boldWhenNonZero: true,
+                                        ),
+                                        numericDataCell(
+                                          c.seeLabMarks,
+                                          boldWhenNonZero: true,
+                                        ),
+                                        numericDataCell(
+                                          c.totalMarks,
+                                          boldWhenNonZero: true,
+                                        ),
                                       ],
                                     );
                                   }),
-                                ];
-
-                                return SizedBox(
-                                  width: width,
-                                  child: Stack(
-                                    clipBehavior: Clip.none,
-                                    children: [
-                                      Table(
-                                        columnWidths: columnWidthsMap,
-                                        border: TableBorder.all(
-                                          color: borderColor,
-                                          width: 1,
-                                        ),
-                                        defaultVerticalAlignment:
-                                            TableCellVerticalAlignment.middle,
-                                        children: tableRows,
-                                      ),
-                                      Positioned(
-                                        left: prefixColumnsWidth,
-                                        top: 0,
-                                        width: teachingHoursWidth,
-                                        height: groupHeaderHeight,
-                                        child: Container(
-                                          decoration: const BoxDecoration(
-                                            color: headerColor,
-                                            border: Border(
-                                              left: BorderSide(
-                                                color: borderColor,
-                                              ),
-                                              top: BorderSide(
-                                                color: borderColor,
-                                              ),
-                                              right: BorderSide(
-                                                color: borderColor,
-                                              ),
-                                              bottom: BorderSide(
-                                                color: borderColor,
-                                              ),
+                                  if (totalRows > 0)
+                                    TableRow(
+                                      children: [
+                                        totalRowCell(const SizedBox.shrink()),
+                                        totalRowCell(const SizedBox.shrink()),
+                                        totalRowCell(const SizedBox.shrink()),
+                                        totalRowCell(const SizedBox.shrink()),
+                                        totalRowCell(const SizedBox.shrink()),
+                                        totalRowCell(
+                                          const Align(
+                                            alignment: Alignment.centerRight,
+                                            child: smcText(
+                                              textToDisplay: 'Total',
+                                              textSize: 12,
+                                              textBoldness: 5,
+                                              colorOfText: Color(0xFF2E3954),
                                             ),
                                           ),
-                                          alignment: Alignment.center,
-                                          child: const smcText(
-                                            textToDisplay:
-                                                'Teaching Hours / Week',
-                                            textSize: 12,
-                                            textBoldness: 4,
-                                            colorOfText: Color(0xFF5C6B8B),
-                                            maxLines: 1,
+                                          alignment: Alignment.centerRight,
+                                        ),
+                                        totalRowNumericCell(totalCreditsSum),
+                                        totalRowNumericCell(totalLectureHrs),
+                                        totalRowNumericCell(totalTutorialHrs),
+                                        totalRowNumericCell(totalPracticalHrs),
+                                        totalRowNumericCell(totalOthersHrs),
+                                        totalRowNumericCell(totalCieMarks),
+                                        totalRowCell(const SizedBox.shrink()),
+                                        totalRowNumericCell(totalSeeTheoryMarks),
+                                        totalRowNumericCell(totalSeeLabMarks),
+                                        totalRowNumericCell(totalMarksSum),
+                                      ],
+                                    ),
+                                ];
+
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    buildGroupHeaderRow(),
+                                    Table(
+                                      columnWidths: columnWidthsMap,
+                                      border: TableBorder.all(
+                                        color: borderColor,
+                                        width: 1,
+                                      ),
+                                      defaultVerticalAlignment:
+                                          TableCellVerticalAlignment.middle,
+                                      children: tableRows,
+                                    ),
+                                  ],
+                                );
+                              }
+
+                              return ScrollConfiguration(
+                                behavior: const MouseDragScrollBehavior(),
+                                child: Scrollbar(
+                                  controller: courseTableHorizontalScrollController,
+                                  thumbVisibility: true,
+                                  interactive: true,
+                                  notificationPredicate: (notification) =>
+                                      notification.metrics.axis ==
+                                      Axis.horizontal,
+                                  child: SingleChildScrollView(
+                                    controller:
+                                        courseTableHorizontalScrollController,
+                                    scrollDirection: Axis.horizontal,
+                                    physics: const ClampingScrollPhysics(
+                                      parent: AlwaysScrollableScrollPhysics(),
+                                    ),
+                                    child: SizedBox(
+                                      width: contentWidth,
+                                      child: Scrollbar(
+                                        controller:
+                                            courseTableVerticalScrollController,
+                                        thumbVisibility: true,
+                                        interactive: true,
+                                        child: SingleChildScrollView(
+                                          controller:
+                                              courseTableVerticalScrollController,
+                                          physics: const ClampingScrollPhysics(
+                                            parent:
+                                                AlwaysScrollableScrollPhysics(),
                                           ),
+                                          child: buildCourseTableContent(),
                                         ),
                                       ),
-                                    ],
+                                    ),
                                   ),
-                                );
-                              }
-
-                              if (tableWidth < minTableWidth) {
-                                return SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: buildCourseTable(minTableWidth),
-                                );
-                              }
-
-                              return SingleChildScrollView(
-                                child: buildCourseTable(tableWidth),
+                                ),
                               );
                             },
                           ),
