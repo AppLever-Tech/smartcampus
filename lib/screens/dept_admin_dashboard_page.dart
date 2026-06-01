@@ -24,6 +24,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' as excel;
 import 'package:smartcampus/widgets/student_import_dialog.dart';
 import 'package:smartcampus/widgets/mouse_drag_scroll_behavior.dart';
+import 'package:smartcampus/services/settings_firestore_service.dart';
 
 class DeptAdminDashboardPage extends StatefulWidget {
   final String orgId;
@@ -48,14 +49,19 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   final CourseFirestoreService
   courseService =
   CourseFirestoreService();
+  final SettingsFirestoreService settingsService = SettingsFirestoreService();
 
   bool loading = true;
   int selectedMenuIndex = 0; // 0: Dashboard, 1: Students, 2: Faculties
+  int selectedSettingsFilter = 0; // 0: Course Types, 1: Batches, 2: Schemes
   List<OrgUserRoleMappingItem> facultyAndStudents = [];
   List<DepartmentMasterItem> departments = [];
   List<FacultyModel> facultyList = [];
   List<StudentModel> studentList = [];
   List<CourseModel> courseList = [];
+  List<SettingsItem> courseTypes = [];
+  List<SettingsItem> batches = [];
+  List<SettingsItem> schemes = [];
   bool coursesLoaded = false;
   int totalCourses = 0;
   String organizationDisplayName = '';
@@ -107,6 +113,21 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         totalCourses = courses.length;
         coursesLoaded = true;
       });
+    });
+    settingsService.getItems('smccourseType').listen((items) {
+      if (!mounted) return;
+      setState(() => courseTypes = items);
+      
+      // Ensure default course types exist
+      _ensureDefaultCourseTypes(items);
+    });
+    settingsService.getItems('smcBatches').listen((items) {
+      if (!mounted) return;
+      setState(() => batches = items);
+    });
+    settingsService.getItems('smcSchemes').listen((items) {
+      if (!mounted) return;
+      setState(() => schemes = items);
     });
   }
 
@@ -285,9 +306,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   }
   Future<void> openCreateCourse() async {
     final formKey = GlobalKey<FormState>();
-    const schemeOptions = ['2023', '2024', '2025', '2026', '2027'];
+    final schemeOptions = schemes.map((s) => s.name).toList();
     const semesterOptions = ['I', 'II', 'III', 'IV'];
-    const courseTypeOptions = ['IPCC', 'PCC', 'PCCL', 'AEC', 'BSC'];
+    final courseTypeOptions = courseTypes.map((ct) => ct.name).toList();
 
     String? selectedScheme;
     String? selectedSemester;
@@ -1169,7 +1190,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     final studentIdCtrl = TextEditingController(text: studentToEdit?.studentId ?? '');
     final fullNameCtrl = TextEditingController(text: studentToEdit?.fullName ?? '');
     String? selectedGender = studentToEdit?.gender;
-    const studentBatchOptions = ['2023-25', '2024-26', '2025-27'];
+    final studentBatchOptions = batches.map((b) => b.name).toList();
     String? selectedStudentBatch = studentToEdit?.batch;
     if (selectedStudentBatch != null &&
         !studentBatchOptions.contains(selectedStudentBatch)) {
@@ -2702,6 +2723,17 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                     ),
                     const SizedBox(height: 8),
                     _menuTile(
+                      title: 'Settings',
+                      icon: Icons.settings_outlined,
+                      isSelected: selectedMenuIndex == 4,
+                      sidebarExpanded: sidebarExpanded,
+                      onTap: () => setState(() {
+                        selectedMenuIndex = 4;
+                        selectedStudentDetail = null;
+                      }),
+                    ),
+                    const SizedBox(height: 8),
+                    _menuTile(
                       title: 'Support',
                       icon: Icons.support_agent_rounded,
                       isSelected: false,
@@ -2751,6 +2783,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         return _buildFacultiesView();
       case 3:
         return _buildCoursesView();
+      case 4:
+        return _buildSettingsView();
 
       default:
         return _buildDashboardView();
@@ -3260,6 +3294,445 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     return buildCourseTable();
   }
 
+  Widget _buildSettingsView() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const smcText(
+          textToDisplay: 'Settings',
+          textSize: 16,
+          textBoldness: 5,
+          colorOfText: ColorConst.textPrimary,
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            _buildSettingsFilterChip('Course Types', 0),
+            const SizedBox(width: 8),
+            _buildSettingsFilterChip('Batches', 1),
+            const SizedBox(width: 8),
+            _buildSettingsFilterChip('Schemes', 2),
+          ],
+        ),
+        const SizedBox(height: 24),
+        Expanded(
+          child: _buildSettingsContent(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSettingsFilterChip(String label, int index) {
+    final bool isSelected = selectedSettingsFilter == index;
+    return GestureDetector(
+      onTap: () => setState(() => selectedSettingsFilter = index),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? ColorConst.primaryBlue : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? ColorConst.primaryBlue : const Color(0xFFE3EAF8),
+          ),
+        ),
+        child: smcText(
+          textToDisplay: label,
+          textSize: 14,
+          textBoldness: isSelected ? 5 : 4,
+          colorOfText: isSelected ? Colors.white : ColorConst.textSecondary,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingsContent() {
+    String collection;
+    List<SettingsItem> items;
+    String title;
+
+    switch (selectedSettingsFilter) {
+      case 0:
+        collection = 'smccourseType';
+        items = courseTypes;
+        title = 'Course Type';
+        break;
+      case 1:
+        collection = 'smcBatches';
+        items = batches;
+        title = 'Batch';
+        break;
+      case 2:
+        collection = 'smcSchemes';
+        items = schemes;
+        title = 'Scheme';
+        break;
+      default:
+        return const SizedBox();
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE4EBFB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF0FF),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(Icons.settings_outlined, color: ColorConst.primaryBlue),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    smcText(
+                      textToDisplay: 'Manage $title',
+                      textSize: 16,
+                      textBoldness: 5,
+                      colorOfText: const Color(0xFF1F2F52),
+                    ),
+                    const SizedBox(height: 2),
+                    smcText(
+                      textToDisplay: 'Configure and manage $title options.',
+                      textSize: 12,
+                      colorOfText: const Color(0xFF7D87A3),
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: () => _showCreateSettingsItemDialog(
+                  collection: collection,
+                  title: title,
+                  isCourseType: selectedSettingsFilter == 0,
+                ),
+                icon: const Icon(Icons.add, size: 18, color: Colors.white),
+                label: const smcText(
+                  textToDisplay: 'Create',
+                  textSize: 14,
+                  textBoldness: 4,
+                  colorOfText: Colors.white,
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ColorConst.primaryBlue,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Expanded(
+            child: items.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.inbox_outlined, size: 48, color: Colors.grey.shade300),
+                        const SizedBox(height: 16),
+                        smcText(
+                          textToDisplay: 'No $title found.',
+                          textSize: 14,
+                          colorOfText: ColorConst.textSecondary,
+                        ),
+                      ],
+                    ),
+                  )
+                : SingleChildScrollView(
+                    scrollDirection: Axis.vertical,
+                    child: Container(
+                      width: double.infinity,
+                      child: DataTable(
+                        headingRowHeight: 50,
+                        dataRowMinHeight: 52,
+                        dataRowMaxHeight: 58,
+                        horizontalMargin: 0,
+                        columnSpacing: 0,
+                        dividerThickness: 1,
+                        border: TableBorder.all(color: const Color(0xFFE3EAF8), width: 1),
+                        headingRowColor: MaterialStateProperty.all(const Color(0xFFF4F7FF)),
+                        columns: [
+                          const DataColumn(
+                            label: SizedBox(
+                              width: 60,
+                              child: Center(
+                                child: smcText(
+                                  textToDisplay: 'S.No',
+                                  textSize: 12,
+                                  textBoldness: 4,
+                                  colorOfText: Color(0xFF5C6B8B),
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (selectedSettingsFilter == 0)
+                            const DataColumn(
+                              label: SizedBox(
+                                width: 120,
+                                child: Center(
+                                  child: smcText(
+                                    textToDisplay: 'CODE',
+                                    textSize: 12,
+                                    textBoldness: 4,
+                                    colorOfText: Color(0xFF5C6B8B),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          DataColumn(
+                            label: Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 16),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: smcText(
+                                    textToDisplay: selectedSettingsFilter == 0 ? 'COURSE TYPE NAME' : 'NAME',
+                                    textSize: 12,
+                                    textBoldness: 4,
+                                    colorOfText: Color(0xFF5C6B8B),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const DataColumn(
+                            label: SizedBox(
+                              width: 100,
+                              child: Center(
+                                child: smcText(
+                                  textToDisplay: 'ACTIONS',
+                                  textSize: 12,
+                                  textBoldness: 4,
+                                  colorOfText: Color(0xFF5C6B8B),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                        rows: items.asMap().entries.map((entry) {
+                          final int index = entry.key;
+                          final item = entry.value;
+                          final int serialNo = index + 1;
+                          return DataRow(
+                            cells: [
+                              DataCell(
+                                Center(
+                                  child: smcText(
+                                    textToDisplay: '$serialNo',
+                                    textSize: 12,
+                                    colorOfText: const Color(0xFF2E3954),
+                                  ),
+                                ),
+                              ),
+                              if (selectedSettingsFilter == 0)
+                                DataCell(
+                                  Center(
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEFF4FF),
+                                        borderRadius: BorderRadius.circular(999),
+                                      ),
+                                      child: smcText(
+                                        textToDisplay: item.code ?? '—',
+                                        textSize: 11,
+                                        textBoldness: 3,
+                                        colorOfText: const Color(0xFF3558DA),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              DataCell(
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 16),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: smcText(
+                                      textToDisplay: item.name,
+                                      textSize: 12,
+                                      colorOfText: const Color(0xFF2E3954),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Center(
+                                  child: PopupMenuButton<String>(
+                                    icon: const Icon(Icons.more_vert_rounded, size: 18, color: Color(0xFF8A96B2)),
+                                    onSelected: (val) {
+                                      if (val == 'edit') {
+                                        _showCreateSettingsItemDialog(
+                                          collection: collection,
+                                          title: title,
+                                          isCourseType: selectedSettingsFilter == 0,
+                                          itemToEdit: item,
+                                        );
+                                      } else if (val == 'delete') {
+                                        settingsService.deleteItem(collection, item.id);
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                                      const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red))),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _ensureDefaultCourseTypes(List<SettingsItem> currentItems) async {
+      final defaults = [
+        {'code': 'PCC', 'name': 'Professional Core Course'},
+        {'code': 'IPCC', 'name': 'Integrated Professional Core Course'},
+        {'code': 'BSC', 'name': 'Bachelor of Science'},
+      ];
+      
+      // 1. Remove exact duplicates within the current collection first
+      final seenCodes = <String>{};
+      final duplicatesToRemove = <String>[];
+      
+      for (var item in currentItems) {
+        if (item.code != null) {
+          if (seenCodes.contains(item.code)) {
+            duplicatesToRemove.add(item.id);
+          } else {
+            seenCodes.add(item.code!);
+          }
+        }
+      }
+      
+      if (duplicatesToRemove.isNotEmpty) {
+        for (var id in duplicatesToRemove) {
+          await settingsService.deleteItem('smccourseType', id);
+        }
+        return; // Exit and let the next stream event handle the rest
+      }
+
+      // 2. Add missing defaults
+      for (var def in defaults) {
+        final exists = currentItems.any((item) => item.code == def['code']);
+        if (!exists) {
+          await settingsService.addItem('smccourseType', name: def['name']!, code: def['code']);
+        }
+      }
+    }
+
+  void _showCreateSettingsItemDialog({
+    required String collection,
+    required String title,
+    bool isCourseType = false,
+    SettingsItem? itemToEdit,
+  }) {
+    final TextEditingController nameController = TextEditingController(text: itemToEdit?.name ?? '');
+    final TextEditingController codeController = TextEditingController(text: itemToEdit?.code ?? '');
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: smcText(
+          textToDisplay: '${itemToEdit == null ? 'Create' : 'Edit'} $title',
+          textSize: 18,
+          textBoldness: 5,
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isCourseType) ...[
+              TextField(
+                controller: codeController,
+                textCapitalization: TextCapitalization.characters,
+                decoration: InputDecoration(
+                  labelText: 'Course Type Code',
+                  hintText: 'e.g. PCC',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+            TextField(
+              controller: nameController,
+              decoration: InputDecoration(
+                labelText: isCourseType ? 'Course Type Full Name' : '$title Name',
+                hintText: isCourseType ? 'e.g. Professional Core Course' : 'Enter $title name',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final name = nameController.text.trim();
+              final code = codeController.text.trim();
+
+              if (name.isNotEmpty && (!isCourseType || code.isNotEmpty)) {
+                if (itemToEdit == null) {
+                  settingsService.addItem(
+                    collection,
+                    name: name,
+                    code: isCourseType ? code : null,
+                  );
+                } else {
+                  settingsService.updateItem(
+                    collection,
+                    itemToEdit.id,
+                    name: name,
+                    code: isCourseType ? code : null,
+                  );
+                }
+                Navigator.pop(context);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: ColorConst.primaryBlue,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const smcText(
+              textToDisplay: 'Save',
+              textSize: 14,
+              textBoldness: 4,
+              colorOfText: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Student Table ───────────────────────────────────────────
 
   String _normalizeStudentPhotoUrl(String rawUrl) {
@@ -3505,7 +3978,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         borderSide: const BorderSide(color: ColorConst.primaryBlue),
                       ),
                     ),
-                    items: ['All Batches', '2023-25', '2024-26', '2025-27']
+                    items: ['All Batches', ...batches.map((b) => b.name)]
+                        .toSet() // Ensure uniqueness
                         .map(
                           (batch) => DropdownMenuItem(
                             value: batch,
@@ -3531,7 +4005,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                   height: 44,
                   child: DropdownButtonFormField<String>(
                     isExpanded: true,
-                    value: studentGenderFilter,
+                    value: ['All Gender', 'Male', 'Female', 'Other'].contains(studentGenderFilter) 
+                        ? studentGenderFilter 
+                        : 'All Gender',
                     decoration: InputDecoration(
                       filled: true,
                       fillColor: Colors.white,
@@ -4052,7 +4528,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                   height: 44,
                   child: DropdownButtonFormField<String>(
                     isExpanded: true,
-                    value: courseSchemeFilter,
+                    value: (['All Schemes', ...schemes.map((s) => s.name)].contains(courseSchemeFilter))
+                        ? courseSchemeFilter
+                        : 'All Schemes',
                     decoration: InputDecoration(
                       filled: true,
                       fillColor: Colors.white,
@@ -4069,7 +4547,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         borderSide: const BorderSide(color: ColorConst.primaryBlue),
                       ),
                     ),
-                    items: ['All Schemes', '2023', '2024', '2025', '2026', '2027']
+                    items: ['All Schemes', ...schemes.map((s) => s.name)]
+                        .toSet()
                         .map(
                           (scheme) => DropdownMenuItem(
                             value: scheme,
@@ -4138,7 +4617,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                   height: 44,
                   child: DropdownButtonFormField<String>(
                     isExpanded: true,
-                    value: courseTypeFilter,
+                    value: (['All Course Types', ...courseTypes.map((ct) => ct.name)].contains(courseTypeFilter))
+                        ? courseTypeFilter
+                        : 'All Course Types',
                     decoration: InputDecoration(
                       filled: true,
                       fillColor: Colors.white,
@@ -4157,12 +4638,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                     ),
                     items: [
                       'All Course Types',
-                      'IPCC',
-                      'PCC',
-                      'PCCL',
-                      'AEC',
-                      'BSC',
+                      ...courseTypes.map((ct) => ct.name)
                     ]
+                        .toSet()
                         .map(
                           (type) => DropdownMenuItem(
                             value: type,
