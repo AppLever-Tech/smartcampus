@@ -121,13 +121,19 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       // Ensure default course types exist
       _ensureDefaultCourseTypes(items);
     });
-    settingsService.getItems('smcBatches').listen((items) {
+    settingsService.getItems('smcbatchmaster').listen((items) {
       if (!mounted) return;
       setState(() => batches = items);
+      
+      // Ensure default batches exist
+      _ensureDefaultBatches(items);
     });
-    settingsService.getItems('smcSchemes').listen((items) {
+    settingsService.getItems('smcschememaster').listen((items) {
       if (!mounted) return;
       setState(() => schemes = items);
+      
+      // Ensure default schemes exist and remove duplicates
+      _ensureDefaultSchemes(items);
     });
   }
 
@@ -3357,12 +3363,12 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         title = 'Course Type';
         break;
       case 1:
-        collection = 'smcBatches';
+        collection = 'smcbatchmaster';
         items = batches;
         title = 'Batch';
         break;
       case 2:
-        collection = 'smcSchemes';
+        collection = 'smcschememaster';
         items = schemes;
         title = 'Scheme';
         break;
@@ -3418,6 +3424,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                   collection: collection,
                   title: title,
                   isCourseType: selectedSettingsFilter == 0,
+                  isBatch: selectedSettingsFilter == 1,
+                  isScheme: selectedSettingsFilter == 2,
                 ),
                 icon: const Icon(Icons.add, size: 18, color: Colors.white),
                 label: const smcText(
@@ -3501,7 +3509,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                 child: Align(
                                   alignment: Alignment.centerLeft,
                                   child: smcText(
-                                    textToDisplay: selectedSettingsFilter == 0 ? 'COURSE TYPE NAME' : 'NAME',
+                                    textToDisplay: selectedSettingsFilter == 0 
+                                        ? 'COURSE TYPE NAME' 
+                                        : (selectedSettingsFilter == 1 ? 'BATCH NAME' : 'SCHEME NAME'),
                                     textSize: 12,
                                     textBoldness: 4,
                                     colorOfText: Color(0xFF5C6B8B),
@@ -3510,6 +3520,23 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                               ),
                             ),
                           ),
+                          if (selectedSettingsFilter == 1 || selectedSettingsFilter == 2)
+                            const DataColumn(
+                              label: Expanded(
+                                child: Padding(
+                                  padding: EdgeInsets.only(left: 16),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: smcText(
+                                      textToDisplay: 'DESCRIPTION',
+                                      textSize: 12,
+                                      textBoldness: 4,
+                                      colorOfText: Color(0xFF5C6B8B),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           const DataColumn(
                             label: SizedBox(
                               width: 100,
@@ -3570,6 +3597,20 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                   ),
                                 ),
                               ),
+                              if (selectedSettingsFilter == 1 || selectedSettingsFilter == 2)
+                                DataCell(
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 16),
+                                    child: Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: smcText(
+                                        textToDisplay: item.description ?? '—',
+                                        textSize: 12,
+                                        colorOfText: const Color(0xFF2E3954),
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               DataCell(
                                 Center(
                                   child: PopupMenuButton<String>(
@@ -3580,6 +3621,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                           collection: collection,
                                           title: title,
                                           isCourseType: selectedSettingsFilter == 0,
+                                          isBatch: selectedSettingsFilter == 1,
+                                          isScheme: selectedSettingsFilter == 2,
                                           itemToEdit: item,
                                         );
                                       } else if (val == 'delete') {
@@ -3642,14 +3685,87 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       }
     }
 
+    Future<void> _ensureDefaultBatches(List<SettingsItem> currentItems) async {
+      final defaults = [
+        {'name': '2023-25', 'description': '2023-2025 Batch'},
+        {'name': '2024-26', 'description': '2024-2026 Batch'},
+        {'name': '2025-27', 'description': '2025-2027 Batch'},
+      ];
+
+      // 1. Remove exact duplicates within the current collection first
+      final seenNames = <String>{};
+      final duplicatesToRemove = <String>[];
+      
+      for (var item in currentItems) {
+        if (seenNames.contains(item.name)) {
+          duplicatesToRemove.add(item.id);
+        } else {
+          seenNames.add(item.name);
+        }
+      }
+      
+      if (duplicatesToRemove.isNotEmpty) {
+        for (var id in duplicatesToRemove) {
+          await settingsService.deleteItem('smcbatchmaster', id);
+        }
+        return; // Exit and let the next stream event handle the rest
+      }
+
+      // 2. Add missing defaults
+      for (var def in defaults) {
+        final exists = currentItems.any((item) => item.name == def['name']);
+        if (!exists) {
+          await settingsService.addItem('smcbatchmaster', name: def['name']!, description: def['description']);
+        }
+      }
+    }
+
+    Future<void> _ensureDefaultSchemes(List<SettingsItem> currentItems) async {
+      final defaults = [
+        {'name': '2023', 'description': '2023 Scheme'},
+        {'name': '2024', 'description': '2024 Scheme'},
+        {'name': '2025', 'description': '2025 Scheme'},
+      ];
+
+      // 1. Remove exact duplicates within the current collection first
+      final seenNames = <String>{};
+      final duplicatesToRemove = <String>[];
+      
+      for (var item in currentItems) {
+        if (seenNames.contains(item.name)) {
+          duplicatesToRemove.add(item.id);
+        } else {
+          seenNames.add(item.name);
+        }
+      }
+      
+      if (duplicatesToRemove.isNotEmpty) {
+        for (var id in duplicatesToRemove) {
+          await settingsService.deleteItem('smcschememaster', id);
+        }
+        return; 
+      }
+
+      // 2. Add missing defaults
+      for (var def in defaults) {
+        final exists = currentItems.any((item) => item.name == def['name']);
+        if (!exists) {
+          await settingsService.addItem('smcschememaster', name: def['name']!, description: def['description']);
+        }
+      }
+    }
+
   void _showCreateSettingsItemDialog({
     required String collection,
     required String title,
     bool isCourseType = false,
+    bool isBatch = false,
+    bool isScheme = false,
     SettingsItem? itemToEdit,
   }) {
     final TextEditingController nameController = TextEditingController(text: itemToEdit?.name ?? '');
     final TextEditingController codeController = TextEditingController(text: itemToEdit?.code ?? '');
+    final TextEditingController descriptionController = TextEditingController(text: itemToEdit?.description ?? '');
 
     showDialog(
       context: context,
@@ -3680,13 +3796,30 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
             TextField(
               controller: nameController,
               decoration: InputDecoration(
-                labelText: isCourseType ? 'Course Type Full Name' : '$title Name',
-                hintText: isCourseType ? 'e.g. Professional Core Course' : 'Enter $title name',
+                labelText: isCourseType 
+                    ? 'Course Type Full Name' 
+                    : (isBatch ? 'Batch Name' : (isScheme ? 'Scheme Name' : '$title Name')),
+                hintText: isCourseType 
+                    ? 'e.g. Professional Core Course' 
+                    : (isBatch ? 'e.g. 2024-26' : (isScheme ? 'e.g. 2023' : 'Enter $title name')),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
             ),
+            if (isBatch || isScheme) ...[
+              const SizedBox(height: 16),
+              TextField(
+                controller: descriptionController,
+                decoration: InputDecoration(
+                  labelText: isBatch ? 'Batch Description' : 'Scheme Description',
+                  hintText: isBatch ? 'e.g. 2024-2026 Batch' : 'e.g. 2023 Scheme',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
         actions: [
@@ -3698,6 +3831,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
             onPressed: () {
               final name = nameController.text.trim();
               final code = codeController.text.trim();
+              final description = descriptionController.text.trim();
 
               if (name.isNotEmpty && (!isCourseType || code.isNotEmpty)) {
                 if (itemToEdit == null) {
@@ -3705,6 +3839,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                     collection,
                     name: name,
                     code: isCourseType ? code : null,
+                    description: (isBatch || isScheme) ? description : null,
                   );
                 } else {
                   settingsService.updateItem(
@@ -3712,6 +3847,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                     itemToEdit.id,
                     name: name,
                     code: isCourseType ? code : null,
+                    description: (isBatch || isScheme) ? description : null,
                   );
                 }
                 Navigator.pop(context);

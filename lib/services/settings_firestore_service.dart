@@ -4,14 +4,16 @@ class SettingsItem {
   final String id;
   final String name;
   final String? code; // Optional field for Course Type (e.g., PCC)
+  final String? description; // Optional field for Batch (e.g., 2024-2026 Batch)
 
-  SettingsItem({required this.id, required this.name, this.code});
+  SettingsItem({required this.id, required this.name, this.code, this.description});
 
   factory SettingsItem.fromFirestore(String id, Map<String, dynamic> data) {
     return SettingsItem(
       id: id,
       name: data['name'] ?? '',
       code: data['code'],
+      description: data['description'],
     );
   }
 
@@ -19,6 +21,7 @@ class SettingsItem {
     return {
       'name': name,
       if (code != null) 'code': code,
+      if (description != null) 'description': description,
     };
   }
 }
@@ -34,18 +37,20 @@ class SettingsFirestoreService {
     });
   }
 
-  Future<void> addItem(String collection, {required String name, String? code}) async {
+  Future<void> addItem(String collection, {required String name, String? code, String? description}) async {
     final data = {
       'name': name,
       if (code != null) 'code': code,
+      if (description != null) 'description': description,
     };
     await _firestore.collection(collection).add(data);
   }
 
-  Future<void> updateItem(String collection, String id, {required String name, String? code}) async {
+  Future<void> updateItem(String collection, String id, {required String name, String? code, String? description}) async {
     final data = {
       'name': name,
       if (code != null) 'code': code,
+      if (description != null) 'description': description,
     };
     await _firestore.collection(collection).doc(id).update(data);
   }
