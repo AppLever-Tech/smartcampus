@@ -2770,6 +2770,18 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
     return counts;
   }
+  Map<String, int> get courseBatchCount {
+    final Map<String, int> counts = {};
+
+    for (final course in courseList) {
+      final batch =
+      course.batch.isEmpty ? 'Unknown' : course.batch;
+
+      counts[batch] = (counts[batch] ?? 0) + 1;
+    }
+
+    return counts;
+  }
 
   Widget _buildDashboardView() {
     return Column(
@@ -2809,18 +2821,13 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
               ),
             ),
               const SizedBox(width:16),
-                  Expanded(
-                  flex: 1,
-                  child: SizedBox(
-                  height: 100,
-                  child: _buildStatCard(
-                  title: 'Total Courses',
-                  count: totalCourses.toString(),
-                  icon: Icons.menu_book_rounded,
-                  color: Colors.purple,
-                  ),
-                  ),
-                  ),
+            Expanded(
+              flex: 1,
+              child: SizedBox(
+                height: 220,
+                child: _buildCourseStatCard(),
+              ),
+            ),
                   ],
                   )
                   ),
@@ -2940,6 +2947,74 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     );
   }
 
+  Widget _buildCourseStatCard() {
+    return Container(
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFFE3EAF8),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+
+            Row(
+              children: [
+
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.purple.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.menu_book_rounded,
+                    color: Colors.purple,
+                  ),
+                ),
+
+                const SizedBox(width: 16),
+
+                Column(
+                  crossAxisAlignment:
+                  CrossAxisAlignment.start,
+                  children: [
+
+                    const Text(
+                      'Total Courses',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+
+                    Text(
+                      totalCourses.toString(),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            Expanded(
+              child: _buildCourseVerticalChart(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildStudentVerticalChart() {
 
     final data =
@@ -2983,6 +3058,69 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                 color: Colors.blue,
                 borderRadius:
                 BorderRadius.circular(6),
+              ),
+            ),
+
+            const SizedBox(height: 6),
+
+            Text(
+              entry.key,
+              style: const TextStyle(
+                fontSize: 10,
+              ),
+            ),
+          ],
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildCourseVerticalChart() {
+
+    final data =
+    courseBatchCount.entries.toList();
+
+    if (data.isEmpty) {
+      return const Center(
+        child: Text(
+          "No Courses",
+          style: TextStyle(fontSize: 12),
+        ),
+      );
+    }
+
+    final maxValue =
+    data.map((e) => e.value)
+        .reduce((a, b) => a > b ? a : b);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: data.map((entry) {
+
+        final height =
+            (entry.value / maxValue) * 45;
+
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+
+            Text(
+              entry.value.toString(),
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 4),
+
+            Container(
+              width: 26,
+              height: height,
+              decoration: BoxDecoration(
+                color: Colors.purple,
+                borderRadius: BorderRadius.circular(6),
               ),
             ),
 
