@@ -224,34 +224,108 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
     if (widget.isStudent) {
       return _buildStudentBasicDetails();
     }
+    return _buildFacultyBasicDetails();
+  }
 
-    final f = widget.person as FacultyModel;
-    final Map<String, String> details = {
-      'Full Name': f.fullName,
-      'Faculty ID': f.facultyId,
-      'Email': f.email,
-      'Mobile': f.mobile,
-      'Gender': f.gender,
-      'DOB': f.dateOfBirth,
-      'Aadhaar': f.aadhaarNumber,
-      'PAN': f.panNumber,
-      'Permanent Address': f.permanentAddress,
-      'Current Address': f.currentAddress,
-    };
+  Widget _buildFacultyBasicDetails() {
+    final FacultyModel f = widget.person as FacultyModel;
+    final String photoUrl = _normalizePhotoUrl(f.photographUrl);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE3EAF8)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: details.entries.map((e) => _buildDetailRow(e.key, e.value)).toList(),
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: _buildDetailsSection(
+                    title: 'Basic Profile Information',
+                    icon: Icons.person_outline_rounded,
+                    children: [
+                      _buildDetailRow('Faculty ID', f.facultyId),
+                      _buildDetailRow('Full Name', f.fullName),
+                      _buildDetailRow('Gender', f.gender),
+                      _buildDetailRow(
+                        'Date of Birth',
+                        _formatDisplayDate(f.dateOfBirth),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  flex: 2,
+                  child: _buildDetailsSection(
+                    title: 'Photograph',
+                    icon: Icons.photo_camera_outlined,
+                    stretchContent: true,
+                    children: [
+                      photoUrl.isNotEmpty
+                          ? Center(
+                              child: FittedBox(
+                                fit: BoxFit.contain,
+                                child: _buildPhotographPreview(
+                                  photoUrl,
+                                  width: 130,
+                                  height: 195,
+                                ),
+                              ),
+                            )
+                          : const Center(
+                              child: Icon(
+                                Icons.image_not_supported_outlined,
+                                size: 40,
+                                color: ColorConst.textSecondary,
+                              ),
+                            ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildDetailsSection(
+            title: 'Identity & Compliance',
+            icon: Icons.verified_user_outlined,
+            children: [
+              _buildDetailRow('Aadhaar / Govt ID', f.aadhaarNumber),
+              _buildDetailRow('PAN', f.panNumber),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildDetailsSection(
+            title: 'Contact Details',
+            icon: Icons.contact_phone_outlined,
+            children: [
+              _buildDetailRow('Mobile Number', f.mobile),
+              _buildDetailRow('Email Address', f.email),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildDetailsSection(
+            title: 'Address',
+            icon: Icons.home_outlined,
+            children: [
+              _buildDetailRow('Permanent Address', f.permanentAddress),
+              _buildDetailRow('Current Address', f.currentAddress),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildDetailsSection(
+            title: 'Emergency Contact',
+            icon: Icons.emergency_outlined,
+            children: [
+              _buildDetailRow('Contact Person Name', f.emergencyContactName),
+              _buildDetailRow('Relation', f.emergencyContactRelation),
+              _buildDetailRow('Emergency Mobile', f.emergencyContactMobile),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:smartcampus/const/color_const.dart';
 import 'package:smartcampus/data/mock_master_data.dart';
 import 'package:smartcampus/data/faculty_model.dart';
@@ -82,9 +81,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
   // Search and Pagination for Faculty
   final TextEditingController facultySearchController = TextEditingController();
-  int facultyRowsPerPage = 10;
+  int facultyRowsPerPage = 100;
   int facultyCurrentPage = 1;
-  String facultyGenderFilter = 'All';
+  String facultyGenderFilter = 'All Gender';
 
   // Search and Pagination for Courses
   final TextEditingController courseSearchController = TextEditingController();
@@ -99,8 +98,10 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   String courseTypeFilter = 'All Course Types';
 
   StudentModel? selectedStudentDetail;
+  FacultyModel? selectedFacultyDetail;
   bool sidebarExpanded = false;
   double studentListPanelRatio = 0.55;
+  double facultyListPanelRatio = 0.55;
 
   @override
   void initState() {
@@ -155,6 +156,14 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     setState(() => selectedStudentDetail = student);
   }
 
+  void closeFacultyDetail() {
+    setState(() => selectedFacultyDetail = null);
+  }
+
+  void openFacultyDetail(FacultyModel faculty) {
+    setState(() => selectedFacultyDetail = faculty);
+  }
+
   bool _isSelectedStudent(StudentModel student) {
     final selected = selectedStudentDetail;
     if (selected == null) {
@@ -168,11 +177,32 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     return student.studentId == selected.studentId;
   }
 
+  bool _isSelectedFaculty(FacultyModel faculty) {
+    final selected = selectedFacultyDetail;
+    if (selected == null) {
+      return false;
+    }
+    if (faculty.documentId != null &&
+        selected.documentId != null &&
+        faculty.documentId!.isNotEmpty) {
+      return faculty.documentId == selected.documentId;
+    }
+    return faculty.facultyId == selected.facultyId;
+  }
+
   Key _studentDetailKey(StudentModel student) {
     return ValueKey<String>(
       student.documentId?.isNotEmpty == true
           ? student.documentId!
           : student.studentId,
+    );
+  }
+
+  Key _facultyDetailKey(FacultyModel faculty) {
+    return ValueKey<String>(
+      faculty.documentId?.isNotEmpty == true
+          ? faculty.documentId!
+          : faculty.facultyId,
     );
   }
 
@@ -1234,11 +1264,11 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     final emergMobileCtrl = TextEditingController(text: studentToEdit?.emergencyContactMobile ?? '');
 
     bool saving = false;
+    int currentStep = 0;
     Uint8List? photographBytes;
     String? photographUrl = studentToEdit?.photographUrl;
     String? photographError;
     String? bloodGroupError;
-    int currentStep = 0;
     const int totalSteps = 3;
 
     await showDialog<void>(
@@ -2034,7 +2064,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     // Controllers — Basic Profile
     final facultyIdCtrl = TextEditingController(text: facultyToEdit?.facultyId ?? '');
     final fullNameCtrl = TextEditingController(text: facultyToEdit?.fullName ?? '');
-    String selectedGender = facultyToEdit?.gender ?? 'Male';
+    String? selectedGender = facultyToEdit?.gender;
     DateTime? selectedDob;
     if (facultyToEdit?.dateOfBirth != null && facultyToEdit!.dateOfBirth.isNotEmpty) {
       try {
@@ -2065,18 +2095,16 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     final emergMobileCtrl = TextEditingController(text: facultyToEdit?.emergencyContactMobile ?? '');
 
     bool saving = false;
+    int currentStep = 0;
     Uint8List? photographBytes;
     String? photographUrl = facultyToEdit?.photographUrl;
 
-    await showModalBottomSheet<void>(
+    await showDialog<void>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
       builder: (ctx) {
+        final media = MediaQuery.of(ctx);
+        final maxHeight = (media.size.height * 0.9).clamp(520.0, 840.0);
+        final maxWidth = media.size.width < 720 ? media.size.width - 24 : 700.0;
         return StatefulBuilder(
           builder: (ctx, setModalState) {
             // ── helpers ────────────────────────────────────────
@@ -2127,40 +2155,37 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
               ),
             );
 
-            // ── sheet body ─────────────────────────────────────
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 16,
-                right: 16,
-                top: 4,
-                bottom: MediaQuery.viewInsetsOf(ctx).bottom + 12,
-              ),
-              child: Form(
-                key: formKey,
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // ── drag handle ────────────────────────
-                      Center(
-                        child: Container(
-                          width: 32,
-                          height: 3,
-                          margin: const EdgeInsets.only(bottom: 12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFDCE2F4),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
-                      ),
+            // ── dialog body ────────────────────────────────────
+            return Dialog(
+              insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth, maxHeight: maxHeight),
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: 16,
+                    right: 16,
+                    top: 16,
+                    bottom: MediaQuery.viewInsetsOf(ctx).bottom + 12,
+                  ),
+                  child: Form(
+                    key: formKey,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
 
                       // ── title row ─────────────────────────
                       Row(
                         children: [
                           Expanded(
                             child: smcText(
-                              textToDisplay: isViewOnly ? 'Faculty Details' : (facultyToEdit == null ? 'Create Faculty' : 'Edit Faculty'),
+                              textToDisplay: isViewOnly
+                                  ? 'Faculty Details'
+                                  : (facultyToEdit == null
+                                        ? 'Create Faculty'
+                                        : 'Edit Faculty'),
                               textSize: 18,
                               textBoldness: 5,
                               colorOfText: ColorConst.textPrimary,
@@ -2173,353 +2198,488 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                           ),
                         ],
                       ),
-
-                      // ══════════════════════════════════════
-                      // 1. Basic Profile Information
-                      // ══════════════════════════════════════
-                      _sectionHeader(
-                        'Basic Profile Information',
-                        Icons.person_outline_rounded,
-                      ),
-
-                      // Faculty / Employee ID
-                      TextFormField(
-                        controller: facultyIdCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor(
-                          'Faculty / Employee ID *',
-                          hint: 'e.g. FAC-2024-001',
-                        ),
-                        textCapitalization: TextCapitalization.characters,
-                        validator: (v) =>
-                        (v == null || v.trim().isEmpty)
-                            ? 'Faculty ID is required'
-                            : null,
-                      ),
                       const SizedBox(height: 8),
-
-                      // Full Name
-                      TextFormField(
-                        controller: fullNameCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor('Full Name *'),
-                        textCapitalization: TextCapitalization.words,
-                        validator: (v) =>
-                        (v == null || v.trim().isEmpty)
-                            ? 'Full name is required'
-                            : null,
-                      ),
-                      const SizedBox(height: 8),
-
-                      // Gender dropdown
-                      DropdownButtonFormField<String>(
-                        value: selectedGender,
-                        decoration: _fieldDecor('Gender *'),
-                        borderRadius: BorderRadius.circular(10),
-                        items: const [
-                          'Male',
-                          'Female',
-                          'Other',
-                          'Prefer not to say',
-                        ]
-                            .map(
-                              (g) => DropdownMenuItem(
-                            value: g,
-                            child: Text(g, style: const TextStyle(fontSize: 13)),
-                          ),
-                        )
-                            .toList(),
-                        onChanged: isViewOnly ? null : (v) {
-                          if (v != null) {
-                            setModalState(() => selectedGender = v);
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 8),
-
-                      // Date of Birth — tap-to-pick
-                      TextFormField(
-                        controller: dobCtrl,
-                        readOnly: true,
-                        decoration: _fieldDecor('Date of Birth *').copyWith(
-                          suffixIcon: const Icon(
-                            Icons.calendar_today_outlined,
-                            size: 16,
-                            color: ColorConst.textSecondary,
-                          ),
-                        ),
-                        onTap: isViewOnly ? null : () async {
-                          final picked = await showDatePicker(
-                            context: ctx,
-                            initialDate: DateTime(1990),
-                            firstDate: DateTime(1940),
-                            lastDate: DateTime.now()
-                                .subtract(const Duration(days: 365 * 18)),
-                            helpText: 'Select Date of Birth',
-                          );
-                          if (picked != null) {
-                            setModalState(() {
-                              selectedDob = picked;
-                              dobCtrl.text =
-                              '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
-                            });
-                          }
-                        },
-                        validator: (_) =>
-                        selectedDob == null ? 'Date of birth is required' : null,
-                      ),
-                      const SizedBox(height: 8),
-
-                      // Photograph upload
-                      GestureDetector(
-                        onTap: isViewOnly ? null : () async {
-                          final picker = ImagePicker();
-                          final picked = await picker.pickImage(
-                            source: ImageSource.gallery,
-                            imageQuality: 70,
-                            maxWidth: 600,
-                          );
-                          if (picked != null) {
-                            final bytes = await picked.readAsBytes();
-                            setModalState(() {
-                              photographBytes = bytes;
-                            });
-                          }
-                        },
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF0F4FF),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: ColorConst.borderSoft),
-                          ),
-                          child: photographBytes != null
-                              ? Stack(
-                            alignment: Alignment.topRight,
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.memory(
-                                  photographBytes!,
-                                  height: 80,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                              if (!isViewOnly)
-                              GestureDetector(
-                                onTap: () => setModalState(() => photographBytes = null),
-                                child: Container(
-                                  margin: const EdgeInsets.all(4),
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: const BoxDecoration(
-                                    color: Colors.red,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(Icons.close, size: 14, color: Colors.white),
-                                ),
-                              ),
-                            ],
-                          )
-                              : Row(
-                            children: [
-                              const Icon(Icons.photo_camera_outlined, size: 16, color: ColorConst.primaryBlue),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: smcText(
-                                  textToDisplay: isViewOnly ? 'Photograph' : 'Tap to upload photograph (optional)',
-                                  textSize: 12,
-                                  colorOfText: ColorConst.textSecondary,
-                                  maxLines: 2,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      // ══════════════════════════════════════
-                      // 2. India-Specific Compliance
-                      // ══════════════════════════════════════
-                      _sectionHeader(
-                        'Compliance (Aadhaar / PAN)',
-                        Icons.verified_user_outlined,
-                      ),
-
-                      TextFormField(
-                        controller: aadhaarCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor('Aadhaar Number'),
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(12),
-                        ],
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) return null;
-                          if (v.trim().length != 12) {
-                            return 'Aadhaar must be 12 digits';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 8),
-
-                      TextFormField(
-                        controller: panCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor('PAN Number'),
-                        textCapitalization: TextCapitalization.characters,
-                        inputFormatters: [
-                          LengthLimitingTextInputFormatter(10),
-                        ],
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) return null;
-                          final panRegex = RegExp(r'^[A-Z]{5}[0-9]{4}[A-Z]{1}$');
-                          if (!panRegex.hasMatch(v.trim().toUpperCase())) {
-                            return 'Invalid PAN (e.g. ABCDE1234F)';
-                          }
-                          return null;
-                        },
-                      ),
-
-                      // ══════════════════════════════════════
-                      // 3. Contact Details
-                      // ══════════════════════════════════════
-                      _sectionHeader(
-                        'Contact Details',
-                        Icons.contact_phone_outlined,
-                      ),
-
-                      TextFormField(
-                        controller: mobileCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor('Mobile Number *'),
-                        keyboardType: TextInputType.phone,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(10),
-                        ],
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) {
-                            return 'Mobile number is required';
-                          }
-                          if (v.trim().length != 10) {
-                            return 'Enter valid 10-digit mobile number';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 8),
-
-                      TextFormField(
-                        controller: emailCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor('Email Address *'),
-                        keyboardType: TextInputType.emailAddress,
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) {
-                            return 'Email is required';
-                          }
-                          final emailRegex =
-                          RegExp(r'^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$');
-                          if (!emailRegex.hasMatch(v.trim())) {
-                            return 'Enter a valid email address';
-                          }
-                          return null;
-                        },
-                      ),
-
-                      // ══════════════════════════════════════
-                      // 4. Address
-                      // ══════════════════════════════════════
-                      _sectionHeader(
-                        'Address',
-                        Icons.home_outlined,
-                      ),
-
-                      TextFormField(
-                        controller: permanentAddrCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor('Permanent Address'),
-                        maxLines: 1,
-                        textCapitalization: TextCapitalization.sentences,
-                      ),
-                      const SizedBox(height: 8),
-
-                      TextFormField(
-                        controller: currentAddrCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor('Current Address'),
-                        maxLines: 1,
-                        textCapitalization: TextCapitalization.sentences,
-                      ),
-
-                      // ══════════════════════════════════════
-                      // 5. Emergency Contact
-                      // ══════════════════════════════════════
-                      _sectionHeader(
-                        'Emergency Contact',
-                        Icons.emergency_outlined,
-                      ),
-
-                      TextFormField(
-                        controller: emergNameCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor('Contact Person Name'),
-                        textCapitalization: TextCapitalization.words,
-                      ),
-                      const SizedBox(height: 8),
-
-                      TextFormField(
-                        controller: emergRelationCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor(
-                          'Relation',
-                          hint: 'e.g. Spouse, Parent, Sibling',
-                        ),
-                        textCapitalization: TextCapitalization.words,
-                      ),
-                      const SizedBox(height: 8),
-
-                      TextFormField(
-                        controller: emergMobileCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor('Emergency Mobile'),
-                        keyboardType: TextInputType.phone,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(10),
-                        ],
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) return null;
-                          if (v.trim().length != 10) {
-                            return 'Enter valid 10-digit number';
-                          }
-                          return null;
-                        },
-                      ),
-
-                      // ── Save button ────────────────────────
-                      const SizedBox(height: 16),
                       if (!isViewOnly)
-                      SizedBox(
-                        width: double.infinity,
-                        height: 44,
-                        child: ElevatedButton(
-                          onPressed: saving
-                              ? null
-                              : () async {
-                            if (!formKey.currentState!.validate()) return;
+                        Row(
+                          children: List.generate(3, (index) {
+                            final bool active = index == currentStep;
+                            final bool completed = index < currentStep;
+                            return Expanded(
+                              child: Container(
+                                margin: EdgeInsets.only(
+                                  right: index == 2 ? 0 : 8,
+                                ),
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: active || completed
+                                      ? ColorConst.primaryBlue
+                                      : const Color(0xFFDCE2F4),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
+                      if (!isViewOnly) const SizedBox(height: 6),
+                      if (!isViewOnly)
+                        smcText(
+                          textToDisplay:
+                              'Step ${currentStep + 1} of 3',
+                          textSize: 12,
+                          colorOfText: const Color(0xFF7D87A3),
+                        ),
+                      if (!isViewOnly) const SizedBox(height: 8),
+
+                      Builder(
+                        builder: (_) {
+                          Widget buildFacultyPhotographPreview() {
+                            if (photographBytes != null) {
+                              return Column(
+                                children: [
+                                  const SizedBox(height: 10),
+                                  Center(
+                                    child: Container(
+                                      width: 280,
+                                      height: 420,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                          color: ColorConst.borderSoft,
+                                        ),
+                                        color: const Color(0xFFF7F9FF),
+                                      ),
+                                      clipBehavior: Clip.antiAlias,
+                                      child: Image.memory(
+                                        photographBytes!,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }
+
+                            final String existingPhotoUrl =
+                                (photographUrl ?? '').trim();
+                            if (existingPhotoUrl.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+
+                            return Column(
+                              children: [
+                                const SizedBox(height: 10),
+                                Center(
+                                  child: Container(
+                                    width: 280,
+                                    height: 420,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                        color: ColorConst.borderSoft,
+                                      ),
+                                      color: const Color(0xFFF7F9FF),
+                                    ),
+                                    clipBehavior: Clip.antiAlias,
+                                    child: Image.network(
+                                      existingPhotoUrl,
+                                      fit: BoxFit.cover,
+                                      errorBuilder:
+                                          (context, error, stackTrace) =>
+                                              const Center(
+                                                child: Icon(
+                                                  Icons
+                                                      .broken_image_outlined,
+                                                  color: ColorConst
+                                                      .textSecondary,
+                                                ),
+                                              ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          }
+
+                          Widget stepOne() {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _sectionHeader(
+                                  'Basic Profile Information',
+                                  Icons.person_outline_rounded,
+                                ),
+                                TextFormField(
+                                  controller: facultyIdCtrl,
+                                  readOnly: isViewOnly,
+                                  decoration: _fieldDecor(
+                                    'Faculty / Employee ID *',
+                                    hint: 'e.g. FAC-2024-001',
+                                  ),
+                                  textCapitalization:
+                                      TextCapitalization.characters,
+                                ),
+                                const SizedBox(height: 8),
+                                TextFormField(
+                                  controller: fullNameCtrl,
+                                  readOnly: isViewOnly,
+                                  decoration: _fieldDecor('Full Name *'),
+                                  textCapitalization:
+                                      TextCapitalization.words,
+                                ),
+                                const SizedBox(height: 8),
+                                DropdownButtonFormField<String>(
+                                  value: selectedGender,
+                                  decoration: _fieldDecor(
+                                    'Gender *',
+                                    hint: 'Select gender',
+                                  ),
+                                  borderRadius: BorderRadius.circular(10),
+                                  items: const [
+                                    'Male',
+                                    'Female',
+                                    'Other',
+                                    'Prefer not to say',
+                                  ]
+                                      .map(
+                                        (g) => DropdownMenuItem(
+                                          value: g,
+                                          child: Text(
+                                            g,
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: isViewOnly
+                                      ? null
+                                      : (v) {
+                                          setModalState(
+                                            () => selectedGender = v,
+                                          );
+                                        },
+                                ),
+                                const SizedBox(height: 8),
+                                TextFormField(
+                                  controller: dobCtrl,
+                                  readOnly: true,
+                                  decoration: _fieldDecor(
+                                    'Date of Birth *',
+                                  ).copyWith(
+                                    suffixIcon: const Icon(
+                                      Icons.calendar_today_outlined,
+                                      size: 16,
+                                      color: ColorConst.textSecondary,
+                                    ),
+                                  ),
+                                  onTap: isViewOnly
+                                      ? null
+                                      : () async {
+                                          final picked = await showDatePicker(
+                                            context: ctx,
+                                            initialDate: DateTime(1990),
+                                            firstDate: DateTime(1940),
+                                            lastDate: DateTime.now().subtract(
+                                              const Duration(days: 365 * 18),
+                                            ),
+                                            helpText: 'Select Date of Birth',
+                                          );
+                                          if (picked != null) {
+                                            setModalState(() {
+                                              selectedDob = picked;
+                                              dobCtrl.text =
+                                                  '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
+                                            });
+                                          }
+                                        },
+                                ),
+                                const SizedBox(height: 8),
+                                GestureDetector(
+                                  onTap: isViewOnly
+                                      ? null
+                                      : () async {
+                                          final picker = ImagePicker();
+                                          final picked =
+                                              await picker.pickImage(
+                                                source: ImageSource.gallery,
+                                                imageQuality: 70,
+                                                maxWidth: 600,
+                                              );
+                                          if (picked != null) {
+                                            final bytes =
+                                                await picked.readAsBytes();
+                                            setModalState(() {
+                                              photographBytes = bytes;
+                                            });
+                                          }
+                                        },
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF0F4FF),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: ColorConst.borderSoft,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.photo_camera_outlined,
+                                          size: 16,
+                                          color: ColorConst.primaryBlue,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          isViewOnly
+                                              ? 'Photograph'
+                                              : 'Upload Photograph *',
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                buildFacultyPhotographPreview(),
+                              ],
+                            );
+                          }
+
+                          Widget stepTwo() {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _sectionHeader(
+                                  'Compliance (Aadhaar / PAN)',
+                                  Icons.verified_user_outlined,
+                                ),
+                                TextFormField(
+                                  controller: aadhaarCtrl,
+                                  readOnly: isViewOnly,
+                                  decoration: _fieldDecor(
+                                    'Aadhaar Number',
+                                  ),
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                    LengthLimitingTextInputFormatter(12),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                TextFormField(
+                                  controller: panCtrl,
+                                  readOnly: isViewOnly,
+                                  decoration: _fieldDecor('PAN Number'),
+                                  textCapitalization:
+                                      TextCapitalization.characters,
+                                  inputFormatters: [
+                                    LengthLimitingTextInputFormatter(10),
+                                  ],
+                                ),
+                                _sectionHeader(
+                                  'Contact Details',
+                                  Icons.contact_phone_outlined,
+                                ),
+                                TextFormField(
+                                  controller: mobileCtrl,
+                                  readOnly: isViewOnly,
+                                  decoration: _fieldDecor(
+                                    'Mobile Number *',
+                                  ),
+                                  keyboardType: TextInputType.phone,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                    LengthLimitingTextInputFormatter(10),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                TextFormField(
+                                  controller: emailCtrl,
+                                  readOnly: isViewOnly,
+                                  decoration: _fieldDecor(
+                                    'Email Address *',
+                                  ),
+                                  keyboardType: TextInputType.emailAddress,
+                                ),
+                              ],
+                            );
+                          }
+
+                          Widget stepThree() {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _sectionHeader(
+                                  'Address',
+                                  Icons.home_outlined,
+                                ),
+                                TextFormField(
+                                  controller: permanentAddrCtrl,
+                                  readOnly: isViewOnly,
+                                  decoration: _fieldDecor(
+                                    'Permanent Address *',
+                                  ),
+                                  maxLines: 1,
+                                  textCapitalization:
+                                      TextCapitalization.sentences,
+                                ),
+                                const SizedBox(height: 8),
+                                TextFormField(
+                                  controller: currentAddrCtrl,
+                                  readOnly: isViewOnly,
+                                  decoration: _fieldDecor(
+                                    'Current Address *',
+                                  ),
+                                  maxLines: 1,
+                                  textCapitalization:
+                                      TextCapitalization.sentences,
+                                ),
+                                _sectionHeader(
+                                  'Emergency Contact',
+                                  Icons.emergency_outlined,
+                                ),
+                                TextFormField(
+                                  controller: emergNameCtrl,
+                                  readOnly: isViewOnly,
+                                  decoration: _fieldDecor(
+                                    'Contact Person Name *',
+                                  ),
+                                  textCapitalization:
+                                      TextCapitalization.words,
+                                ),
+                                const SizedBox(height: 8),
+                                TextFormField(
+                                  controller: emergRelationCtrl,
+                                  readOnly: isViewOnly,
+                                  decoration: _fieldDecor(
+                                    'Relation *',
+                                    hint: 'e.g. Spouse, Parent, Sibling',
+                                  ),
+                                  textCapitalization:
+                                      TextCapitalization.words,
+                                ),
+                                const SizedBox(height: 8),
+                                TextFormField(
+                                  controller: emergMobileCtrl,
+                                  readOnly: isViewOnly,
+                                  decoration: _fieldDecor(
+                                    'Emergency Mobile *',
+                                  ),
+                                  keyboardType: TextInputType.phone,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                    LengthLimitingTextInputFormatter(10),
+                                  ],
+                                ),
+                              ],
+                            );
+                          }
+
+                          Widget buildStepContent() {
+                            if (currentStep == 0) return stepOne();
+                            if (currentStep == 1) return stepTwo();
+                            return stepThree();
+                          }
+
+                          bool validateStep(int step, {bool showError = true}) {
+                            String? error;
+                            if (step == 0) {
+                              if (facultyIdCtrl.text.trim().isEmpty) {
+                                error = 'Faculty ID is required';
+                              } else if (fullNameCtrl.text.trim().isEmpty) {
+                                error = 'Full name is required';
+                              } else if (selectedGender == null ||
+                                  selectedGender!.trim().isEmpty) {
+                                error = 'Gender is required';
+                              } else if (selectedDob == null) {
+                                error = 'Date of birth is required';
+                              } else if (photographBytes == null &&
+                                  (photographUrl ?? '').trim().isEmpty) {
+                                error = 'Photograph is required';
+                              }
+                            } else if (step == 1) {
+                              final String mobile = mobileCtrl.text.trim();
+                              final String email = emailCtrl.text.trim();
+                              final String aadhaar = aadhaarCtrl.text.trim();
+                              final String pan = panCtrl.text.trim();
+                              if (mobile.isEmpty) {
+                                error = 'Mobile number is required';
+                              } else if (mobile.length != 10) {
+                                error =
+                                    'Enter valid 10-digit mobile number';
+                              } else if (email.isEmpty) {
+                                error = 'Email is required';
+                              } else if (!RegExp(
+                                r'^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$',
+                              ).hasMatch(email)) {
+                                error = 'Enter a valid email address';
+                              } else if (aadhaar.isNotEmpty &&
+                                  aadhaar.length != 12) {
+                                error = 'Aadhaar must be 12 digits';
+                              } else if (pan.isNotEmpty &&
+                                  !RegExp(
+                                    r'^[A-Z]{5}[0-9]{4}[A-Z]{1}$',
+                                  ).hasMatch(pan.toUpperCase())) {
+                                error = 'Invalid PAN (e.g. ABCDE1234F)';
+                              }
+                            } else {
+                              final String permanentAddress =
+                                  permanentAddrCtrl.text.trim();
+                              final String currentAddress =
+                                  currentAddrCtrl.text.trim();
+                              final String emergencyName =
+                                  emergNameCtrl.text.trim();
+                              final String emergencyRelation =
+                                  emergRelationCtrl.text.trim();
+                              final String emergencyMobile =
+                                  emergMobileCtrl.text.trim();
+                              if (permanentAddress.isEmpty) {
+                                error = 'Permanent address is required';
+                              } else if (currentAddress.isEmpty) {
+                                error = 'Current address is required';
+                              } else if (emergencyName.isEmpty) {
+                                error = 'Emergency contact name is required';
+                              } else if (emergencyRelation.isEmpty) {
+                                error = 'Emergency relation is required';
+                              } else if (emergencyMobile.isEmpty) {
+                                error = 'Emergency mobile is required';
+                              } else if (emergencyMobile.length != 10) {
+                                error = 'Enter valid 10-digit number';
+                              }
+                            }
+                            if (error != null && showError) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  backgroundColor: Colors.red.shade600,
+                                  content: smcText(
+                                    textToDisplay: error,
+                                    textSize: 13,
+                                    colorOfText: Colors.white,
+                                  ),
+                                ),
+                              );
+                              return false;
+                            }
+                            return error == null;
+                          }
+
+                          Future<void> saveFaculty() async {
+                            if (!validateStep(0, showError: true) ||
+                                !validateStep(1, showError: true) ||
+                                !validateStep(2, showError: true)) {
+                              return;
+                            }
                             setModalState(() => saving = true);
 
-                            // Upload photo if selected
                             if (photographBytes != null) {
                               final ref = FirebaseStorage.instance
                                   .ref()
                                   .child('faculty_photos')
-                                  .child('${facultyIdCtrl.text.trim().toUpperCase()}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+                                  .child(
+                                    '${facultyIdCtrl.text.trim().toUpperCase()}_${DateTime.now().millisecondsSinceEpoch}.jpg',
+                                  );
                               await ref.putData(
                                 photographBytes!,
                                 SettableMetadata(contentType: 'image/jpeg'),
@@ -2531,11 +2691,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                               documentId: facultyToEdit?.documentId,
                               facultyId: facultyIdCtrl.text.trim().toUpperCase(),
                               fullName: fullNameCtrl.text.trim(),
-                              gender: selectedGender,
+                              gender: selectedGender ?? '',
                               dateOfBirth: selectedDob != null
-                                  ? '${selectedDob!.year}-'
-                                  '${selectedDob!.month.toString().padLeft(2, '0')}-'
-                                  '${selectedDob!.day.toString().padLeft(2, '0')}'
+                                  ? '${selectedDob!.year}-${selectedDob!.month.toString().padLeft(2, '0')}-${selectedDob!.day.toString().padLeft(2, '0')}'
                                   : '',
                               aadhaarNumber: aadhaarCtrl.text.trim(),
                               panNumber: panCtrl.text.trim().toUpperCase(),
@@ -2545,13 +2703,15 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                               currentAddress: currentAddrCtrl.text.trim(),
                               emergencyContactName: emergNameCtrl.text.trim(),
                               emergencyContactRelation:
-                              emergRelationCtrl.text.trim(),
+                                  emergRelationCtrl.text.trim(),
                               emergencyContactMobile:
-                              emergMobileCtrl.text.trim(),
+                                  emergMobileCtrl.text.trim(),
                               orgId: widget.orgId,
                               deptId: widget.deptId,
                               photographUrl: photographUrl ?? '',
-                              createdAt: facultyToEdit?.createdAt ?? DateTime.now().toIso8601String(),
+                              createdAt:
+                                  facultyToEdit?.createdAt ??
+                                  DateTime.now().toIso8601String(),
                             );
 
                             try {
@@ -2570,7 +2730,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                   backgroundColor: Colors.green.shade600,
                                   content: smcText(
                                     textToDisplay:
-                                    '${faculty.fullName} ${facultyToEdit == null ? 'added' : 'updated'} successfully.',
+                                        '${faculty.fullName} ${facultyToEdit == null ? 'added' : 'updated'} successfully.',
                                     textSize: 14,
                                     colorOfText: Colors.white,
                                   ),
@@ -2580,7 +2740,10 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                             } catch (e) {
                               if (!ctx.mounted) return;
                               setModalState(() => saving = false);
-                              final errorMsg = e.toString().replaceFirst('Exception: ', '');
+                              final errorMsg = e.toString().replaceFirst(
+                                'Exception: ',
+                                '',
+                              );
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   backgroundColor: Colors.red.shade600,
@@ -2593,33 +2756,98 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                 ),
                               );
                             }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: ColorConst.primaryBlue,
-                            disabledBackgroundColor: ColorConst.primaryBlue.withOpacity(0.6),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          child: saving
-                              ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Colors.white,
-                            ),
-                          )
-                              : smcText(
-                            textToDisplay: facultyToEdit == null ? 'Save Faculty' : 'Update Faculty',
-                            textSize: 15,
-                            textBoldness: 4,
-                            colorOfText: Colors.white,
-                          ),
-                        ),
+                          }
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              buildStepContent(),
+                              const SizedBox(height: 16),
+                              if (!isViewOnly)
+                                Row(
+                                  children: [
+                                    TextButton(
+                                      onPressed: saving
+                                          ? null
+                                          : () {
+                                              if (currentStep == 0) {
+                                                Navigator.pop(ctx);
+                                                return;
+                                              }
+                                              setModalState(() {
+                                                currentStep -= 1;
+                                              });
+                                            },
+                                      child: Text(
+                                        currentStep == 0
+                                            ? 'Cancel'
+                                            : 'Back',
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    SizedBox(
+                                      height: 44,
+                                      child: ElevatedButton(
+                                        onPressed: saving
+                                            ? null
+                                            : () async {
+                                                if (currentStep < 2) {
+                                                  if (!validateStep(
+                                                    currentStep,
+                                                  )) {
+                                                    return;
+                                                  }
+                                                  setModalState(() {
+                                                    currentStep += 1;
+                                                  });
+                                                  return;
+                                                }
+                                                await saveFaculty();
+                                              },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor:
+                                              ColorConst.primaryBlue,
+                                          disabledBackgroundColor:
+                                              ColorConst.primaryBlue
+                                                  .withOpacity(0.6),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(14),
+                                          ),
+                                        ),
+                                        child: saving
+                                            ? const SizedBox(
+                                                width: 22,
+                                                height: 22,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2.5,
+                                                      color: Colors.white,
+                                                    ),
+                                              )
+                                            : smcText(
+                                                textToDisplay:
+                                                    currentStep == 2
+                                                    ? (facultyToEdit == null
+                                                          ? 'Create'
+                                                          : 'Update')
+                                                    : 'Next',
+                                                textSize: 14,
+                                                textBoldness: 4,
+                                                colorOfText: Colors.white,
+                                              ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              const SizedBox(height: 8),
+                            ],
+                          );
+                        },
                       ),
-                      const SizedBox(height: 8),
-                    ],
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -2695,6 +2923,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       onTap: () => setState(() {
                         selectedMenuIndex = 0;
                         selectedStudentDetail = null;
+                        selectedFacultyDetail = null;
                       }),
                     ),
                     const SizedBox(height: 8),
@@ -2703,7 +2932,10 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       icon: Icons.school_outlined,
                       isSelected: selectedMenuIndex == 1,
                       sidebarExpanded: sidebarExpanded,
-                      onTap: () => setState(() => selectedMenuIndex = 1),
+                      onTap: () => setState(() {
+                        selectedMenuIndex = 1;
+                        selectedFacultyDetail = null;
+                      }),
                     ),
                     const SizedBox(height: 8),
                     _menuTile(
@@ -2714,6 +2946,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       onTap: () => setState(() {
                         selectedMenuIndex = 2;
                         selectedStudentDetail = null;
+                        selectedFacultyDetail = null;
                       }),
                     ),
                     const SizedBox(height: 8),
@@ -2725,6 +2958,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       onTap: () => setState(() {
                         selectedMenuIndex = 3;
                         selectedStudentDetail = null;
+                        selectedFacultyDetail = null;
                       }),
                     ),
                     const SizedBox(height: 8),
@@ -2736,6 +2970,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       onTap: () => setState(() {
                         selectedMenuIndex = 4;
                         selectedStudentDetail = null;
+                        selectedFacultyDetail = null;
                       }),
                     ),
                     const SizedBox(height: 8),
@@ -3390,44 +3625,85 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   }
 
   Widget _buildFacultiesView() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+    if (selectedFacultyDetail == null) {
+      return buildFacultyTable();
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const double dividerWidth = 10;
+        const double minListWidth = 360;
+        const double minDetailWidth = 320;
+        final double availableWidth =
+            (constraints.maxWidth - dividerWidth).clamp(0, double.infinity);
+
+        if (availableWidth <= minListWidth + minDetailWidth) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(flex: 5, child: buildFacultyTable()),
+              _buildFacultyPanelDivider(constraints.maxWidth),
+              Expanded(
+                flex: 4,
+                child: PersonDetailPage(
+                  key: _facultyDetailKey(selectedFacultyDetail!),
+                  person: selectedFacultyDetail!,
+                  isStudent: false,
+                  embedded: true,
+                  onClose: closeFacultyDetail,
+                ),
+              ),
+            ],
+          );
+        }
+
+        final double listWidth = (availableWidth * facultyListPanelRatio)
+            .clamp(minListWidth, availableWidth - minDetailWidth);
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Expanded(
-              child: smcText(
-                textToDisplay: 'Faculty in your department',
-                textSize: 14,
-                textBoldness: 3,
-                colorOfText: ColorConst.textSecondary,
-              ),
-            ),
-            ElevatedButton.icon(
-              onPressed: openCreateFacultySheet,
-              icon: const Icon(Icons.person_add_alt_1_rounded, size: 18, color: Colors.white),
-              label: const smcText(
-                textToDisplay: 'Create Faculty',
-                textSize: 14,
-                textBoldness: 4,
-                colorOfText: Colors.white,
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: ColorConst.primaryBlue,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+            SizedBox(width: listWidth, child: buildFacultyTable()),
+            _buildFacultyPanelDivider(constraints.maxWidth),
+            Expanded(
+              child: PersonDetailPage(
+                key: _facultyDetailKey(selectedFacultyDetail!),
+                person: selectedFacultyDetail!,
+                isStudent: false,
+                embedded: true,
+                onClose: closeFacultyDetail,
               ),
             ),
           ],
+        );
+      },
+    );
+  }
+
+  Widget _buildFacultyPanelDivider(double totalWidth) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeColumn,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragUpdate: (details) {
+          setState(() {
+            facultyListPanelRatio += details.delta.dx / totalWidth;
+            facultyListPanelRatio = facultyListPanelRatio.clamp(0.3, 0.7);
+          });
+        },
+        child: Container(
+          width: 10,
+          child: Center(
+            child: Container(
+              width: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD8E2F4),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ),
         ),
-        const SizedBox(height: 16),
-        Expanded(child: buildFacultyTable()),
-      ],
+      ),
     );
   }
 
@@ -4032,6 +4308,20 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         : student.fullName.trim().substring(0, 1).toUpperCase();
     final String rawUrl = student.photographUrl;
     final String normalizedUrl = _normalizeStudentPhotoUrl(rawUrl);
+
+    return _StudentPhotoAvatar(
+      photoUrl: normalizedUrl,
+      fallbackInitial: initial,
+      radius: radius,
+    );
+  }
+
+  Widget _buildFacultyAvatar(FacultyModel faculty, {double radius = 18}) {
+    final String initial = faculty.fullName.trim().isEmpty
+        ? '?'
+        : faculty.fullName.trim().substring(0, 1).toUpperCase();
+    final String normalizedUrl =
+        _normalizeStudentPhotoUrl(faculty.photographUrl);
 
     return _StudentPhotoAvatar(
       photoUrl: normalizedUrl,
@@ -5647,15 +5937,18 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
   Widget buildFacultyTable() {
     final String searchTerm = facultySearchController.text.trim().toLowerCase();
-    final List<FacultyModel> genderFiltered = facultyGenderFilter == 'All'
+    final List<FacultyModel> genderFiltered = facultyGenderFilter == 'All Gender'
         ? facultyList
         : facultyList.where((f) => f.gender == facultyGenderFilter).toList();
     final List<FacultyModel> searched = genderFiltered.where((f) {
       if (searchTerm.isEmpty) return true;
-      return '${f.facultyId} ${f.fullName} ${f.gender} ${f.email}'
+      return '${f.facultyId} ${f.fullName} ${f.email} ${f.mobile} ${f.gender}'
           .toLowerCase()
           .contains(searchTerm);
-    }).toList();
+    }).toList()
+      ..sort(
+        (a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()),
+      );
 
     final int totalRows = searched.length;
     final int totalPages = totalRows == 0 ? 1 : ((totalRows - 1) ~/ facultyRowsPerPage) + 1;
@@ -5677,6 +5970,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 width: 44,
@@ -5689,38 +5983,85 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                 child: const Icon(Icons.people_alt_outlined, color: ColorConst.primaryBlue),
               ),
               const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Flexible(
+                          child: smcText(
+                            textToDisplay: 'Faculty List',
+                            textSize: 16,
+                            textBoldness: 5,
+                            colorOfText: Color(0xFF1F2F52),
+                            maxLines: 1,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF4FF),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: smcText(
+                            textToDisplay: '${facultyList.length}',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: ColorConst.primaryBlue,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    const smcText(
+                      textToDisplay: 'View and manage all faculty in your department.',
+                      textSize: 12,
+                      colorOfText: Color(0xFF7D87A3),
+                      maxLines: 2,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    children: [
-                      const smcText(
-                        textToDisplay: 'Faculty List',
-                        textSize: 16,
-                        textBoldness: 5,
-                        colorOfText: Color(0xFF1F2F52),
+                  ElevatedButton.icon(
+                    onPressed: openCreateFacultySheet,
+                    icon: const Icon(Icons.person_add_alt_1_rounded, size: 18, color: Colors.white),
+                    label: const smcText(
+                      textToDisplay: 'Create',
+                      textSize: 14,
+                      textBoldness: 4,
+                      colorOfText: Colors.white,
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: ColorConst.primaryBlue,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEFF4FF),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: smcText(
-                          textToDisplay: '${facultyList.length}',
-                          textSize: 12,
-                          textBoldness: 4,
-                          colorOfText: ColorConst.primaryBlue,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                  const SizedBox(height: 2),
-                  const smcText(
-                    textToDisplay: 'View and manage all faculty in your department.',
-                    textSize: 12,
-                    colorOfText: Color(0xFF7D87A3),
+                  const SizedBox(width: 10),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Faculty import will be added soon.')),
+                      );
+                    },
+                    icon: const Icon(Icons.upload_file_rounded),
+                    label: const Text('Import Faculty'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: ColorConst.primaryBlue,
+                      side: const BorderSide(color: ColorConst.primaryBlue),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -5735,81 +6076,87 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: const Color(0xFFE8EDFA)),
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: SizedBox(
-                    height: 44,
-                    child: TextField(
-                      controller: facultySearchController,
-                      onChanged: (_) => setState(() => facultyCurrentPage = 1),
-                      decoration: InputDecoration(
-                        hintText: 'Search faculty...',
-                        prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Color(0xFF8A96B2)),
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: ColorConst.primaryBlue),
-                        ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final bool stackFilters = constraints.maxWidth < 560;
+                final Widget searchField = SizedBox(
+                  height: 44,
+                  child: TextField(
+                    controller: facultySearchController,
+                    onChanged: (_) => setState(() => facultyCurrentPage = 1),
+                    decoration: InputDecoration(
+                      hintText: 'Search faculty...',
+                      prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Color(0xFF8A96B2)),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: ColorConst.primaryBlue),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: SizedBox(
-                    height: 44,
-                    child: DropdownButtonFormField<String>(
-                      value: facultyGenderFilter,
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: ColorConst.primaryBlue),
-                        ),
+                );
+                final Widget genderDropdown = SizedBox(
+                  height: 44,
+                  child: DropdownButtonFormField<String>(
+                    isExpanded: true,
+                    value: ['All Gender', 'Male', 'Female', 'Other', 'Prefer not to say']
+                            .contains(facultyGenderFilter)
+                        ? facultyGenderFilter
+                        : 'All Gender',
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
                       ),
-                      items: ['All', 'Male', 'Female', 'Other', 'Prefer not to say']
-                          .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                          .toList(),
-                      onChanged: (v) {
-                        if (v != null) {
-                          setState(() {
-                            facultyGenderFilter = v;
-                            facultyCurrentPage = 1;
-                          });
-                        }
-                      },
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: ColorConst.primaryBlue),
+                      ),
                     ),
+                    items: ['All Gender', 'Male', 'Female', 'Other', 'Prefer not to say']
+                        .map(
+                          (g) => DropdownMenuItem(
+                            value: g,
+                            child: Text(
+                              g,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) {
+                        setState(() {
+                          facultyGenderFilter = v;
+                          facultyCurrentPage = 1;
+                        });
+                      }
+                    },
                   ),
-                ),
-                const SizedBox(width: 12),
-                SizedBox(
+                );
+                final Widget resetButton = SizedBox(
                   height: 44,
                   child: OutlinedButton(
                     onPressed: () {
                       setState(() {
                         facultySearchController.clear();
-                        facultyGenderFilter = 'All';
+                        facultyGenderFilter = 'All Gender';
                         facultyCurrentPage = 1;
                       });
                     },
@@ -5820,8 +6167,35 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       colorOfText: Color(0xFF4F5E7D),
                     ),
                   ),
-                ),
-              ],
+                );
+
+                if (stackFilters) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      searchField,
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(child: genderDropdown),
+                          const SizedBox(width: 12),
+                          resetButton,
+                        ],
+                      ),
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(flex: 3, child: searchField),
+                    const SizedBox(width: 12),
+                    Expanded(flex: 2, child: genderDropdown),
+                    const SizedBox(width: 12),
+                    resetButton,
+                  ],
+                );
+              },
             ),
           ),
           const SizedBox(height: 12),
@@ -5856,42 +6230,93 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                     headingRowHeight: 50,
                                     dataRowMinHeight: 52,
                                     dataRowMaxHeight: 58,
-                                    horizontalMargin: 8,
+                                    horizontalMargin: 0,
                                     columnSpacing: 0,
                                     dividerThickness: 1,
                                     border: TableBorder.all(color: const Color(0xFFE3EAF8), width: 1),
                                     headingRowColor: MaterialStateProperty.all(const Color(0xFFF4F7FF)),
                                     columns: const [
-                                      DataColumn(label: SizedBox(width: 120, child: Center(child: smcText(textToDisplay: 'Faculty ID', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
-                                      DataColumn(label: SizedBox(width: 180, child: Center(child: smcText(textToDisplay: 'Name', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
-                                      DataColumn(label: SizedBox(width: 100, child: Center(child: smcText(textToDisplay: 'Gender', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
-                                      DataColumn(label: SizedBox(width: 200, child: Center(child: smcText(textToDisplay: 'Email', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
-                                      DataColumn(label: SizedBox(width: 100, child: Center(child: smcText(textToDisplay: 'Photo', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
+                                      DataColumn(label: SizedBox(width: 50, child: Center(child: smcText(textToDisplay: 'S.No', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
+                                      DataColumn(label: SizedBox(width: 100, child: Padding(padding: EdgeInsets.only(left: 8), child: Align(alignment: Alignment.centerLeft, child: smcText(textToDisplay: 'Faculty ID', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B)))))),
+                                      DataColumn(label: SizedBox(width: 200, child: Center(child: smcText(textToDisplay: 'Name', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
+                                      DataColumn(label: SizedBox(width: 180, child: Center(child: smcText(textToDisplay: 'Email', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
+                                      DataColumn(label: SizedBox(width: 110, child: Center(child: smcText(textToDisplay: 'Mobile #', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
+                                      DataColumn(label: SizedBox(width: 90, child: Center(child: smcText(textToDisplay: 'Gender', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
                                       DataColumn(label: SizedBox(width: 80, child: Center(child: smcText(textToDisplay: 'Actions', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
                                     ],
-                                    rows: pageRows.map((f) {
+                                    rows: pageRows.asMap().entries.map((entry) {
+                                      final int index = entry.key;
+                                      final FacultyModel f = entry.value;
+                                      final int serialNo = startIndex + index + 1;
+                                      final bool isSelected = _isSelectedFaculty(f);
                                       return DataRow(
+                                        selected: isSelected,
+                                        onSelectChanged: (_) => openFacultyDetail(f),
+                                        color: isSelected
+                                            ? WidgetStateProperty.all(const Color(0xFFE8F0FE))
+                                            : null,
                                         cells: [
                                           DataCell(
                                             Center(
-                                              child: InkWell(
-                                                onTap: () => Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (context) => PersonDetailPage(person: f, isStudent: false),
-                                                  ),
-                                                ),
+                                              child: smcText(
+                                                textToDisplay: '$serialNo',
+                                                textSize: 12,
+                                                colorOfText: const Color(0xFF2E3954),
+                                              ),
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Padding(
+                                              padding: const EdgeInsets.only(left: 8),
+                                              child: Align(
+                                                alignment: Alignment.centerLeft,
                                                 child: smcText(
                                                   textToDisplay: f.facultyId,
                                                   textSize: 12,
                                                   textBoldness: 4,
-                                                  colorOfText: Colors.blue,
-                                                  decoration: TextDecoration.underline,
+                                                  colorOfText: const Color(0xFF2E3954),
                                                 ),
                                               ),
                                             ),
                                           ),
-                                          DataCell(Center(child: smcText(textToDisplay: f.fullName, textSize: 12, colorOfText: const Color(0xFF2E3954), maxLines: 1))),
+                                          DataCell(
+                                            Padding(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                                              child: Row(
+                                                children: [
+                                                  _buildFacultyAvatar(f),
+                                                  const SizedBox(width: 10),
+                                                  Expanded(
+                                                    child: smcText(
+                                                      textToDisplay: f.fullName,
+                                                      textSize: 12,
+                                                      colorOfText: const Color(0xFF2E3954),
+                                                      maxLines: 1,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Center(
+                                              child: smcText(
+                                                textToDisplay: f.email,
+                                                textSize: 12,
+                                                colorOfText: const Color(0xFF2E3954),
+                                                maxLines: 1,
+                                              ),
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Center(
+                                              child: smcText(
+                                                textToDisplay: f.mobile,
+                                                textSize: 12,
+                                                colorOfText: const Color(0xFF2E3954),
+                                              ),
+                                            ),
+                                          ),
                                           DataCell(
                                             Center(
                                               child: Container(
@@ -5899,20 +6324,6 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                                 decoration: BoxDecoration(color: const Color(0xFFEFF4FF), borderRadius: BorderRadius.circular(999)),
                                                 child: smcText(textToDisplay: f.gender, textSize: 11, textBoldness: 3, colorOfText: const Color(0xFF3558DA)),
                                               ),
-                                            ),
-                                          ),
-                                          DataCell(Center(child: smcText(textToDisplay: f.email, textSize: 12, colorOfText: const Color(0xFF718096), maxLines: 1))),
-                                          DataCell(
-                                            Center(
-                                              child: f.photographUrl.isNotEmpty
-                                                  ? InkWell(
-                                                      onTap: () async {
-                                                        final uri = Uri.parse(f.photographUrl);
-                                                        if (await canLaunchUrl(uri)) await launchUrl(uri);
-                                                      },
-                                                      child: const Icon(Icons.image_outlined, size: 18, color: ColorConst.primaryBlue),
-                                                    )
-                                                  : const Icon(Icons.image_not_supported_outlined, size: 18, color: Colors.grey),
                                             ),
                                           ),
                                           DataCell(
@@ -5929,6 +6340,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                                 ],
                                               ),
                                             ),
+                                            onTap: () {},
                                           ),
                                         ],
                                       );
@@ -5973,6 +6385,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                           DropdownMenuItem(value: 10, child: Text('10')),
                                           DropdownMenuItem(value: 25, child: Text('25')),
                                           DropdownMenuItem(value: 50, child: Text('50')),
+                                          DropdownMenuItem(value: 100, child: Text('100')),
                                         ],
                                         onChanged: (value) {
                                           if (value != null) {
@@ -6046,6 +6459,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     if (confirm == true && faculty.documentId != null) {
       try {
         await facultyService.deleteFaculty(faculty.documentId!);
+        if (_isSelectedFaculty(faculty)) {
+          closeFacultyDetail();
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Faculty deleted successfully')),
         );
