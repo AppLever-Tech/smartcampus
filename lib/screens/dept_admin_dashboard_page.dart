@@ -4327,6 +4327,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       photoUrl: normalizedUrl,
       fallbackInitial: initial,
       radius: radius,
+      preferCachedNetworkImage: true,
     );
   }
 
@@ -6543,6 +6544,7 @@ class _StudentPhotoAvatar extends StatefulWidget {
     this.radius = 18,
     this.previewWidth,
     this.previewHeight,
+    this.preferCachedNetworkImage = false,
   });
 
   final String photoUrl;
@@ -6550,6 +6552,7 @@ class _StudentPhotoAvatar extends StatefulWidget {
   final double radius;
   final double? previewWidth;
   final double? previewHeight;
+  final bool preferCachedNetworkImage;
 
   bool get isPreview => previewWidth != null && previewHeight != null;
 
@@ -6595,6 +6598,17 @@ class _StudentPhotoAvatarState extends State<_StudentPhotoAvatar> {
       if (mounted) {
         setState(() => _loading = false);
       }
+      return;
+    }
+
+    if (widget.preferCachedNetworkImage) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _useCachedNetworkImage = true;
+      });
       return;
     }
 
@@ -6775,14 +6789,18 @@ class _StudentPhotoAvatarState extends State<_StudentPhotoAvatar> {
     }
 
     final double size = widget.radius * 2;
-    return ClipOval(
-      child: CachedNetworkImage(
-        imageUrl: widget.photoUrl,
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-        placeholder: (_, __) => _buildLoadingIndicator(size: size),
-        errorWidget: (context, url, error) => _buildInitialAvatar(),
+    return CircleAvatar(
+      radius: widget.radius,
+      backgroundColor: const Color(0xFFEAF0FF),
+      child: ClipOval(
+        child: CachedNetworkImage(
+          imageUrl: widget.photoUrl,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          placeholder: (_, __) => _buildLoadingIndicator(size: size),
+          errorWidget: (context, url, error) => _buildInitialAvatar(),
+        ),
       ),
     );
   }

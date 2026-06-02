@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:smartcampus/const/color_const.dart';
 import 'package:smartcampus/data/faculty_model.dart';
@@ -272,6 +273,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
                                   photoUrl,
                                   width: 130,
                                   height: 195,
+                                  useCachedNetworkImage: true,
                                 ),
                               ),
                             )
@@ -538,6 +540,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
     String photoUrl, {
     double width = 280,
     double height = 420,
+    bool useCachedNetworkImage = false,
   }) {
     return Container(
       key: ValueKey<String>(photoUrl),
@@ -549,19 +552,36 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
         color: const Color(0xFFF7F9FF),
       ),
       clipBehavior: Clip.antiAlias,
-      child: Image.network(
-        photoUrl,
-        key: ValueKey<String>('img-$photoUrl'),
-        fit: BoxFit.cover,
-        webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
-        gaplessPlayback: false,
-        errorBuilder: (_, __, ___) => const Center(
-          child: Icon(
-            Icons.broken_image_outlined,
-            color: ColorConst.textSecondary,
-          ),
-        ),
-      ),
+      child: useCachedNetworkImage
+          ? CachedNetworkImage(
+              imageUrl: photoUrl,
+              key: ValueKey<String>('cached-$photoUrl'),
+              fit: BoxFit.cover,
+              width: width,
+              height: height,
+              placeholder: (_, __) => const Center(
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              errorWidget: (_, __, ___) => const Center(
+                child: Icon(
+                  Icons.broken_image_outlined,
+                  color: ColorConst.textSecondary,
+                ),
+              ),
+            )
+          : Image.network(
+              photoUrl,
+              key: ValueKey<String>('img-$photoUrl'),
+              fit: BoxFit.cover,
+              webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
+              gaplessPlayback: false,
+              errorBuilder: (_, __, ___) => const Center(
+                child: Icon(
+                  Icons.broken_image_outlined,
+                  color: ColorConst.textSecondary,
+                ),
+              ),
+            ),
     );
   }
 
