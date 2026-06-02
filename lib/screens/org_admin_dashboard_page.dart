@@ -1008,7 +1008,6 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                     ],
                   ],
                 )
-
                     : selectedMenuIndex == 1
                     ? BasicDetailsScreen(
                   isAdmin: true,
