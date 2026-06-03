@@ -181,7 +181,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
     if (widget.isStudent) {
       return const [
         'Basic Details',
-        'Courses Opted',
+        'Courses Enrolled',
         'Achievements',
         'Publications',
       ];
@@ -232,7 +232,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
     switch (tab) {
       case 'Basic Details':
         return _buildBasicDetails();
-      case 'Courses Opted':
+      case 'Courses Enrolled':
         return _buildCoursesOpted();
       case 'Achievements':
         return _buildAchievements();
@@ -648,7 +648,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
   Widget _buildCoursesOpted() {
     return const Center(
       child: smcText(
-        textToDisplay: 'No courses opted yet.',
+        textToDisplay: 'No courses enrolled yet.',
         textSize: 14,
         colorOfText: ColorConst.textSecondary,
       ),
