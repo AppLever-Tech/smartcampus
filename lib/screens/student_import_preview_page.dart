@@ -8,6 +8,7 @@ class StudentImportPreviewScreen extends StatefulWidget {
   final String orgId;
   final String deptId;
 
+
   const StudentImportPreviewScreen({
     super.key,
     required this.rows,
@@ -26,6 +27,7 @@ class _StudentImportPreviewScreenState
   bool importing = false;
 
   double progress = 0;
+  String filterType = 'all';
 
   late List<StudentImportRow> rows;
 
@@ -56,6 +58,22 @@ class _StudentImportPreviewScreenState
       rows.where(
             (e) => e.hasError,
       ).length;
+  List<StudentImportRow> get filteredRows {
+
+    if (filterType == 'new') {
+      return rows.where(
+            (e) => !e.existsInSystem,
+      ).toList();
+    }
+
+    if (filterType == 'existing') {
+      return rows.where(
+            (e) => e.existsInSystem,
+      ).toList();
+    }
+
+    return rows;
+  }
 
   Future<void> saveImport() async {
     setState(() {
@@ -290,6 +308,68 @@ class _StudentImportPreviewScreenState
               ),
             ),
 
+            const SizedBox(height: 10),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+              ),
+              child: Row(
+                children: [
+
+                  ElevatedButton(
+                    // style: ElevatedButton.styleFrom(
+                    //   backgroundColor:
+                    //   filterType == 'new'
+                    //       ? Colors.white
+                    //       : Colors.grey.shade300,
+                    // ),
+                    onPressed: () {
+                      setState(() {
+                        filterType = 'new';
+                      });
+                    },
+                    child: Text(
+                      "New Records (${rows.where((e) => !e.existsInSystem).length})",
+                    ),
+                  ),
+
+                  const SizedBox(width: 10),
+
+                  ElevatedButton(
+                    // style: ElevatedButton.styleFrom(
+                      // backgroundColor:
+                      // filterType == 'existing'
+                      //     ? Colors.white
+                      //     : Colors.grey.shade300,
+                    // ),
+                    onPressed: () {
+                      setState(() {
+                        filterType = 'existing';
+                      });
+                    },
+
+                    child: Text(
+                      "Existing Records (${rows.where((e) => e.existsInSystem).length})",
+                    ),
+                  ),
+
+                  const SizedBox(width: 10),
+
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        filterType = 'all';
+                      });
+                    },
+                    child: const Text(
+                      "Show All",
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
 
             Expanded(
               child: SingleChildScrollView(
@@ -318,13 +398,19 @@ class _StudentImportPreviewScreenState
                       DataColumn(label: Text("Overwrite")),
                       DataColumn(label: Text("Errors")),
                     ],
-                    rows: rows.map((row) {
+                    rows: filteredRows.map((row) {
                       return DataRow(
-                        color: row.hasError
-                            ? WidgetStateProperty.all(
-                          Colors.red.shade50,
-                        )
-                            : null,
+                          color: WidgetStateProperty.all(
+
+                            row.hasError
+                                ? Colors.red.shade50
+
+                                : row.existsInSystem
+                                ? Colors.orange.shade50
+
+                                : Colors.green.shade50,
+
+                          ),
                         cells: [
                           DataCell(Text(row.student.studentId)),
                           DataCell(Text(row.student.fullName)),
@@ -355,10 +441,29 @@ class _StudentImportPreviewScreenState
                             ),
                           ),
                           DataCell(
-                            Text(
-                              row.existsInSystem
-                                  ? "Yes"
-                                  : "No",
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: row.existsInSystem
+                                    ? Colors.orange.shade100
+                                    : Colors.green.shade100,
+                                borderRadius:
+                                BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                row.existsInSystem
+                                    ? "Existing"
+                                    : "New",
+                                style: TextStyle(
+                                  color: row.existsInSystem
+                                      ? Colors.orange.shade900
+                                      : Colors.green.shade900,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
                           ),
 
