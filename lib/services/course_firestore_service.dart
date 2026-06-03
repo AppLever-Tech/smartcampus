@@ -38,4 +38,20 @@ class CourseFirestoreService {
         .doc(id)
         .delete();
   }
+
+  Future<void> updateCourseFields(
+    String id,
+    Map<String, dynamic> fields,
+  ) async {
+    await _firestore.collection('courses').doc(id).update(fields);
+  }
+
+  Future<void> enrollStudents(String courseId, List<String> studentKeys) async {
+    if (studentKeys.isEmpty) {
+      return;
+    }
+    await _firestore.collection('courses').doc(courseId).update({
+      'enrolled_student_ids': FieldValue.arrayUnion(studentKeys),
+    });
+  }
 }

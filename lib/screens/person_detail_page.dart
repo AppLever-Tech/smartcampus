@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:smartcampus/const/color_const.dart';
 import 'package:smartcampus/data/faculty_model.dart';
@@ -9,7 +8,10 @@ class PersonDetailPage extends StatefulWidget {
   final dynamic person; // Can be StudentModel or FacultyModel
   final bool isStudent;
   final bool embedded;
+  final bool embeddedMaximized;
   final VoidCallback? onClose;
+  final VoidCallback? onMaximize;
+  final VoidCallback? onBackFromMaximized;
   final VoidCallback? onEditStudent;
 
   const PersonDetailPage({
@@ -17,7 +19,10 @@ class PersonDetailPage extends StatefulWidget {
     required this.person,
     required this.isStudent,
     this.embedded = false,
+    this.embeddedMaximized = false,
     this.onClose,
+    this.onMaximize,
+    this.onBackFromMaximized,
     this.onEditStudent,
   });
 
@@ -52,11 +57,15 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
       return DecoratedBox(
         decoration: BoxDecoration(
           color: const Color(0xFFF6F7FB),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: widget.embeddedMaximized
+              ? BorderRadius.zero
+              : BorderRadius.circular(14),
           border: Border.all(color: const Color(0xFFE3EAF8)),
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: widget.embeddedMaximized
+              ? BorderRadius.zero
+              : BorderRadius.circular(14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -99,15 +108,22 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
   }
 
   Widget _buildEmbeddedHeader() {
+    final bool isMaximized = widget.embeddedMaximized;
+
     return Container(
       color: ColorConst.primaryBlue,
-      padding: const EdgeInsets.fromLTRB(4, 8, 12, 8),
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.close_rounded, color: Colors.white),
-            tooltip: 'Close',
-            onPressed: widget.onClose,
+            icon: Icon(
+              isMaximized ? Icons.arrow_back_rounded : Icons.close_rounded,
+              color: Colors.white,
+            ),
+            tooltip: isMaximized ? 'Back' : 'Close',
+            onPressed: isMaximized
+                ? widget.onBackFromMaximized
+                : widget.onClose,
           ),
           Expanded(
             child: Column(
@@ -129,6 +145,12 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
               ],
             ),
           ),
+          if (!isMaximized && widget.onMaximize != null)
+            IconButton(
+              icon: const Icon(Icons.open_in_new, color: Colors.white),
+              tooltip: 'Maximize',
+              onPressed: widget.onMaximize,
+            ),
         ],
       ),
     );
@@ -273,7 +295,6 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
                                   photoUrl,
                                   width: 130,
                                   height: 195,
-                                  useCachedNetworkImage: true,
                                 ),
                               ),
                             )
@@ -540,7 +561,6 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
     String photoUrl, {
     double width = 280,
     double height = 420,
-    bool useCachedNetworkImage = false,
   }) {
     return Container(
       key: ValueKey<String>(photoUrl),
@@ -552,36 +572,19 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
         color: const Color(0xFFF7F9FF),
       ),
       clipBehavior: Clip.antiAlias,
-      child: useCachedNetworkImage
-          ? CachedNetworkImage(
-              imageUrl: photoUrl,
-              key: ValueKey<String>('cached-$photoUrl'),
-              fit: BoxFit.cover,
-              width: width,
-              height: height,
-              placeholder: (_, __) => const Center(
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              errorWidget: (_, __, ___) => const Center(
-                child: Icon(
-                  Icons.broken_image_outlined,
-                  color: ColorConst.textSecondary,
-                ),
-              ),
-            )
-          : Image.network(
-              photoUrl,
-              key: ValueKey<String>('img-$photoUrl'),
-              fit: BoxFit.cover,
-              webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
-              gaplessPlayback: false,
-              errorBuilder: (_, __, ___) => const Center(
-                child: Icon(
-                  Icons.broken_image_outlined,
-                  color: ColorConst.textSecondary,
-                ),
-              ),
-            ),
+      child: Image.network(
+        photoUrl,
+        key: ValueKey<String>('img-$photoUrl'),
+        fit: BoxFit.cover,
+        webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
+        gaplessPlayback: false,
+        errorBuilder: (_, __, ___) => const Center(
+          child: Icon(
+            Icons.broken_image_outlined,
+            color: ColorConst.textSecondary,
+          ),
+        ),
+      ),
     );
   }
 

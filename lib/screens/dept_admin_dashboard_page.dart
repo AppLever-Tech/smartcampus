@@ -10,6 +10,7 @@ import 'package:smartcampus/const/color_const.dart';
 import 'package:smartcampus/data/mock_master_data.dart';
 import 'package:smartcampus/data/faculty_model.dart';
 import 'package:smartcampus/data/student_model.dart';
+import 'package:smartcampus/screens/course_detail_page.dart';
 import 'package:smartcampus/screens/landing_page.dart';
 import 'package:smartcampus/screens/person_detail_page.dart';
 import 'package:smartcampus/services/faculty_firestore_service.dart';
@@ -99,9 +100,14 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
   StudentModel? selectedStudentDetail;
   FacultyModel? selectedFacultyDetail;
+  CourseModel? selectedCourseDetail;
   bool sidebarExpanded = false;
   double studentListPanelRatio = 0.55;
   double facultyListPanelRatio = 0.55;
+  double courseListPanelRatio = 0.55;
+  bool studentDetailMaximized = false;
+  bool facultyDetailMaximized = false;
+  bool courseDetailMaximized = false;
 
   @override
   void initState() {
@@ -113,6 +119,13 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         courseList = courses;
         totalCourses = courses.length;
         coursesLoaded = true;
+        if (selectedCourseDetail != null) {
+          final Iterable<CourseModel> match =
+              courses.where((c) => c.id == selectedCourseDetail!.id);
+          if (match.isNotEmpty) {
+            selectedCourseDetail = match.first;
+          }
+        }
       });
     });
     settingsService.getItems('smccourseType').listen((items) {
@@ -149,19 +162,49 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   }
 
   void closeStudentDetail() {
-    setState(() => selectedStudentDetail = null);
+    setState(() {
+      selectedStudentDetail = null;
+      studentDetailMaximized = false;
+    });
   }
 
   void openStudentDetail(StudentModel student) {
-    setState(() => selectedStudentDetail = student);
+    setState(() {
+      selectedStudentDetail = student;
+      studentDetailMaximized = false;
+    });
   }
 
   void closeFacultyDetail() {
-    setState(() => selectedFacultyDetail = null);
+    setState(() {
+      selectedFacultyDetail = null;
+      facultyDetailMaximized = false;
+    });
   }
 
   void openFacultyDetail(FacultyModel faculty) {
-    setState(() => selectedFacultyDetail = faculty);
+    setState(() {
+      selectedFacultyDetail = faculty;
+      facultyDetailMaximized = false;
+    });
+  }
+
+  void closeCourseDetail() {
+    setState(() {
+      selectedCourseDetail = null;
+      courseDetailMaximized = false;
+    });
+  }
+
+  void openCourseDetail(CourseModel course) {
+    setState(() {
+      selectedCourseDetail = course;
+      courseDetailMaximized = false;
+    });
+  }
+
+  void _onCourseDetailUpdated(CourseModel updated) {
+    setState(() => selectedCourseDetail = updated);
   }
 
   bool _isSelectedStudent(StudentModel student) {
@@ -190,6 +233,40 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     return faculty.facultyId == selected.facultyId;
   }
 
+  bool _isSelectedCourse(CourseModel course) {
+    final selected = selectedCourseDetail;
+    if (selected == null) {
+      return false;
+    }
+    return course.id == selected.id;
+  }
+
+  List<FacultyModel> _assignedFacultyForCourse(CourseModel course) {
+    final String facultyField = course.faculty.trim();
+    if (facultyField.isEmpty) {
+      return const [];
+    }
+    return facultyList.where((f) {
+      return f.fullName == facultyField ||
+          f.facultyId == facultyField ||
+          facultyField.contains(f.fullName) ||
+          facultyField.contains(f.facultyId);
+    }).toList();
+  }
+
+  List<StudentModel> _enrolledStudentsForCourse(CourseModel course) {
+    final Set<String> enrolledIds = course.enrolledStudentIds.toSet();
+    if (enrolledIds.isEmpty) {
+      return const [];
+    }
+    return studentList.where((student) {
+      final String key = student.documentId?.isNotEmpty == true
+          ? student.documentId!
+          : student.studentId;
+      return enrolledIds.contains(key);
+    }).toList();
+  }
+
   Key _studentDetailKey(StudentModel student) {
     return ValueKey<String>(
       student.documentId?.isNotEmpty == true
@@ -204,6 +281,10 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
           ? faculty.documentId!
           : faculty.facultyId,
     );
+  }
+
+  Key _courseDetailKey(CourseModel course) {
+    return ValueKey<String>(course.id);
   }
 
   Future<void> refresh() async {
@@ -2924,6 +3005,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         selectedMenuIndex = 0;
                         selectedStudentDetail = null;
                         selectedFacultyDetail = null;
+                        selectedCourseDetail = null;
                       }),
                     ),
                     const SizedBox(height: 8),
@@ -2935,6 +3017,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       onTap: () => setState(() {
                         selectedMenuIndex = 1;
                         selectedFacultyDetail = null;
+                        selectedCourseDetail = null;
                       }),
                     ),
                     const SizedBox(height: 8),
@@ -2947,6 +3030,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         selectedMenuIndex = 2;
                         selectedStudentDetail = null;
                         selectedFacultyDetail = null;
+                        selectedCourseDetail = null;
                       }),
                     ),
                     const SizedBox(height: 8),
@@ -2959,6 +3043,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         selectedMenuIndex = 3;
                         selectedStudentDetail = null;
                         selectedFacultyDetail = null;
+                        selectedCourseDetail = null;
                       }),
                     ),
                     const SizedBox(height: 8),
@@ -2971,6 +3056,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         selectedMenuIndex = 4;
                         selectedStudentDetail = null;
                         selectedFacultyDetail = null;
+                        selectedCourseDetail = null;
                       }),
                     ),
                     const SizedBox(height: 8),
@@ -3540,6 +3626,10 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       return buildStudentTable();
     }
 
+    if (studentDetailMaximized) {
+      return _buildStudentDetailPanel(maximized: true);
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
         const double dividerWidth = 10;
@@ -3556,16 +3646,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
               _buildStudentPanelDivider(constraints.maxWidth),
               Expanded(
                 flex: 4,
-                child: PersonDetailPage(
-                  key: _studentDetailKey(selectedStudentDetail!),
-                  person: selectedStudentDetail!,
-                  isStudent: true,
-                  embedded: true,
-                  onClose: closeStudentDetail,
-                  onEditStudent: () => openCreateStudentSheet(
-                    studentToEdit: selectedStudentDetail!,
-                  ),
-                ),
+                child: _buildStudentDetailPanel(maximized: false),
               ),
             ],
           );
@@ -3580,20 +3661,30 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
             SizedBox(width: listWidth, child: buildStudentTable()),
             _buildStudentPanelDivider(constraints.maxWidth),
             Expanded(
-              child: PersonDetailPage(
-                key: _studentDetailKey(selectedStudentDetail!),
-                person: selectedStudentDetail!,
-                isStudent: true,
-                embedded: true,
-                onClose: closeStudentDetail,
-                onEditStudent: () => openCreateStudentSheet(
-                  studentToEdit: selectedStudentDetail!,
-                ),
-              ),
+              child: _buildStudentDetailPanel(maximized: false),
             ),
           ],
         );
       },
+    );
+  }
+
+  Widget _buildStudentDetailPanel({required bool maximized}) {
+    return PersonDetailPage(
+      key: _studentDetailKey(selectedStudentDetail!),
+      person: selectedStudentDetail!,
+      isStudent: true,
+      embedded: true,
+      embeddedMaximized: maximized,
+      onClose: closeStudentDetail,
+      onMaximize:
+          maximized ? null : () => setState(() => studentDetailMaximized = true),
+      onBackFromMaximized: maximized
+          ? () => setState(() => studentDetailMaximized = false)
+          : null,
+      onEditStudent: () => openCreateStudentSheet(
+        studentToEdit: selectedStudentDetail!,
+      ),
     );
   }
 
@@ -3629,6 +3720,10 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       return buildFacultyTable();
     }
 
+    if (facultyDetailMaximized) {
+      return _buildFacultyDetailPanel(maximized: true);
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
         const double dividerWidth = 10;
@@ -3645,13 +3740,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
               _buildFacultyPanelDivider(constraints.maxWidth),
               Expanded(
                 flex: 4,
-                child: PersonDetailPage(
-                  key: _facultyDetailKey(selectedFacultyDetail!),
-                  person: selectedFacultyDetail!,
-                  isStudent: false,
-                  embedded: true,
-                  onClose: closeFacultyDetail,
-                ),
+                child: _buildFacultyDetailPanel(maximized: false),
               ),
             ],
           );
@@ -3666,17 +3755,27 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
             SizedBox(width: listWidth, child: buildFacultyTable()),
             _buildFacultyPanelDivider(constraints.maxWidth),
             Expanded(
-              child: PersonDetailPage(
-                key: _facultyDetailKey(selectedFacultyDetail!),
-                person: selectedFacultyDetail!,
-                isStudent: false,
-                embedded: true,
-                onClose: closeFacultyDetail,
-              ),
+              child: _buildFacultyDetailPanel(maximized: false),
             ),
           ],
         );
       },
+    );
+  }
+
+  Widget _buildFacultyDetailPanel({required bool maximized}) {
+    return PersonDetailPage(
+      key: _facultyDetailKey(selectedFacultyDetail!),
+      person: selectedFacultyDetail!,
+      isStudent: false,
+      embedded: true,
+      embeddedMaximized: maximized,
+      onClose: closeFacultyDetail,
+      onMaximize:
+          maximized ? null : () => setState(() => facultyDetailMaximized = true),
+      onBackFromMaximized: maximized
+          ? () => setState(() => facultyDetailMaximized = false)
+          : null,
     );
   }
 
@@ -3711,7 +3810,100 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     if (!coursesLoaded) {
       return const Center(child: CircularProgressIndicator());
     }
-    return buildCourseTable();
+
+    if (selectedCourseDetail == null) {
+      return buildCourseTable();
+    }
+
+    if (courseDetailMaximized) {
+      return _buildCourseDetailPanel(maximized: true);
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const double dividerWidth = 10;
+        const double minListWidth = 360;
+        const double minDetailWidth = 320;
+        final double availableWidth =
+            (constraints.maxWidth - dividerWidth).clamp(0, double.infinity);
+
+        if (availableWidth <= minListWidth + minDetailWidth) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(flex: 5, child: buildCourseTable()),
+              _buildCoursePanelDivider(constraints.maxWidth),
+              Expanded(
+                flex: 4,
+                child: _buildCourseDetailPanel(maximized: false),
+              ),
+            ],
+          );
+        }
+
+        final double listWidth = (availableWidth * courseListPanelRatio)
+            .clamp(minListWidth, availableWidth - minDetailWidth);
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(width: listWidth, child: buildCourseTable()),
+            _buildCoursePanelDivider(constraints.maxWidth),
+            Expanded(
+              child: _buildCourseDetailPanel(maximized: false),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCourseDetailPanel({required bool maximized}) {
+    return CourseDetailPage(
+      key: _courseDetailKey(selectedCourseDetail!),
+      course: selectedCourseDetail!,
+      allStudents: studentList,
+      assignedFaculty: _assignedFacultyForCourse(selectedCourseDetail!),
+      enrolledStudents: _enrolledStudentsForCourse(selectedCourseDetail!),
+      studentAvatarBuilder: (student, {radius = 18}) =>
+          _buildStudentAvatar(student, radius: radius),
+      embedded: true,
+      embeddedMaximized: maximized,
+      onClose: closeCourseDetail,
+      onMaximize:
+          maximized ? null : () => setState(() => courseDetailMaximized = true),
+      onBackFromMaximized: maximized
+          ? () => setState(() => courseDetailMaximized = false)
+          : null,
+      onCourseUpdated: _onCourseDetailUpdated,
+    );
+  }
+
+  Widget _buildCoursePanelDivider(double totalWidth) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeColumn,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragUpdate: (details) {
+          setState(() {
+            courseListPanelRatio += details.delta.dx / totalWidth;
+            courseListPanelRatio = courseListPanelRatio.clamp(0.3, 0.7);
+          });
+        },
+        child: Container(
+          width: 10,
+          child: Center(
+            child: Container(
+              width: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD8E2F4),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildSettingsView() {
@@ -4327,7 +4519,6 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       photoUrl: normalizedUrl,
       fallbackInitial: initial,
       radius: radius,
-      preferCachedNetworkImage: true,
     );
   }
 
@@ -5406,22 +5597,30 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                 Widget dataCell(
                                   Widget child, {
                                   Alignment alignment = Alignment.center,
+                                  Color? backgroundColor,
+                                  VoidCallback? onTap,
                                 }) {
-                                  return Container(
-                                    height: dataRowHeight,
-                                    alignment: alignment,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 8,
+                                  return GestureDetector(
+                                    onTap: onTap,
+                                    behavior: HitTestBehavior.opaque,
+                                    child: Container(
+                                      height: dataRowHeight,
+                                      alignment: alignment,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 8,
+                                      ),
+                                      color: backgroundColor ?? Colors.white,
+                                      child: child,
                                     ),
-                                    color: Colors.white,
-                                    child: child,
                                   );
                                 }
 
                                 Widget numericDataCell(
                                   int value, {
                                   bool boldWhenNonZero = false,
+                                  Color? backgroundColor,
+                                  VoidCallback? onTap,
                                 }) {
                                   return dataCell(
                                     smcText(
@@ -5432,12 +5631,16 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                       colorOfText: const Color(0xFF2E3954),
                                       maxLines: 1,
                                     ),
+                                    backgroundColor: backgroundColor,
+                                    onTap: onTap,
                                   );
                                 }
 
                                 Widget textDataCell(
                                   String value, {
                                   bool boldWhenNonEmpty = false,
+                                  Color? backgroundColor,
+                                  VoidCallback? onTap,
                                 }) {
                                   final String display = cellText(value);
                                   final bool emphasize = boldWhenNonEmpty &&
@@ -5451,6 +5654,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                       colorOfText: const Color(0xFF2E3954),
                                       maxLines: 2,
                                     ),
+                                    backgroundColor: backgroundColor,
+                                    onTap: onTap,
                                   );
                                 }
 
@@ -5612,6 +5817,11 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                     final int index = entry.key;
                                     final CourseModel c = entry.value;
                                     final int serialNo = startIndex + index + 1;
+                                    final bool isSelected = _isSelectedCourse(c);
+                                    final Color rowColor = isSelected
+                                        ? const Color(0xFFE8F0FE)
+                                        : Colors.white;
+                                    void selectCourse() => openCourseDetail(c);
 
                                     return TableRow(
                                       children: [
@@ -5621,6 +5831,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                             textSize: 12,
                                             colorOfText: const Color(0xFF2E3954),
                                           ),
+                                          backgroundColor: rowColor,
+                                          onTap: selectCourse,
                                         ),
                                         dataCell(
                                           smcText(
@@ -5629,6 +5841,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                             colorOfText: const Color(0xFF2E3954),
                                             maxLines: 1,
                                           ),
+                                          backgroundColor: rowColor,
+                                          onTap: selectCourse,
                                         ),
                                         dataCell(
                                           smcText(
@@ -5637,6 +5851,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                             colorOfText: const Color(0xFF2E3954),
                                             maxLines: 1,
                                           ),
+                                          backgroundColor: rowColor,
+                                          onTap: selectCourse,
                                         ),
                                         dataCell(
                                           Container(
@@ -5658,6 +5874,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                               maxLines: 1,
                                             ),
                                           ),
+                                          backgroundColor: rowColor,
+                                          onTap: selectCourse,
                                         ),
                                         dataCell(
                                           smcText(
@@ -5668,6 +5886,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                             maxLines: 1,
                                           ),
                                           alignment: Alignment.centerLeft,
+                                          backgroundColor: rowColor,
+                                          onTap: selectCourse,
                                         ),
                                         dataCell(
                                           smcText(
@@ -5677,6 +5897,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                             maxLines: 2,
                                           ),
                                           alignment: Alignment.centerLeft,
+                                          backgroundColor: rowColor,
+                                          onTap: selectCourse,
                                         ),
                                         dataCell(
                                           smcText(
@@ -5685,42 +5907,62 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                             colorOfText: const Color(0xFF2E3954),
                                             maxLines: 1,
                                           ),
+                                          backgroundColor: rowColor,
+                                          onTap: selectCourse,
                                         ),
                                         numericDataCell(
                                           c.lectureHrs,
                                           boldWhenNonZero: true,
+                                          backgroundColor: rowColor,
+                                          onTap: selectCourse,
                                         ),
                                         numericDataCell(
                                           c.tutorialHrs,
                                           boldWhenNonZero: true,
+                                          backgroundColor: rowColor,
+                                          onTap: selectCourse,
                                         ),
                                         numericDataCell(
                                           c.practicalHrs,
                                           boldWhenNonZero: true,
+                                          backgroundColor: rowColor,
+                                          onTap: selectCourse,
                                         ),
                                         numericDataCell(
                                           c.othersHrs,
                                           boldWhenNonZero: true,
+                                          backgroundColor: rowColor,
+                                          onTap: selectCourse,
                                         ),
                                         numericDataCell(
                                           c.cieMarks,
                                           boldWhenNonZero: true,
+                                          backgroundColor: rowColor,
+                                          onTap: selectCourse,
                                         ),
                                         textDataCell(
                                           c.seeExamDuration,
                                           boldWhenNonEmpty: true,
+                                          backgroundColor: rowColor,
+                                          onTap: selectCourse,
                                         ),
                                         numericDataCell(
                                           c.seeTheoryMarks,
                                           boldWhenNonZero: true,
+                                          backgroundColor: rowColor,
+                                          onTap: selectCourse,
                                         ),
                                         numericDataCell(
                                           c.seeLabMarks,
                                           boldWhenNonZero: true,
+                                          backgroundColor: rowColor,
+                                          onTap: selectCourse,
                                         ),
                                         numericDataCell(
                                           c.totalMarks,
                                           boldWhenNonZero: true,
+                                          backgroundColor: rowColor,
+                                          onTap: selectCourse,
                                         ),
                                       ],
                                     );
@@ -5824,13 +6066,19 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                             color: Colors.white,
                             border: Border(top: BorderSide(color: Color(0xFFE3EAF8))),
                           ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              smcText(
-                                textToDisplay: totalRows == 0
-                                    ? 'Showing 0 entries'
-                                    : 'Showing ${startIndex + 1} to $endIndex of $totalRows entries',
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              return SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      smcText(
+                                        textToDisplay: totalRows == 0
+                                            ? 'Showing 0 entries'
+                                            : 'Showing ${startIndex + 1} to $endIndex of $totalRows entries',
                                         textSize: 12,
                                         colorOfText: const Color(0xFF7D87A3),
                                       ),
@@ -5898,7 +6146,11 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                             : null,
                                         icon: const Icon(Icons.last_page_rounded),
                                       ),
-                            ],
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ],
@@ -6544,7 +6796,6 @@ class _StudentPhotoAvatar extends StatefulWidget {
     this.radius = 18,
     this.previewWidth,
     this.previewHeight,
-    this.preferCachedNetworkImage = false,
   });
 
   final String photoUrl;
@@ -6552,7 +6803,6 @@ class _StudentPhotoAvatar extends StatefulWidget {
   final double radius;
   final double? previewWidth;
   final double? previewHeight;
-  final bool preferCachedNetworkImage;
 
   bool get isPreview => previewWidth != null && previewHeight != null;
 
@@ -6598,17 +6848,6 @@ class _StudentPhotoAvatarState extends State<_StudentPhotoAvatar> {
       if (mounted) {
         setState(() => _loading = false);
       }
-      return;
-    }
-
-    if (widget.preferCachedNetworkImage) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _loading = false;
-        _useCachedNetworkImage = true;
-      });
       return;
     }
 
