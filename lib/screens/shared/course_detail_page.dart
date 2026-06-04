@@ -1,5 +1,5 @@
 import 'dart:typed_data';
-
+import 'package:smartcampus/screens/shared/course_enrollment_excel_review_page.dart';
 import 'package:excel/excel.dart' as excel;
 import 'package:file_picker/file_picker.dart';
 import 'package:file_saver/file_saver.dart';
@@ -1342,52 +1342,82 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
         allowedExtensions: const ['xlsx'],
         withData: true,
       );
+
       if (result == null || result.files.isEmpty) {
         return;
       }
 
       final Uint8List? bytes = result.files.single.bytes;
+
       if (bytes == null || bytes.isEmpty) {
         if (!mounted) return;
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not read the selected Excel file.')),
+          const SnackBar(
+            content: Text(
+              'Could not read the selected Excel file.',
+            ),
+          ),
         );
         return;
       }
 
-      final excel.Excel workbook = excel.Excel.decodeBytes(bytes);
+      final excel.Excel workbook =
+      excel.Excel.decodeBytes(bytes);
+
       if (workbook.tables.isEmpty) {
         if (!mounted) return;
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No sheets found in the Excel file.')),
+          const SnackBar(
+            content: Text(
+              'No sheets found in the Excel file.',
+            ),
+          ),
         );
         return;
       }
 
-      final excel.Sheet sheet = workbook.tables.values.first;
+      final excel.Sheet sheet =
+          workbook.tables.values.first;
+
       if (sheet.rows.length <= 1) {
         if (!mounted) return;
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No student IDs found in the Excel file.')),
+          const SnackBar(
+            content: Text(
+              'No student IDs found in the Excel file.',
+            ),
+          ),
         );
         return;
       }
 
       final Map<String, StudentModel> availableById = {
-        for (final StudentModel student in _availableStudentsForEnrollment)
+        for (final StudentModel student
+        in _availableStudentsForEnrollment)
           student.studentId.trim().toUpperCase(): student,
       };
 
-      final List<StudentModel> matched = <StudentModel>[];
-      final Set<String> seenIds = <String>{};
+      final List<StudentModel> matched = [];
+
+      final Set<String> seenIds = {};
+
       for (int i = 1; i < sheet.rows.length; i++) {
         final List<excel.Data?> row = sheet.rows[i];
+
         final String studentId =
             row[0]?.value?.toString().trim().toUpperCase() ?? '';
-        if (studentId.isEmpty || seenIds.contains(studentId)) {
+
+        if (studentId.isEmpty ||
+            seenIds.contains(studentId)) {
           continue;
         }
-        final StudentModel? student = availableById[studentId];
+
+        final StudentModel? student =
+        availableById[studentId];
+
         if (student != null) {
           matched.add(student);
           seenIds.add(studentId);
@@ -1396,19 +1426,57 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
 
       if (matched.isEmpty) {
         if (!mounted) return;
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('No matching unenrolled students found in the Excel file.'),
+            content: Text(
+              'No matching unenrolled students found in the Excel file.',
+            ),
           ),
         );
         return;
       }
 
-      await _enrollStudents(matched);
+      if (!mounted) return;
+
+      final bool? enrolled =
+      await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              CourseEnrollmentExcelReviewPage(
+                course: _course,
+                students: matched,
+                studentAvatarBuilder:
+                widget.studentAvatarBuilder,
+              ),
+        ),
+      );
+
+      if (enrolled == true) {
+        final List<String> keys =
+        matched.map(_studentKey).toList();
+
+        final List<String> updatedIds = {
+          ..._course.enrolledStudentIds,
+          ...keys,
+        }.toList();
+
+        widget.onCourseUpdated?.call(
+          _course.copyWith(
+            enrolledStudentIds: updatedIds,
+          ),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to import enrollments: $e')),
+        SnackBar(
+          content: Text(
+            'Failed to import enrollments: $e',
+          ),
+        ),
       );
     }
   }
