@@ -405,69 +405,32 @@ class _CourseEnrollmentExcelReviewPageState
 
                 const SizedBox(width: 12),
 
-                // ElevatedButton(
-                //   onPressed: _loading
-                //       ? null
-                //       : _enrollSelectedStudents,
-                //
-                //   style:
-                //   ElevatedButton.styleFrom(
-                //     backgroundColor:
-                //     const Color(
-                //         0xFFEDEEFF),
-                //     foregroundColor:
-                //     const Color(
-                //         0xFF5065C8),
-                //     elevation: 0,
-                //     minimumSize:
-                //     const Size(
-                //       160,
-                //       50,
-                //     ),
-                //     shape:
-                //     RoundedRectangleBorder(
-                //       borderRadius:
-                //       BorderRadius
-                //           .circular(
-                //         30,
-                //       ),
-                //     ),
-                //   ),
-                //
-                //   child: _loading
-                //       ? const SizedBox(
-                //     width: 20,
-                //     height: 20,
-                //     child:
-                //     CircularProgressIndicator(
-                //       strokeWidth:
-                //       2,
-                //     ),
-                //   )
-                //       : const Text(
-                //     'Enroll students',
-                //
-                //   ),
-                // ),
-                OutlinedButton(
+                ElevatedButton(
                   onPressed: _loading
                       ? null
                       : _enrollSelectedStudents,
 
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(
+                  style:
+                  ElevatedButton.styleFrom(
+                    backgroundColor:
+                    const Color(
+                        0xFFEDEEFF),
+                    foregroundColor:
+                    const Color(
+                        0xFF5065C8),
+                    elevation: 0,
+                    minimumSize:
+                    const Size(
                       160,
                       50,
                     ),
-
-                    side: const BorderSide(
-                      color: ColorConst.primaryBlue,
-                      width: 1.5,
-                    ),
-
-                    shape: RoundedRectangleBorder(
+                    shape:
+                    RoundedRectangleBorder(
                       borderRadius:
-                      BorderRadius.circular(30),
+                      BorderRadius
+                          .circular(
+                        30,
+                      ),
                     ),
                   ),
 
@@ -475,18 +438,17 @@ class _CourseEnrollmentExcelReviewPageState
                       ? const SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
+                    child:
+                    CircularProgressIndicator(
+                      strokeWidth:
+                      2,
                     ),
                   )
                       : const Text(
-                    'Enroll Students',
-                    style: TextStyle(
-                      color: ColorConst.primaryBlue,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    'Enroll students',
+
                   ),
-                )
+                ),
               ],
             ),
           ],
