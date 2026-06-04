@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:smartcampus/data/org_field.dart';
 import 'package:smartcampus/data/student_model.dart';
 
 /// Handles all Firestore operations for the smcStudentMaster collection.
@@ -14,12 +15,18 @@ class StudentFirestoreService {
 
   /// Saves a new student record. Throws if [studentId] already exists for
   /// this [orgId].
+  static String normalizeOrgId(String orgId) => OrgField.normalize(orgId);
+
+  static String normalizeDeptId(String deptId) => OrgField.normalize(deptId);
+
   Future<void> createStudent(StudentModel student) async {
+    final orgId = normalizeOrgId(student.orgId);
+    final deptId = normalizeDeptId(student.deptId);
 
     final existing = await _db
         .collection(_collection)
         .where('student_id', isEqualTo: student.studentId)
-        .where('org_id', isEqualTo: student.orgId)
+        .where(OrgField.orgIdKey, isEqualTo: orgId)
         .limit(1)
         .get();
 
@@ -29,20 +36,22 @@ class StudentFirestoreService {
       );
     }
 
-    await _db.collection(_collection).add(student.toMap());
+    await _db.collection(_collection).add(
+          student.copyWith(orgId: orgId, deptId: deptId).toMap(),
+        );
   }
 
   // ── Read ───────────────────────────────────────────────────────
 
-  /// Returns all students for a given department within an organisation.
-  Future<List<StudentModel>> listStudentsForDept({
-    required String orgId,
-    required String deptId,
-  }) async {
+  /// Organisation-wide students — scoped by [org_id] only.
+  Future<List<StudentModel>> listStudentsForOrg(String orgId) async {
+    final orgNorm = normalizeOrgId(orgId);
+    if (orgNorm.isEmpty) {
+      return const [];
+    }
     final snap = await _db
         .collection(_collection)
-        .where('org_id', isEqualTo: orgId)
-        .where('dept_id', isEqualTo: deptId)
+        .where(OrgField.orgIdKey, isEqualTo: orgNorm)
         .get();
 
     return snap.docs
@@ -50,16 +59,12 @@ class StudentFirestoreService {
         .toList();
   }
 
-  /// Returns all students for a given organisation (all departments).
-  Future<List<StudentModel>> listStudentsForOrg(String orgId) async {
-    final snap = await _db
-        .collection(_collection)
-        .where('org_id', isEqualTo: orgId)
-        .get();
-
-    return snap.docs
-        .map((d) => StudentModel.fromMap(d.data(), documentId: d.id))
-        .toList();
+  /// Alias kept for call sites — uses [org_id] only (ignores department).
+  Future<List<StudentModel>> listStudentsForDept({
+    required String orgId,
+    String deptId = '',
+  }) {
+    return listStudentsForOrg(orgId);
   }
 
   // ── Update ─────────────────────────────────────────────────────
@@ -69,20 +74,25 @@ class StudentFirestoreService {
     required String documentId,
     required StudentModel updated,
   }) async {
+    final orgId = normalizeOrgId(updated.orgId);
+    final deptId = normalizeDeptId(updated.deptId);
     await _db
         .collection(_collection)
         .doc(documentId)
-        .set(updated.toMap(), SetOptions(merge: true));
+        .set(
+          updated.copyWith(orgId: orgId, deptId: deptId).toMap(),
+          SetOptions(merge: true),
+        );
   }
 
   Future<StudentModel?> findStudent({
     required String orgId,
     required String studentId,
   }) async {
-
+    final orgUpper = normalizeOrgId(orgId);
     final snap = await _db
         .collection(_collection)
-        .where('org_id', isEqualTo: orgId)
+        .where(OrgField.orgIdKey, isEqualTo: orgUpper)
         .where('student_id', isEqualTo: studentId)
         .limit(1)
         .get();

@@ -7,7 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:smartcampus/const/color_const.dart';
+import 'package:smartcampus/data/org_field.dart';
 import 'package:smartcampus/data/mock_master_data.dart';
+import 'package:smartcampus/data/user_org_scope.dart';
 import 'package:smartcampus/data/faculty_model.dart';
 import 'package:smartcampus/data/student_model.dart';
 import 'package:smartcampus/screens/auth/landing_page.dart';
@@ -16,10 +18,12 @@ import 'package:smartcampus/screens/shared/person_detail_page.dart';
 import 'package:smartcampus/services/faculty_firestore_service.dart';
 import 'package:smartcampus/services/student_firestore_service.dart';
 import 'package:smartcampus/services/org_role_firestore_service.dart';
+import 'package:smartcampus/widgets/department_form_sheet.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 import 'package:smartcampus/models/course_model.dart';
 import 'package:smartcampus/services/course_firestore_service.dart';
 import 'dart:typed_data';
+import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' as excel;
 import 'package:smartcampus/widgets/student_import_dialog.dart';
@@ -58,7 +62,6 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   bool loading = true;
   int selectedMenuIndex = 0; // 0: Dashboard, 1: Students, 2: Faculties, 3: Courses, 4: Users, 5: Settings
   int selectedSettingsFilter = 0; // 0: Course Types, 1: Batches, 2: Schemes
-  List<OrgUserRoleMappingItem> facultyAndStudents = [];
   List<DepartmentMasterItem> departments = [];
   List<FacultyModel> facultyList = [];
   List<StudentModel> studentList = [];
@@ -70,6 +73,39 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   int totalCourses = 0;
   String organizationDisplayName = '';
   bool canEditOrDelete = false;
+  UserOrgScope? _orgScope;
+  StreamSubscription<List<CourseModel>>? _courseSubscription;
+
+  String get scopedOrgId =>
+      _orgScope?.orgId ?? OrgField.normalize(widget.orgId);
+
+  String get scopedDeptId =>
+      _orgScope?.deptId ?? OrgField.normalize(widget.deptId);
+
+  void _bindScopedCourseListener() {
+    _courseSubscription?.cancel();
+    final scope = _orgScope;
+    if (scope == null || !scope.hasOrg) {
+      return;
+    }
+    _courseSubscription = courseService
+        .getCoursesForOrg(orgId: scope.orgId)
+        .listen((courses) {
+      if (!mounted) return;
+      setState(() {
+        courseList = courses;
+        totalCourses = courses.length;
+        coursesLoaded = true;
+        if (selectedCourseDetail != null) {
+          final Iterable<CourseModel> match =
+              courses.where((c) => c.id == selectedCourseDetail!.id);
+          if (match.isNotEmpty) {
+            selectedCourseDetail = match.first;
+          }
+        }
+      });
+    });
+  }
 
   Stream<QuerySnapshot> getCoursesStream() {
 
@@ -117,21 +153,6 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   void initState() {
     super.initState();
     refresh();
-    courseService.getCourses().listen((courses) {
-      if (!mounted) return;
-      setState(() {
-        courseList = courses;
-        totalCourses = courses.length;
-        coursesLoaded = true;
-        if (selectedCourseDetail != null) {
-          final Iterable<CourseModel> match =
-              courses.where((c) => c.id == selectedCourseDetail!.id);
-          if (match.isNotEmpty) {
-            selectedCourseDetail = match.first;
-          }
-        }
-      });
-    });
     settingsService.getItems('smccourseType').listen((items) {
       if (!mounted) return;
       setState(() => courseTypes = items);
@@ -162,6 +183,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     courseSearchController.dispose();
     courseTableHorizontalScrollController.dispose();
     courseTableVerticalScrollController.dispose();
+    _courseSubscription?.cancel();
     super.dispose();
   }
 
@@ -295,50 +317,55 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     setState(() => loading = true);
     try {
       final currentUser = FirebaseAuth.instance.currentUser;
-      final people = await roleService.listFacultyAndStudentsForOrg(widget.orgId);
-      final depts = await roleService.loadDepartmentsForOrg(widget.orgId);
-      final org = await roleService.authService.getOrganizationById(widget.orgId);
+      UserOrgScope? scope;
+      scope = await userMasterService.resolveOrgScopeForSignedInUser();
+      scope ??= UserOrgScope(
+        orgId: OrgField.normalize(widget.orgId),
+        deptId: OrgField.normalize(widget.deptId),
+      );
+      _orgScope = scope;
+      _bindScopedCourseListener();
+
+      final depts = await roleService.loadDepartmentsForOrg(scope.orgId);
+      final org = await roleService.authService.getOrganizationById(scope.orgId);
       final faculty = await facultyService.listFacultyForDept(
-        orgId: widget.orgId,
-        deptId: widget.deptId,
+        orgId: scope.orgId,
+        deptId: scope.deptId,
       );
       final students = await studentService.listStudentsForDept(
-        orgId: widget.orgId,
-        deptId: widget.deptId,
+        orgId: scope.orgId,
+        deptId: scope.deptId,
       );
 
       bool allowed = false;
       if (currentUser != null) {
-        // 1. Check if creator of the department
-        final currentDept = depts.where((d) => d.deptId == widget.deptId).firstOrNull;
+        final currentDept =
+            depts.where((d) => d.deptId == scope!.deptId).firstOrNull;
         if (currentDept != null && currentDept.createdBy == currentUser.uid) {
           allowed = true;
         } else {
-          // 2. Check if user has DEPT_ADMIN role for this specific department
-          final mappings = await roleService.getAllRoleMappingsForUuid(currentUser.uid);
-          allowed = mappings.any((m) =>
-              m.normalizedRoleId == 'DEPT_ADMIN' &&
-              m.orgId.toUpperCase() == widget.orgId.toUpperCase() &&
-              m.deptId.toUpperCase() == widget.deptId.toUpperCase()
-          );
+          final userMaster = await userMasterService.getSignedInUserMaster();
+          allowed = userMaster != null &&
+              userMaster.normalizedUserRole == 'DEPT_ADMIN' &&
+              userMaster.isApproved &&
+              userMaster.orgId == scope.orgId &&
+              userMaster.deptId == scope.deptId;
         }
       }
 
       if (!mounted) return;
       setState(() {
         canEditOrDelete = allowed;
-        facultyAndStudents = people;
         departments = depts;
         facultyList = faculty;
         studentList = students;
         organizationDisplayName =
-        (org?.orgName ?? '').trim().isEmpty ? widget.orgId : org!.orgName;
+            (org?.orgName ?? '').trim().isEmpty ? scope!.orgId : org!.orgName;
         loading = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        facultyAndStudents = [];
         loading = false;
       });
     }
@@ -395,8 +422,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
             emergencyContactRelation: row[13]?.value.toString() ?? '',
             emergencyContactMobile: row[14]?.value.toString() ?? '',
             photographUrl: '',
-            orgId: widget.orgId,
-            deptId: widget.deptId,
+            orgId: scopedOrgId,
+            deptId: scopedDeptId,
             createdOn: DateTime.now().toIso8601String(),
           );
 
@@ -958,6 +985,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
                   final course = CourseModel(
                     id: '',
+                    orgId: scopedOrgId,
                     batch: selectedScheme ?? '',
                     semester: selectedSemester ?? '',
                     courseTitle: courseTitleCtrl.text.trim(),
@@ -1149,6 +1177,52 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         ],
       ),
     );
+  }
+
+  DepartmentMasterItem? get currentDepartment {
+    final target = scopedDeptId.trim().toUpperCase();
+    for (final dept in departments) {
+      if (dept.deptId.trim().toUpperCase() == target) {
+        return dept;
+      }
+    }
+    return null;
+  }
+
+  Future<void> openEditCurrentDepartmentSheet() async {
+    final dept = currentDepartment;
+    if (dept == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: smcText(
+            textToDisplay: 'Department details could not be loaded.',
+            textSize: 14,
+            colorOfText: Colors.white,
+          ),
+        ),
+      );
+      return;
+    }
+    final saved = await showDepartmentFormSheet(
+      context: context,
+      roleService: roleService,
+      orgId: scopedOrgId,
+      department: dept,
+      lockDeptId: true,
+    );
+    if (!mounted || !saved) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: smcText(
+          textToDisplay: 'Department updated successfully.',
+          textSize: 14,
+          colorOfText: Colors.white,
+        ),
+      ),
+    );
+    await refresh();
   }
 
   // ── Assign Department sheet (existing) ────────────────────────
@@ -1497,8 +1571,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                 emergencyContactName: emergNameCtrl.text.trim(),
                 emergencyContactRelation: emergRelationCtrl.text.trim(),
                 emergencyContactMobile: emergMobileCtrl.text.trim(),
-                orgId: widget.orgId,
-                deptId: widget.deptId,
+                orgId: scopedOrgId,
+                deptId: scopedDeptId,
                 createdOn: studentToEdit?.createdOn ??
                     DateTime.now().toIso8601String(),
               );
@@ -2793,8 +2867,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                   emergRelationCtrl.text.trim(),
                               emergencyContactMobile:
                                   emergMobileCtrl.text.trim(),
-                              orgId: widget.orgId,
-                              deptId: widget.deptId,
+                              orgId: scopedOrgId,
+                              deptId: scopedDeptId,
                               photographUrl: photographUrl ?? '',
                               createdAt:
                                   facultyToEdit?.createdAt ??
@@ -3167,15 +3241,45 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   }
 
   Widget _buildDashboardView() {
+    final DepartmentMasterItem? dept = currentDepartment;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const smcText(
-          textToDisplay: 'Department Overview',
-          textSize: 16,
-          textBoldness: 5,
-          colorOfText: ColorConst.textPrimary,
+        Row(
+          children: [
+            const Expanded(
+              child: smcText(
+                textToDisplay: 'Department Overview',
+                textSize: 16,
+                textBoldness: 5,
+                colorOfText: ColorConst.textPrimary,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: openEditCurrentDepartmentSheet,
+              icon: const Icon(
+                Icons.edit_outlined,
+                size: 18,
+                color: ColorConst.primaryBlue,
+              ),
+              label: const smcText(
+                textToDisplay: 'Edit Department',
+                textSize: 13,
+                textBoldness: 4,
+                colorOfText: ColorConst.primaryBlue,
+              ),
+            ),
+          ],
         ),
+        if (dept != null && dept.deptAccessCode.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          smcText(
+            textToDisplay:
+                'Registration access code: ${dept.deptAccessCode}',
+            textSize: 13,
+            colorOfText: ColorConst.textSecondary,
+          ),
+        ],
         const SizedBox(height: 16),
         Expanded(
         child:Row(
@@ -3402,6 +3506,15 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
     final data =
     studentBatchCount.entries.toList();
+
+    if (data.isEmpty) {
+      return const Center(
+        child: Text(
+          'No Students',
+          style: TextStyle(fontSize: 12),
+        ),
+      );
+    }
 
     final maxValue =
     data.map((e) => e.value)
@@ -3930,8 +4043,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
   Widget _buildUserManagementView() {
     return DeptUserManagementView(
-      orgId: widget.orgId,
-      deptId: widget.deptId,
+      orgId: scopedOrgId,
+      deptId: scopedDeptId,
       onUsersChanged: refresh,
     );
   }
@@ -4672,8 +4785,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       await showDialog(
                         context: context,
                         builder: (_) => StudentImportDialog(
-                          orgId: widget.orgId,
-                          deptId: widget.deptId,
+                          orgId: scopedOrgId,
+                          deptId: scopedDeptId,
                         ),
                       );
 

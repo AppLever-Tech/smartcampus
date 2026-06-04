@@ -4,6 +4,7 @@ import 'package:smartcampus/const/color_const.dart';
 import 'package:smartcampus/data/mock_master_data.dart';
 import 'package:smartcampus/screens/auth/landing_page.dart';
 import 'package:smartcampus/services/org_role_firestore_service.dart';
+import 'package:smartcampus/widgets/department_form_sheet.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -1564,8 +1565,10 @@ class SystemAdminOrganizationDetailsPage extends StatefulWidget {
 class SystemAdminOrganizationDetailsPageState
     extends State<SystemAdminOrganizationDetailsPage> {
   List<UserMasterItem> allUsers = <UserMasterItem>[];
+  List<DepartmentMasterItem> departments = <DepartmentMasterItem>[];
   String? assigningUuid;
   bool loadingUsers = true;
+  bool loadingDepartments = true;
   final TextEditingController assigneeSearchController = TextEditingController();
   int selectedSectionIndex = 0;
 
@@ -1573,6 +1576,74 @@ class SystemAdminOrganizationDetailsPageState
   void initState() {
     super.initState();
     loadUsers();
+    loadDepartments();
+  }
+
+  Future<void> loadDepartments() async {
+    try {
+      final depts = await widget.roleService.loadDepartmentsForOrg(
+        widget.organization.orgId,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        departments = depts;
+        loadingDepartments = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        departments = <DepartmentMasterItem>[];
+        loadingDepartments = false;
+      });
+    }
+  }
+
+  Future<void> openCreateDepartmentSheet() async {
+    final saved = await showDepartmentFormSheet(
+      context: context,
+      roleService: widget.roleService,
+      orgId: widget.organization.orgId,
+    );
+    if (!mounted || !saved) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: smcText(
+          textToDisplay: 'Department saved successfully.',
+          textSize: 14,
+          colorOfText: Colors.white,
+        ),
+      ),
+    );
+    await loadDepartments();
+  }
+
+  Future<void> openEditDepartmentSheet(DepartmentMasterItem department) async {
+    final saved = await showDepartmentFormSheet(
+      context: context,
+      roleService: widget.roleService,
+      orgId: widget.organization.orgId,
+      department: department,
+      lockDeptId: true,
+    );
+    if (!mounted || !saved) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: smcText(
+          textToDisplay: 'Department updated successfully.',
+          textSize: 14,
+          colorOfText: Colors.white,
+        ),
+      ),
+    );
+    await loadDepartments();
   }
 
   Future<void> loadUsers() async {
@@ -1615,6 +1686,7 @@ class SystemAdminOrganizationDetailsPageState
       return target.contains(search);
     }).toList();
     final bool isBasicInfoSelected = selectedSectionIndex == 0;
+    final bool isDepartmentsSelected = selectedSectionIndex == 2;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
@@ -1695,10 +1767,21 @@ class SystemAdminOrganizationDetailsPageState
                     _buildSectionTile(
                       title: 'Add Assignee',
                       icon: Icons.person_add_alt_1_rounded,
-                      isSelected: !isBasicInfoSelected,
+                      isSelected: selectedSectionIndex == 1,
                       onTap: () {
                         setState(() {
                           selectedSectionIndex = 1;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _buildSectionTile(
+                      title: 'Departments',
+                      icon: Icons.account_tree_outlined,
+                      isSelected: isDepartmentsSelected,
+                      onTap: () {
+                        setState(() {
+                          selectedSectionIndex = 2;
                         });
                       },
                     ),
@@ -1709,7 +1792,9 @@ class SystemAdminOrganizationDetailsPageState
             Expanded(
               child: isBasicInfoSelected
                   ? _buildBasicInfoView(context)
-                  : _buildAssigneeView(filteredUsers),
+                  : isDepartmentsSelected
+                      ? _buildDepartmentsView()
+                      : _buildAssigneeView(filteredUsers),
             ),
           ],
         ),
@@ -1754,6 +1839,86 @@ class SystemAdminOrganizationDetailsPageState
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildDepartmentsView() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const smcText(
+                textToDisplay: 'Departments',
+                textSize: 34,
+                textBoldness: 5,
+                colorOfText: ColorConst.textPrimary,
+              ),
+              ElevatedButton.icon(
+                onPressed: openCreateDepartmentSheet,
+                icon: const Icon(Icons.add, color: Colors.white, size: 18),
+                label: const smcText(
+                  textToDisplay: 'Create Department',
+                  textSize: 14,
+                  colorOfText: Colors.white,
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ColorConst.primaryBlue,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const smcText(
+            textToDisplay:
+                'Manage departments and 4-digit access codes used during user registration.',
+            textSize: 14,
+            colorOfText: ColorConst.textSecondary,
+            maxLines: 2,
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: loadingDepartments
+                ? const Center(child: CircularProgressIndicator())
+                : departments.isEmpty
+                    ? const Center(
+                        child: smcText(
+                          textToDisplay: 'No departments added yet.',
+                          textSize: 15,
+                          colorOfText: ColorConst.textSecondary,
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: departments.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          final dept = departments[index];
+                          return Card(
+                            child: ListTile(
+                              leading: const CircleAvatar(
+                                child: Icon(Icons.account_tree),
+                              ),
+                              title: Text(dept.deptName),
+                              subtitle: Text(
+                                'ID: ${dept.deptId}'
+                                '${dept.deptAccessCode.isNotEmpty ? '  ·  Access code: ${dept.deptAccessCode}' : ''}',
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.edit_outlined),
+                                color: ColorConst.primaryBlue,
+                                onPressed: () => openEditDepartmentSheet(dept),
+                              ),
+                              onTap: () => openEditDepartmentSheet(dept),
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        ],
       ),
     );
   }

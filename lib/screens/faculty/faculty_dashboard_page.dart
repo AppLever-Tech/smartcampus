@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:smartcampus/const/color_const.dart';
 import 'package:smartcampus/data/faculty_model.dart';
+import 'package:smartcampus/data/org_field.dart';
+import 'package:smartcampus/data/user_org_scope.dart';
 import 'package:smartcampus/models/course_model.dart';
 import 'package:smartcampus/screens/auth/landing_page.dart';
 import 'package:smartcampus/screens/shared/course_detail_page.dart';
@@ -9,6 +13,7 @@ import 'package:smartcampus/screens/shared/person_detail_page.dart';
 import 'package:smartcampus/services/course_firestore_service.dart';
 import 'package:smartcampus/services/faculty_firestore_service.dart';
 import 'package:smartcampus/services/org_role_firestore_service.dart';
+import 'package:smartcampus/services/user_master_firestore_service.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 
 class FacultyDashboardPage extends StatefulWidget {
@@ -35,7 +40,18 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
   final OrgRoleFirestoreService roleService = OrgRoleFirestoreService();
   final FacultyFirestoreService facultyService = FacultyFirestoreService();
   final CourseFirestoreService courseService = CourseFirestoreService();
+  final UserMasterFirestoreService userMasterService =
+      UserMasterFirestoreService();
   final TextEditingController courseSearchController = TextEditingController();
+
+  UserOrgScope? _orgScope;
+  StreamSubscription<List<CourseModel>>? _courseSubscription;
+
+  String get scopedOrgId =>
+      _orgScope?.orgId ?? OrgField.normalize(widget.orgId);
+
+  String get scopedDeptId =>
+      _orgScope?.deptId ?? OrgField.normalize(widget.deptId);
 
   bool loading = true;
   bool coursesLoaded = false;
@@ -75,11 +91,15 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
     }).toList();
   }
 
-  @override
-  void initState() {
-    super.initState();
-    refresh();
-    courseService.getCourses().listen((courses) {
+  void _bindScopedCourseListener() {
+    _courseSubscription?.cancel();
+    final scope = _orgScope;
+    if (scope == null || !scope.hasOrg) {
+      return;
+    }
+    _courseSubscription = courseService
+        .getCoursesForOrg(orgId: scope.orgId)
+        .listen((courses) {
       if (!mounted) {
         return;
       }
@@ -98,30 +118,45 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    refresh();
+  }
+
+  @override
   void dispose() {
     courseSearchController.dispose();
+    _courseSubscription?.cancel();
     super.dispose();
   }
 
   Future<void> refresh() async {
     setState(() => loading = true);
     try {
+      final scope = await userMasterService.resolveOrgScopeForSignedInUser() ??
+          UserOrgScope(
+            orgId: OrgField.normalize(widget.orgId),
+            deptId: OrgField.normalize(widget.deptId),
+          );
+      _orgScope = scope;
+      _bindScopedCourseListener();
+
       final resolvedFaculty = await facultyService.resolveFacultyForUser(
-        orgId: widget.orgId,
-        deptId: widget.deptId,
+        orgId: scope.orgId,
+        deptId: scope.deptId,
         displayName: widget.displayName,
         uuid: widget.uuid,
         prefetched: widget.faculty,
       );
       final org =
-          await roleService.authService.getOrganizationById(widget.orgId);
-      String deptName = widget.deptId;
-      if (widget.deptId.isNotEmpty) {
+          await roleService.authService.getOrganizationById(scope.orgId);
+      String deptName = scope.deptId;
+      if (scope.deptId.isNotEmpty) {
         final departments =
-            await roleService.loadDepartmentsForOrg(widget.orgId);
+            await roleService.loadDepartmentsForOrg(scope.orgId);
         for (final dept in departments) {
-          if (dept.deptId.toUpperCase() == widget.deptId.toUpperCase()) {
-            deptName = dept.deptName.isNotEmpty ? dept.deptName : widget.deptId;
+          if (dept.deptId.toUpperCase() == scope.deptId) {
+            deptName = dept.deptName.isNotEmpty ? dept.deptName : scope.deptId;
             break;
           }
         }
@@ -132,7 +167,7 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
       setState(() {
         facultyProfile = resolvedFaculty;
         organizationDisplayName = (org?.orgName ?? '').trim().isEmpty
-            ? widget.orgId
+            ? scope.orgId
             : org!.orgName;
         departmentDisplayName = deptName;
         loading = false;

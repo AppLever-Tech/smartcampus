@@ -6,6 +6,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:pinput/pinput.dart';
 import 'package:smartcampus/const/color_const.dart';
 import 'package:smartcampus/data/mock_master_data.dart';
 import 'package:smartcampus/screens/auth/landing_page.dart';
@@ -66,7 +67,9 @@ class RegisterPageState extends State<RegisterPage> {
         '${firstNameController.text.trim()} ${lastNameController.text.trim()}'
             .trim();
     final normalizedUuid = firebaseAuthService.normalizeUuidForCompare(mobile);
-    final enteredDeptCode = deptCodeController.text.trim().toUpperCase();
+    final enteredAccessCode = OrgRoleFirestoreService.normalizeDeptAccessCode(
+      deptCodeController.text,
+    );
 
     setState(() {
       isSubmitting = true;
@@ -81,7 +84,7 @@ class RegisterPageState extends State<RegisterPage> {
       );
 
       final department =
-          await roleService.findDepartmentByCode(enteredDeptCode).timeout(
+          await roleService.findDepartmentByAccessCode(enteredAccessCode).timeout(
                 const Duration(seconds: 20),
                 onTimeout: () =>
                     throw TimeoutException('Department lookup timeout'),
@@ -90,7 +93,7 @@ class RegisterPageState extends State<RegisterPage> {
         setState(() {
           isSubmitting = false;
           formMessage =
-              'Department code not found. Check the unique code with your department admin.';
+              'Department access code not found. Check the 4-digit code with your department admin.';
         });
         return;
       }
@@ -327,7 +330,7 @@ class RegisterPageState extends State<RegisterPage> {
                     SizedBox(height: 8),
                     smcText(
                       textToDisplay:
-                          'Enter the unique department code shared by your department admin. Your request will appear in User Management for approval.',
+                          'Enter the 4-digit department access code shared by your department admin. Your request will appear in User Management for approval.',
                       textSize: 13,
                       colorOfText: ColorConst.textSecondary,
                       maxLines: 3,
@@ -377,10 +380,7 @@ class RegisterPageState extends State<RegisterPage> {
             keyboardType: TextInputType.phone,
           ),
           const SizedBox(height: 14),
-          buildField(
-            controller: deptCodeController,
-            label: 'Unique Department Code',
-          ),
+          buildDepartmentCodeInput(),
           if (formMessage != null) ...[
             const SizedBox(height: 16),
             buildMessageBanner(formMessage!),
@@ -505,6 +505,128 @@ class RegisterPageState extends State<RegisterPage> {
           ),
         ],
       ],
+    );
+  }
+
+  static const int _departmentCodeLength = 4;
+
+  PinTheme get _departmentCodePinTheme => PinTheme(
+        width: 52,
+        height: 52,
+        textStyle: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          color: ColorConst.textPrimary,
+        ),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF7F9FF),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: ColorConst.primaryBlue,
+            width: 1.5,
+          ),
+        ),
+      );
+
+  PinTheme get _departmentCodeFocusedPinTheme => PinTheme(
+        width: 52,
+        height: 52,
+        textStyle: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          color: ColorConst.textPrimary,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: ColorConst.primaryBlueDark,
+            width: 2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: ColorConst.primaryBlue.withValues(alpha: 0.15),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+      );
+
+  PinTheme get _departmentCodeSubmittedPinTheme => PinTheme(
+        width: 52,
+        height: 52,
+        textStyle: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          color: ColorConst.textPrimary,
+        ),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEAF0FF),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: ColorConst.primaryBlue,
+            width: 1.5,
+          ),
+        ),
+      );
+
+  Widget buildDepartmentCodeInput() {
+    return FormField<String>(
+      validator: (_) {
+        final digits =
+            deptCodeController.text.replaceAll(RegExp(r'\D'), '');
+        if (digits.isEmpty) {
+          return 'Enter department access code';
+        }
+        if (digits.length < _departmentCodeLength) {
+          return 'Enter all $_departmentCodeLength digits';
+        }
+        return null;
+      },
+      builder: (field) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const smcText(
+              textToDisplay: 'Department Access Code',
+              textSize: 14,
+              textBoldness: 4,
+              colorOfText: ColorConst.textSecondary,
+            ),
+            const SizedBox(height: 6),
+            const smcText(
+              textToDisplay:
+                  'Enter the 4-digit code from your department admin.',
+              textSize: 12,
+              colorOfText: ColorConst.textSecondary,
+              maxLines: 2,
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Pinput(
+                mainAxisAlignment: MainAxisAlignment.start,
+                controller: deptCodeController,
+                length: _departmentCodeLength,
+                enabled: !isSubmitting,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(_departmentCodeLength),
+                ],
+                defaultPinTheme: _departmentCodePinTheme,
+                focusedPinTheme: _departmentCodeFocusedPinTheme,
+                submittedPinTheme: _departmentCodeSubmittedPinTheme,
+                forceErrorState: field.hasError,
+                errorText: field.errorText,
+                onChanged: (_) => field.didChange(deptCodeController.text),
+                onCompleted: (_) => field.didChange(deptCodeController.text),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 

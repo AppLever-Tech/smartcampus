@@ -33,7 +33,7 @@ class _DeptUserManagementViewState extends State<DeptUserManagementView> {
 
   bool loading = true;
   List<UserMasterItem> users = [];
-  String roleFilter = 'All Roles';
+  String roleFilter = 'Unclassified';
   String statusFilter = 'All Status';
   int userRowsPerPage = 25;
   int userCurrentPage = 1;
@@ -572,7 +572,6 @@ class _DeptUserManagementViewState extends State<DeptUserManagementView> {
   }
 
   static const List<String> _roleFilterOptions = [
-    'All Roles',
     'Unclassified',
     'Student',
     'Faculty',
@@ -580,9 +579,6 @@ class _DeptUserManagementViewState extends State<DeptUserManagementView> {
   ];
 
   bool _userMatchesRoleCategory(UserMasterItem user, String label) {
-    if (label == 'All Roles') {
-      return true;
-    }
     final String filterValue = label == 'Dept Admin' ? 'DEPT_ADMIN' : label;
     return user.userRole.toLowerCase() == label.toLowerCase() ||
         user.normalizedUserRole ==
@@ -590,9 +586,6 @@ class _DeptUserManagementViewState extends State<DeptUserManagementView> {
   }
 
   int _roleCategoryCount(String label) {
-    if (label == 'All Roles') {
-      return users.length;
-    }
     return users.where((user) => _userMatchesRoleCategory(user, label)).length;
   }
 

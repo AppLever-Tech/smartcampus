@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:smartcampus/data/org_field.dart';
 
 /// Firestore collection: smcFacultyMaster
 class FacultyModel {
@@ -81,8 +82,8 @@ class FacultyModel {
       (data['emergency_contact_relation'] ?? '').toString().trim(),
       emergencyContactMobile:
       (data['emergency_contact_mobile'] ?? '').toString().trim(),
-      orgId: (data['org_id'] ?? '').toString().trim(),
-      deptId: (data['dept_id'] ?? '').toString().trim(),
+      orgId: OrgField.readOrgId(data),
+      deptId: OrgField.readDeptId(data),
       status: (data['status'] ?? 'Active').toString().trim(),
       createdAt: (data['created_at'] ?? '').toString().trim(),
     );
@@ -150,8 +151,8 @@ class FacultyModel {
       'emergency_contact_name': emergencyContactName,
       'emergency_contact_relation': emergencyContactRelation,
       'emergency_contact_mobile': emergencyContactMobile,
-      'org_id': orgId,
-      'dept_id': deptId,
+      ...OrgField.orgIdWrite(orgId),
+      if (OrgField.normalize(deptId).isNotEmpty) OrgField.deptIdKey: OrgField.normalize(deptId),
       'status': status,
       'created_at': createdAt,
     };

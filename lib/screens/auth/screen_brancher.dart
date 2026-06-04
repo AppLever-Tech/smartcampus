@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:smartcampus/data/mock_master_data.dart';
-import 'package:smartcampus/screens/auth/profile_pending_approval_page.dart';
 import 'package:smartcampus/screens/auth/register_page.dart';
 import 'package:smartcampus/screens/dept_admin/dept_admin_dashboard_page.dart';
 import 'package:smartcampus/screens/faculty/faculty_dashboard_page.dart';
@@ -8,7 +7,6 @@ import 'package:smartcampus/screens/org_admin/org_admin_dashboard_page.dart';
 import 'package:smartcampus/screens/system_admin/system_admin_home_page.dart';
 import 'package:smartcampus/services/faculty_firestore_service.dart';
 import 'package:smartcampus/services/firebase_auth_service.dart';
-import 'package:smartcampus/services/org_role_firestore_service.dart';
 import 'package:smartcampus/services/user_master_firestore_service.dart';
 
 class ScreenBrancher extends StatelessWidget {
@@ -33,7 +31,6 @@ class ScreenBrancher extends StatelessWidget {
 }
 
 Future<Widget> resolveHomeWidget(String uuid) async {
-  final OrgRoleFirestoreService roleService = OrgRoleFirestoreService();
   final FirebaseAuthService authService = FirebaseAuthService();
   final FacultyFirestoreService facultyService = FacultyFirestoreService();
   final UserMasterFirestoreService userMasterService =
@@ -87,51 +84,6 @@ Future<Widget> resolveHomeWidget(String uuid) async {
                 'Your account is approved. A department admin will classify you as Student or Faculty shortly.',
           ),
         );
-    }
-  }
-
-  // Legacy fallback: smcOrgUserRoleMapping
-  final List<OrgUserRoleMappingItem> mappings =
-      await roleService.getAllRoleMappingsForUuid(uuid);
-
-  if (mappings.isNotEmpty) {
-    final OrgUserRoleMappingItem primary = roleService.pickPrimaryRole(mappings);
-    if (primary.isRegisteredPending) {
-      final UserMasterItem? user = await authService.getUserByUuid(uuid);
-      final String displayName = primary.name.isNotEmpty
-          ? primary.name
-          : (user?.displayName ?? 'User');
-      return ProfilePendingApprovalPage(
-        displayName: displayName,
-        user: user,
-      );
-    }
-
-    switch (primary.normalizedRoleId) {
-      case 'SYSTEM_ADMIN':
-        return SystemAdminHomePage(
-          systemAdminName: primary.name,
-        );
-      case 'ORG_ADMIN':
-        return OrgAdminDashboardPage(
-          orgId: primary.orgId,
-          adminName: primary.name,
-        );
-      case 'DEPT_ADMIN':
-        return DeptAdminDashboardPage(
-          orgId: primary.orgId,
-          adminName: primary.name,
-          deptId: primary.deptId,
-        );
-      case 'FACULTY':
-        return FacultyDashboardPage(
-          orgId: primary.orgId,
-          deptId: primary.deptId,
-          displayName: primary.name,
-          uuid: uuid,
-        );
-      default:
-        return RegisterPage(uuid: uuid);
     }
   }
 

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:smartcampus/data/faculty_model.dart';
+import 'package:smartcampus/data/org_field.dart';
 import 'package:smartcampus/services/firebase_auth_service.dart';
 
 /// Handles all Firestore operations for the smcFacultyMaster collection.
@@ -15,13 +16,17 @@ class FacultyFirestoreService {
 
   /// Saves a new faculty record.  Throws if [facultyId] already exists for
   /// this [orgId] (checked client-side to give a meaningful error message).
+  static String normalizeOrgId(String orgId) => OrgField.normalize(orgId);
+
+  static String normalizeDeptId(String deptId) => OrgField.normalize(deptId);
+
   Future<void> createFaculty(FacultyModel faculty) async {
-    // Optional duplicate check – you can remove this if Firestore rules
-    // already enforce uniqueness on faculty_id + org_id.
+    final orgId = normalizeOrgId(faculty.orgId);
+    final deptId = normalizeDeptId(faculty.deptId);
     final existing = await _db
         .collection(_collection)
         .where('faculty_id', isEqualTo: faculty.facultyId)
-        .where('org_id', isEqualTo: faculty.orgId)
+        .where(OrgField.orgIdKey, isEqualTo: orgId)
         .limit(1)
         .get();
 
@@ -31,20 +36,22 @@ class FacultyFirestoreService {
       );
     }
 
-    await _db.collection(_collection).add(faculty.toMap());
+    await _db.collection(_collection).add(
+          faculty.copyWith(orgId: orgId, deptId: deptId).toMap(),
+        );
   }
 
   // ── Read ───────────────────────────────────────────────────────
 
-  /// Returns all faculty for a given department within an organisation.
-  Future<List<FacultyModel>> listFacultyForDept({
-    required String orgId,
-    required String deptId,
-  }) async {
+  /// Organisation-wide faculty — scoped by [org_id] only.
+  Future<List<FacultyModel>> listFacultyForOrg(String orgId) async {
+    final orgNorm = normalizeOrgId(orgId);
+    if (orgNorm.isEmpty) {
+      return const [];
+    }
     final snap = await _db
         .collection(_collection)
-        .where('org_id', isEqualTo: orgId)
-        .where('dept_id', isEqualTo: deptId)
+        .where(OrgField.orgIdKey, isEqualTo: orgNorm)
         .get();
 
     return snap.docs
@@ -52,17 +59,12 @@ class FacultyFirestoreService {
         .toList();
   }
 
-  /// Returns all faculty for a given organisation (all departments).
-  Future<List<FacultyModel>> listFacultyForOrg(String orgId) async {
-    final snap = await _db
-        .collection(_collection)
-        .where('org_id', isEqualTo: orgId)
-        
-        .get();
-
-    return snap.docs
-        .map((d) => FacultyModel.fromMap(d.data(), documentId: d.id))
-        .toList();
+  /// Alias kept for call sites — uses [org_id] only (ignores department).
+  Future<List<FacultyModel>> listFacultyForDept({
+    required String orgId,
+    String deptId = '',
+  }) {
+    return listFacultyForOrg(orgId);
   }
 
   /// Finds a faculty record by login mobile / phone variants.
@@ -114,7 +116,10 @@ class FacultyFirestoreService {
 
     final byMobile = await getFacultyByMobile(uuid);
     if (byMobile != null) {
-      return byMobile;
+      if (orgId.isEmpty ||
+          normalizeOrgId(byMobile.orgId) == normalizeOrgId(orgId)) {
+        return byMobile;
+      }
     }
 
     final trimmedName = displayName.trim();
@@ -151,10 +156,15 @@ class FacultyFirestoreService {
     required String documentId,
     required FacultyModel updated,
   }) async {
+    final orgId = normalizeOrgId(updated.orgId);
+    final deptId = normalizeDeptId(updated.deptId);
     await _db
         .collection(_collection)
         .doc(documentId)
-        .set(updated.toMap(), SetOptions(merge: true));
+        .set(
+          updated.copyWith(orgId: orgId, deptId: deptId).toMap(),
+          SetOptions(merge: true),
+        );
   }
 
   // ── Delete ─────────────────────────────────────────────────────

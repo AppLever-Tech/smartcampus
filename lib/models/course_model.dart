@@ -1,5 +1,9 @@
+import 'package:smartcampus/data/org_field.dart';
+
 class CourseModel {
   final String id;
+  final String orgId;
+  final String deptId;
   final String batch;
   final String semester;
   final String courseTitle;
@@ -23,6 +27,8 @@ class CourseModel {
 
   CourseModel({
     required this.id,
+    this.orgId = '',
+    this.deptId = '',
     required this.batch,
     required this.semester,
     required this.courseTitle,
@@ -57,6 +63,8 @@ class CourseModel {
 
     return CourseModel(
       id: id,
+      orgId: OrgField.readOrgId(data),
+      deptId: OrgField.readDeptId(data),
       batch: data['batch'] ?? '',
       semester: data['semester'] ?? '',
       courseTitle: data['courseTitle'] ?? '',
@@ -112,6 +120,8 @@ class CourseModel {
     final int computedTotal = totalMarks > 0 ? totalMarks : cieMarks + computedSee;
 
     return {
+      ...OrgField.orgIdWrite(orgId),
+      if (OrgField.normalize(deptId).isNotEmpty) OrgField.deptIdKey: OrgField.normalize(deptId),
       'batch': batch,
       'semester': semester,
       'courseTitle': courseTitle,
@@ -137,12 +147,16 @@ class CourseModel {
   }
 
   CourseModel copyWith({
+    String? orgId,
+    String? deptId,
     String? syllabusPdfUrl,
     String? syllabusPdfName,
     List<String>? enrolledStudentIds,
   }) {
     return CourseModel(
       id: id,
+      orgId: orgId ?? this.orgId,
+      deptId: deptId ?? this.deptId,
       batch: batch,
       semester: semester,
       courseTitle: courseTitle,

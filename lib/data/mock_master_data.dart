@@ -1,3 +1,5 @@
+import 'package:smartcampus/data/org_field.dart';
+
 class OrgUserRoleMappingItem {
   final String uuid;
   final String orgId;
@@ -19,10 +21,30 @@ class OrgUserRoleMappingItem {
     this.documentId = '',
   });
 
-  bool get isRegisteredPending =>
-      status.toLowerCase() == 'registered';
+  bool get isRegisteredPending => isPendingApproval;
+
+  bool get isPendingApproval {
+    final normalized = status.toLowerCase().trim();
+    return normalized == 'pending approval' ||
+        normalized == 'registered' ||
+        normalized == 'pending';
+  }
 
   String get normalizedRoleId => roleId.toUpperCase().trim();
+
+  factory OrgUserRoleMappingItem.fromUserMaster(UserMasterItem user) {
+    final String role =
+        user.userRole.isNotEmpty ? user.userRole : user.roleId;
+    return OrgUserRoleMappingItem(
+      uuid: user.uuid,
+      orgId: user.orgId.isNotEmpty ? user.orgId : user.requestedOrgId,
+      roleId: role,
+      name: user.displayName,
+      status: user.status,
+      deptId: user.deptId,
+      documentId: user.uuid,
+    );
+  }
 
   factory OrgUserRoleMappingItem.fromMap(
     Map<String, dynamic> data, {
@@ -161,8 +183,8 @@ class UserMasterItem {
       userName: resolvedName,
       userRole: resolvedRole,
       status: (data['status'] ?? 'Pending Approval').toString().trim(),
-      orgId: (data['org_id'] ?? '').toString().trim(),
-      deptId: (data['dept_id'] ?? '').toString().trim(),
+      orgId: OrgField.readOrgId(data),
+      deptId: OrgField.readDeptId(data),
       name: resolvedName,
       email: (data['email'] ?? '').toString().trim(),
       mobile: (data['mobile'] ?? data['phone'] ?? '').toString().trim(),
@@ -190,8 +212,9 @@ class UserMasterItem {
       'user_name': displayName,
       'user_role': userRole.isNotEmpty ? userRole : roleId,
       'status': status,
-      if ((orgId ?? this.orgId).isNotEmpty) 'org_id': orgId ?? this.orgId,
-      if ((deptId ?? this.deptId).isNotEmpty) 'dept_id': deptId ?? this.deptId,
+      ...OrgField.orgIdWrite(orgId ?? this.orgId),
+      if (OrgField.normalize(deptId ?? this.deptId).isNotEmpty)
+        OrgField.deptIdKey: OrgField.normalize(deptId ?? this.deptId),
     };
   }
 
@@ -327,6 +350,7 @@ class DepartmentMasterItem {
   final String orgId;
   final String deptId;
   final String deptUniqueId;          // Firestore document ID
+  final String deptAccessCode;        // 4-digit registration code (stored as String)
   final String deptName;
   final String establishedYear;       // e.g. "2005"
   final String deptType;              // "Engineering" / "Management" / "Science"
@@ -339,6 +363,7 @@ class DepartmentMasterItem {
     required this.orgId,
     required this.deptId,
     this.deptUniqueId = '',
+    this.deptAccessCode = '',
     required this.deptName,
     this.establishedYear = '',
     this.deptType = '',
@@ -357,9 +382,10 @@ class DepartmentMasterItem {
     }
 
     return DepartmentMasterItem(
-      orgId: (data['org_id'] ?? '').toString().trim(),
-      deptId: (data['dept_id'] ?? '').toString().trim(),
+      orgId: OrgField.readOrgId(data),
+      deptId: OrgField.readDeptId(data),
       deptUniqueId: (data['dept_unique_id'] ?? documentId).toString().trim(),
+      deptAccessCode: (data['dept_access_code'] ?? '').toString().trim(),
       deptName: (data['dept_name'] ?? data['department_name'] ?? '').toString().trim(),
       establishedYear: (data['established_year'] ?? '').toString().trim(),
       deptType: (data['dept_type'] ?? '').toString().trim(),
@@ -375,6 +401,7 @@ class DepartmentMasterItem {
       'org_id': orgId,
       'dept_id': deptId,
       'dept_unique_id': deptUniqueId,
+      if (deptAccessCode.isNotEmpty) 'dept_access_code': deptAccessCode,
       'dept_name': deptName,
       'established_year': establishedYear,
       'dept_type': deptType,

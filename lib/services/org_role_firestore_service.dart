@@ -1,58 +1,30 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:smartcampus/data/mock_master_data.dart';
 import 'package:smartcampus/services/firebase_auth_service.dart';
+import 'package:smartcampus/services/user_master_firestore_service.dart';
 
 class OrgRoleFirestoreService {
-  OrgRoleFirestoreService({FirebaseAuthService? authService})
-      : authService = authService ?? FirebaseAuthService();
+  OrgRoleFirestoreService({
+    FirebaseAuthService? authService,
+    UserMasterFirestoreService? userMasterService,
+  })  : authService = authService ?? FirebaseAuthService(),
+        _userMaster = userMasterService ??
+            UserMasterFirestoreService(authService: authService);
 
   final FirebaseAuthService authService;
+  final UserMasterFirestoreService _userMaster;
 
-  static const String mappingCollection = 'smcOrgUserRoleMapping';
-  static const String userMasterCollection = 'smcUserMaster';
   static const String orgCollection = 'smcOrganizations';
   static const String deptCollection = 'smcDepartments';
 
   Future<List<OrgUserRoleMappingItem>> getAllRoleMappingsForUuid(
     String uuid,
   ) async {
-    final seen = <String>{};
-    final out = <OrgUserRoleMappingItem>[];
-    for (final candidate in authService.uuidCandidates(uuid)) {
-      final snap = await FirebaseFirestore.instance
-          .collection(mappingCollection)
-          .where('uuid', isEqualTo: candidate)
-          .get();
-      for (final doc in snap.docs) {
-        if (seen.add(doc.id)) {
-          out.add(
-            OrgUserRoleMappingItem.fromMap(doc.data(), documentId: doc.id),
-          );
-        }
-      }
+    final user = await _userMaster.getByUuid(uuid);
+    if (user == null || user.normalizedUserRole.isEmpty) {
+      return <OrgUserRoleMappingItem>[];
     }
-    if (out.isNotEmpty) {
-      return out;
-    }
-    final all = await FirebaseFirestore.instance
-        .collection(mappingCollection)
-        .limit(500)
-        .get();
-    final targets = authService
-        .uuidCandidates(uuid)
-        .map(authService.normalizeUuidForCompare)
-        .toSet();
-    for (final doc in all.docs) {
-      final data = doc.data();
-      final dbUuid = authService.normalizeUuidForCompare(data['uuid']);
-      if (dbUuid.isEmpty) {
-        continue;
-      }
-      if (targets.contains(dbUuid) && seen.add(doc.id)) {
-        out.add(OrgUserRoleMappingItem.fromMap(data, documentId: doc.id));
-      }
-    }
-    return out;
+    return <OrgUserRoleMappingItem>[OrgUserRoleMappingItem.fromUserMaster(user)];
   }
 
   OrgUserRoleMappingItem pickPrimaryRole(List<OrgUserRoleMappingItem> list) {
@@ -77,53 +49,22 @@ class OrgRoleFirestoreService {
   }
 
   Future<List<OrgUserRoleMappingItem>> listPendingOrgAdmins() async {
-    final snap =
-        await FirebaseFirestore.instance.collection(mappingCollection).get();
-    return snap.docs
-        .map(
-          (d) => OrgUserRoleMappingItem.fromMap(d.data(), documentId: d.id),
-        )
-        .where(
-          (m) => m.normalizedRoleId == 'ORG_ADMIN' && m.isRegisteredPending,
-        )
-        .toList();
+    final users = await _userMaster.listPendingOrgAdmins();
+    return users.map(OrgUserRoleMappingItem.fromUserMaster).toList();
   }
 
   Future<List<OrgUserRoleMappingItem>> listPendingDeptAdminsForOrg(
     String orgId,
   ) async {
-    final norm = orgId.trim().toUpperCase();
-    final snap =
-        await FirebaseFirestore.instance.collection(mappingCollection).get();
-    return snap.docs
-        .map(
-          (d) => OrgUserRoleMappingItem.fromMap(d.data(), documentId: d.id),
-        )
-        .where(
-          (m) =>
-              m.normalizedRoleId == 'DEPT_ADMIN' &&
-              m.isRegisteredPending &&
-              m.orgId.trim().toUpperCase() == norm,
-        )
-        .toList();
+    final users = await _userMaster.listPendingDeptAdminsForOrg(orgId);
+    return users.map(OrgUserRoleMappingItem.fromUserMaster).toList();
   }
 
   Future<List<OrgUserRoleMappingItem>> listFacultyAndStudentsForOrg(
     String orgId,
   ) async {
-    final norm = orgId.trim().toUpperCase();
-    final snap =
-        await FirebaseFirestore.instance.collection(mappingCollection).get();
-    return snap.docs
-        .map(
-          (d) => OrgUserRoleMappingItem.fromMap(d.data(), documentId: d.id),
-        )
-        .where((m) {
-          final r = m.normalizedRoleId;
-          final roleOk = r == 'FACULTY' || r == 'STUDENT';
-          return roleOk && m.orgId.trim().toUpperCase() == norm;
-        })
-        .toList();
+    final users = await _userMaster.listFacultyAndStudentsForOrg(orgId);
+    return users.map(OrgUserRoleMappingItem.fromUserMaster).toList();
   }
 
   Future<List<OrganizationItem>> loadAllOrganizations() async {
@@ -179,43 +120,40 @@ class OrgRoleFirestoreService {
     return <DepartmentMasterItem>[];
   }
 
-  Future<DepartmentMasterItem?> findDepartmentByCode(String code) async {
-    final normalized = code.trim().toUpperCase();
-    if (normalized.isEmpty) {
+  /// Normalizes user input to a 4-digit access code string (e.g. "0123").
+  static String normalizeDeptAccessCode(String code) {
+    final digits = code.replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) {
+      return '';
+    }
+    return digits.padLeft(4, '0').substring(0, 4);
+  }
+
+  Future<DepartmentMasterItem?> findDepartmentByAccessCode(String code) async {
+    final accessCode = normalizeDeptAccessCode(code);
+    if (accessCode.length != 4) {
       return null;
     }
 
     for (final col in [deptCollection]) {
       try {
-        final byDeptId = await FirebaseFirestore.instance
+        final byAccessCode = await FirebaseFirestore.instance
             .collection(col)
-            .where('dept_id', isEqualTo: normalized)
+            .where('dept_access_code', isEqualTo: accessCode)
             .limit(1)
             .get();
-        if (byDeptId.docs.isNotEmpty) {
+        if (byAccessCode.docs.isNotEmpty) {
           return DepartmentMasterItem.fromMap(
-            byDeptId.docs.first.data(),
-            documentId: byDeptId.docs.first.id,
-          );
-        }
-
-        final byUniqueId = await FirebaseFirestore.instance
-            .collection(col)
-            .where('dept_unique_id', isEqualTo: normalized)
-            .limit(1)
-            .get();
-        if (byUniqueId.docs.isNotEmpty) {
-          return DepartmentMasterItem.fromMap(
-            byUniqueId.docs.first.data(),
-            documentId: byUniqueId.docs.first.id,
+            byAccessCode.docs.first.data(),
+            documentId: byAccessCode.docs.first.id,
           );
         }
 
         final all = await FirebaseFirestore.instance.collection(col).limit(500).get();
         for (final doc in all.docs) {
           final dept = DepartmentMasterItem.fromMap(doc.data(), documentId: doc.id);
-          if (dept.deptId.toUpperCase() == normalized ||
-              dept.deptUniqueId.toUpperCase() == normalized) {
+          final stored = normalizeDeptAccessCode(dept.deptAccessCode);
+          if (stored == accessCode) {
             return dept;
           }
         }
@@ -226,10 +164,33 @@ class OrgRoleFirestoreService {
     return null;
   }
 
+  Future<bool> isDeptAccessCodeTakenInOrg({
+    required String orgId,
+    required String accessCode,
+    String? excludeDeptId,
+  }) async {
+    final normalized = normalizeDeptAccessCode(accessCode);
+    if (normalized.length != 4) {
+      return false;
+    }
+    final exclude = excludeDeptId?.trim().toUpperCase() ?? '';
+    final departments = await loadDepartmentsForOrg(orgId);
+    for (final dept in departments) {
+      if (exclude.isNotEmpty && dept.deptId.toUpperCase() == exclude) {
+        continue;
+      }
+      if (normalizeDeptAccessCode(dept.deptAccessCode) == normalized) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   Future<void> createOrUpdateDepartment({
     required String orgId,
     required String deptId,
     required String deptName,
+    required String deptAccessCode,
     String establishedYear = '',
     String deptType = '',
     List<String> programsOffered = const [],
@@ -239,9 +200,23 @@ class OrgRoleFirestoreService {
   }) async {
     final String orgUpper = orgId.trim().toUpperCase();
     final String deptUpper = deptId.trim().toUpperCase();
+    final String accessCode = normalizeDeptAccessCode(deptAccessCode);
 
     if (orgUpper.isEmpty || deptUpper.isEmpty) {
       throw StateError('Organization ID and Department ID are required.');
+    }
+    if (accessCode.length != 4) {
+      throw StateError('A valid 4-digit department access code is required.');
+    }
+
+    if (await isDeptAccessCodeTakenInOrg(
+      orgId: orgUpper,
+      accessCode: accessCode,
+      excludeDeptId: deptUpper,
+    )) {
+      throw StateError(
+        'This access code is already used by another department in this organisation.',
+      );
     }
 
     final col = FirebaseFirestore.instance.collection(deptCollection);
@@ -260,6 +235,7 @@ class OrgRoleFirestoreService {
       'org_id': orgUpper,
       'dept_id': deptUpper,
       'dept_unique_id': ref.id,
+      'dept_access_code': accessCode,
       'dept_name': deptName.trim(),
       'established_year': establishedYear.trim(),
       'dept_type': deptType.trim(),
@@ -270,7 +246,6 @@ class OrgRoleFirestoreService {
       'updated_at': FieldValue.serverTimestamp(),
     };
 
-    // ✅ Only set created_at during CREATE
     if (existing.docs.isEmpty) {
       payload['created_at'] = FieldValue.serverTimestamp();
     }
@@ -278,265 +253,62 @@ class OrgRoleFirestoreService {
     await ref.set(payload, SetOptions(merge: true));
   }
 
-  Future<int> countAssignedDepartmentsForOrg(String orgId) async {
-    final norm = orgId.trim().toUpperCase();
-    final snap = await FirebaseFirestore.instance.collection(mappingCollection).get();
-    final ids = <String>{};
-    for (final doc in snap.docs) {
-      final m = OrgUserRoleMappingItem.fromMap(doc.data(), documentId: doc.id);
-      if (m.normalizedRoleId == 'DEPT_ADMIN' &&
-          m.orgId.trim().toUpperCase() == norm &&
-          m.deptId.trim().isNotEmpty) {
-        ids.add(m.deptId.trim().toUpperCase());
-      }
-    }
-    return ids.length;
+  Future<int> countAssignedDepartmentsForOrg(String orgId) {
+    return _userMaster.countAssignedDepartmentsForOrg(orgId);
   }
 
   Future<UserMasterItem?> getUserMaster(String uuid) {
-    return authService.getUserByUuid(uuid);
+    return _userMaster.getByUuid(uuid);
   }
 
   Future<List<UserMasterItem>> listRegisteredUsersForOrgAssignment(
     String orgId,
-  ) async {
-    final normOrg = orgId.trim().toUpperCase();
-    try {
-      final query = await FirebaseFirestore.instance
-          .collection(userMasterCollection)
-          .where('status', isEqualTo: 'Registered')
-          .where('requested_org_id', isEqualTo: normOrg)
-          .limit(300)
-          .get();
-      return query.docs
-          .map((doc) => UserMasterItem.fromMap(doc.data()))
-          .where((u) => u.uuid.isNotEmpty && u.roleId.trim().isEmpty)
-          .toList();
-    } catch (_) {
-      final all = await FirebaseFirestore.instance
-          .collection(userMasterCollection)
-          .limit(500)
-          .get();
-      return all.docs
-          .map((doc) => UserMasterItem.fromMap(doc.data()))
-          .where(
-            (u) =>
-                u.uuid.isNotEmpty &&
-                u.roleId.trim().isEmpty &&
-                u.status.trim().toLowerCase() == 'registered' &&
-                u.requestedOrgId.trim().toUpperCase() == normOrg,
-          )
-          .toList();
-    }
+  ) {
+    return _userMaster.listRegisteredUsersForOrgAssignment(orgId);
   }
 
-  Future<List<UserMasterItem>> listAllUsers() async {
-    final snap = await FirebaseFirestore.instance
-        .collection(userMasterCollection)
-        .limit(800)
-        .get();
-    return snap.docs
-        .map((doc) => UserMasterItem.fromMap(doc.data()))
-        .where((u) => u.uuid.isNotEmpty)
-        .toList();
-  }
-
-  String mappingDocumentId(OrgUserRoleMappingItem m, String suffixOrgOrRole) {
-    if (m.documentId.isNotEmpty) {
-      return m.documentId;
-    }
-    return '${m.uuid}_${suffixOrgOrRole}_${m.normalizedRoleId}';
+  Future<List<UserMasterItem>> listAllUsers() {
+    return _userMaster.listAll();
   }
 
   Future<void> assignOrgAdminToOrganization({
     required OrgUserRoleMappingItem mapping,
     required OrganizationItem organization,
-  }) async {
-    final user = await getUserMaster(mapping.uuid);
-    if (user == null) {
-      throw StateError('User not found in smcUserMaster');
-    }
-    final batch = FirebaseFirestore.instance.batch();
-    final orgIdUpper = organization.orgId.trim().toUpperCase();
-    String? docId = mapping.documentId.trim().isNotEmpty
-        ? mapping.documentId.trim()
-        : null;
-    if (docId == null) {
-      docId = await findExistingMappingDocumentId(
-        uuid: mapping.uuid,
-        orgIdUpper: orgIdUpper,
-      );
-    }
-    if (docId == null || docId.isEmpty) {
-      throw StateError(
-        'Existing mapping document not found for this user. Cannot assign org admin.',
-      );
-    }
-    final mapRef =
-        FirebaseFirestore.instance.collection(mappingCollection).doc(docId);
-    final merged = mapping
-        .copyWith(
-          orgId: orgIdUpper,
-          orgUniqueId: organization.orgUniqueId,
-          status: 'Approved',
-          roleId: 'ORG_ADMIN',
-        )
-        .toMap();
-    batch.set(mapRef, {
-      ...merged,
-      'updated_at': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-
-    final userRef = FirebaseFirestore.instance
-        .collection(userMasterCollection)
-        .doc(user.uuid);
-    batch.set(
-      userRef,
-      {
-        ...user
-            .copyWith(
-              userRole: 'ORG_ADMIN',
-              roleId: 'ORG_ADMIN',
-              orgId: orgIdUpper,
-              requestedOrgId: orgIdUpper,
-              requestedOrgName: organization.orgName,
-              status: 'Approved',
-            )
-            .toCoreMap(),
-        'updated_at': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
+  }) {
+    return _userMaster.assignOrgAdminToOrganization(
+      uuid: mapping.uuid,
+      organization: organization,
+      userName: mapping.name,
     );
-    await batch.commit();
-  }
-
-  Future<String?> findExistingMappingDocumentId({
-    required String uuid,
-    required String orgIdUpper,
-  }) async {
-    final candidates = authService.uuidCandidates(uuid);
-    for (final candidate in candidates) {
-      final snap = await FirebaseFirestore.instance
-          .collection(mappingCollection)
-          .where('uuid', isEqualTo: candidate)
-          .limit(20)
-          .get();
-      if (snap.docs.isEmpty) {
-        continue;
-      }
-      final sameOrg = snap.docs.where((doc) {
-        final data = doc.data();
-        return (data['org_id'] ?? '').toString().trim().toUpperCase() == orgIdUpper;
-      });
-      if (sameOrg.isNotEmpty) {
-        return sameOrg.first.id;
-      }
-      final registeredPending = snap.docs.where((doc) {
-        final data = doc.data();
-        return (data['role_id'] ?? '').toString().trim().isEmpty &&
-            (data['status'] ?? '').toString().trim().toLowerCase() == 'registered';
-      });
-      if (registeredPending.isNotEmpty) {
-        return registeredPending.first.id;
-      }
-      return snap.docs.first.id;
-    }
-    return null;
   }
 
   Future<void> assignDeptAdminToDepartment({
     required OrgUserRoleMappingItem mapping,
     required DepartmentMasterItem department,
-  }) async {
-    final user = await getUserMaster(mapping.uuid);
-    if (user == null) {
-      throw StateError('User not found in smcUserMaster');
-    }
-    final batch = FirebaseFirestore.instance.batch();
-    final orgUpper = mapping.orgId.trim().toUpperCase();
-    String? docId = mapping.documentId.trim().isNotEmpty
-        ? mapping.documentId.trim()
-        : null;
-    if (docId == null) {
-      docId = await findExistingMappingDocumentId(
-        uuid: mapping.uuid,
-        orgIdUpper: orgUpper,
-      );
-    }
-    if (docId == null || docId.isEmpty) {
-      throw StateError(
-        'Existing mapping document not found for this user. Cannot assign department.',
-      );
-    }
-    final mapRef =
-        FirebaseFirestore.instance.collection(mappingCollection).doc(docId);
-    batch.set(
-      mapRef,
-      {
-        ...mapping
-            .copyWith(
-              deptId: department.deptId.trim(),
-              status: 'Approved',
-            )
-            .toMap(),
-        'updated_at': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
+  }) {
+    final orgId = mapping.orgId.isNotEmpty
+        ? mapping.orgId
+        : department.orgId;
+    return _userMaster.assignDeptAdminToDepartment(
+      uuid: mapping.uuid,
+      department: department,
+      orgId: orgId,
+      userName: mapping.name,
     );
-
-    final userRef = FirebaseFirestore.instance
-        .collection(userMasterCollection)
-        .doc(user.uuid);
-    batch.set(
-      userRef,
-      {
-        ...user
-            .copyWith(
-              deptId: department.deptId.trim(),
-              status: 'Approved',
-            )
-            .toMap(),
-        'updated_at': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
-    await batch.commit();
   }
 
   Future<void> assignFacultyOrStudentDepartment({
     required OrgUserRoleMappingItem mapping,
     required DepartmentMasterItem department,
-  }) async {
-    final user = await getUserMaster(mapping.uuid);
-    if (user == null) {
-      throw StateError('User not found in smcUserMaster');
-    }
-    final batch = FirebaseFirestore.instance.batch();
-    final orgUpper = mapping.orgId.trim().toUpperCase();
-    final docId = mappingDocumentId(mapping, orgUpper);
-    final mapRef =
-        FirebaseFirestore.instance.collection(mappingCollection).doc(docId);
-    batch.set(
-      mapRef,
-      {
-        ...mapping.copyWith(deptId: department.deptId.trim()).toMap(),
-        'updated_at': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
+  }) {
+    final orgId = mapping.orgId.isNotEmpty
+        ? mapping.orgId
+        : department.orgId;
+    return _userMaster.assignFacultyOrStudentDepartment(
+      uuid: mapping.uuid,
+      department: department,
+      orgId: orgId,
     );
-
-    final userRef = FirebaseFirestore.instance
-        .collection(userMasterCollection)
-        .doc(user.uuid);
-    batch.set(
-      userRef,
-      {
-        ...user.copyWith(deptId: department.deptId.trim()).toMap(),
-        'updated_at': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
-    await batch.commit();
   }
 
   Future<void> createOrUpdateOrganization({
