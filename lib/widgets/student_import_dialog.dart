@@ -54,7 +54,18 @@ class _StudentImportDialogState
     }
 
     if (student.mobile.trim().isEmpty) {
-      errors.add("Missing Mobile");
+      errors.add('Missing Mobile');
+    } else {
+      final digits = student.mobile.replaceAll(RegExp(r'\D'), '');
+      final bool validMobile = digits.length == 10 ||
+          (digits.length == 12 && digits.startsWith('91'));
+      if (!validMobile) {
+        errors.add('Invalid Mobile');
+      }
+    }
+
+    if (student.resolvedUuid.isEmpty) {
+      errors.add('Invalid login UUID (check mobile number)');
     }
 
     return errors;
@@ -129,6 +140,8 @@ class _StudentImportDialogState
       'Emergency Contact Relation',
 
       'Emergency Contact Mobile',
+
+      'Login UUID (optional)',
     ]);
 
     sheet.appendRow([
@@ -162,6 +175,8 @@ class _StudentImportDialogState
       'Father',
 
       '9876543211',
+
+      '919876543210',
     ]);
 
     final bytes =
@@ -271,60 +286,10 @@ class _StudentImportDialogState
 
       final row = sheet.rows[i];
 
-      final student = StudentModel(
-
-        studentId:
-        row[0]?.value.toString() ?? '',
-
-        fullName:
-        row[1]?.value.toString() ?? '',
-
-        gender:
-        row[2]?.value.toString() ?? '',
-
-        dateOfBirth:
-        row[3]?.value.toString() ?? '',
-
-        aadhaarNumber:
-        row[4]?.value.toString() ?? '',
-
-        category:
-        row[5]?.value.toString() ?? '',
-
-        nationality:
-        row[6]?.value.toString() ?? '',
-
-        bloodGroup:
-        row[7]?.value.toString() ?? '',
-
-        mobile:
-        row[8]?.value.toString() ?? '',
-
-        email:
-        row[9]?.value.toString() ?? '',
-
-        permanentAddress:
-        row[10]?.value.toString() ?? '',
-
-        correspondenceAddress:
-        row[11]?.value.toString() ?? '',
-
-        emergencyContactName:
-        row[12]?.value.toString() ?? '',
-
-        emergencyContactRelation:
-        row[13]?.value.toString() ?? '',
-
-        emergencyContactMobile:
-        row[14]?.value.toString() ?? '',
-
+      final student = StudentModel.fromExcelRow(
+        row,
         orgId: widget.orgId,
-
         deptId: widget.deptId,
-
-        createdOn:
-        DateTime.now()
-            .toIso8601String(),
       );
 
       final errors =

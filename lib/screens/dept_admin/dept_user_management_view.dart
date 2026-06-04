@@ -242,6 +242,7 @@ class _DeptUserManagementViewState extends State<DeptUserManagementView> {
           fullName: user.displayName,
           gender: '',
           dateOfBirth: '',
+          uuid: StudentModel.normalizeUuid(user.uuid),
           mobile: user.uuid,
           email: '',
           orgId: widget.orgId,

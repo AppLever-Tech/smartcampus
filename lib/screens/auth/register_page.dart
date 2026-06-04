@@ -9,9 +9,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:pinput/pinput.dart';
 import 'package:smartcampus/const/color_const.dart';
 import 'package:smartcampus/data/mock_master_data.dart';
+import 'package:smartcampus/data/student_model.dart';
 import 'package:smartcampus/screens/auth/landing_page.dart';
 import 'package:smartcampus/services/firebase_auth_service.dart';
 import 'package:smartcampus/services/org_role_firestore_service.dart';
+import 'package:smartcampus/services/student_firestore_service.dart';
 import 'package:smartcampus/services/user_master_firestore_service.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 
@@ -98,6 +100,18 @@ class RegisterPageState extends State<RegisterPage> {
         return;
       }
 
+      final studentService = StudentFirestoreService();
+      final existingStudent =
+          await studentService.getStudentByUuid(normalizedUuid);
+      if (existingStudent != null) {
+        setState(() {
+          isSubmitting = false;
+          formMessage =
+              'This mobile number is already registered. Please sign in.';
+        });
+        return;
+      }
+
       final existingUser = await userMasterService.getByUuid(normalizedUuid);
       if (existingUser != null) {
         setState(() {
@@ -107,6 +121,24 @@ class RegisterPageState extends State<RegisterPage> {
         });
         return;
       }
+
+      final photographUrl = await uploadProfileImage(normalizedUuid);
+
+      await studentService.createStudent(
+        StudentModel(
+          studentId: 'REG-$normalizedUuid',
+          fullName: fullName,
+          gender: '',
+          dateOfBirth: '',
+          uuid: normalizedUuid,
+          mobile: mobile,
+          email: emailController.text.trim().toLowerCase(),
+          photographUrl: photographUrl,
+          orgId: department.orgId,
+          deptId: department.deptId,
+          createdOn: DateTime.now().toIso8601String(),
+        ),
+      );
 
       await userMasterService.upsertUser(
         uuid: normalizedUuid,

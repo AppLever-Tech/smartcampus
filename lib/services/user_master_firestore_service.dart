@@ -222,11 +222,12 @@ class UserMasterFirestoreService {
   }
 
   Future<void> syncFromStudent(StudentModel student) async {
-    if (student.mobile.trim().isEmpty) {
+    final loginUuid = student.resolvedUuid;
+    if (loginUuid.isEmpty) {
       return;
     }
     await upsertUser(
-      uuid: student.mobile,
+      uuid: loginUuid,
       userName: student.fullName,
       userRole: UserRoles.student,
       status: UserStatus.approved,

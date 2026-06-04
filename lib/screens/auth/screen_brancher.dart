@@ -4,9 +4,12 @@ import 'package:smartcampus/screens/auth/register_page.dart';
 import 'package:smartcampus/screens/dept_admin/dept_admin_dashboard_page.dart';
 import 'package:smartcampus/screens/faculty/faculty_dashboard_page.dart';
 import 'package:smartcampus/screens/org_admin/org_admin_dashboard_page.dart';
+import 'package:smartcampus/screens/student/student_dashboard_page.dart';
+import 'package:smartcampus/screens/student/student_profile_not_found_page.dart';
 import 'package:smartcampus/screens/system_admin/system_admin_home_page.dart';
 import 'package:smartcampus/services/faculty_firestore_service.dart';
 import 'package:smartcampus/services/firebase_auth_service.dart';
+import 'package:smartcampus/services/student_firestore_service.dart';
 import 'package:smartcampus/services/user_master_firestore_service.dart';
 
 class ScreenBrancher extends StatelessWidget {
@@ -33,6 +36,7 @@ class ScreenBrancher extends StatelessWidget {
 Future<Widget> resolveHomeWidget(String uuid) async {
   final FirebaseAuthService authService = FirebaseAuthService();
   final FacultyFirestoreService facultyService = FacultyFirestoreService();
+  final StudentFirestoreService studentService = StudentFirestoreService();
   final UserMasterFirestoreService userMasterService =
       UserMasterFirestoreService(authService: authService);
 
@@ -69,10 +73,17 @@ Future<Widget> resolveHomeWidget(String uuid) async {
         if (!userMaster.isApproved) {
           return RegistrationPendingPage(user: userMaster);
         }
-        return RegistrationPendingPage(
-          user: userMaster.copyWith(
-            requestedOrgName: 'Student portal coming soon. Complete your profile after admin approval.',
-          ),
+        final studentProfile =
+            await studentService.getStudentByUuid(uuid);
+        if (studentProfile == null) {
+          return const StudentProfileNotFoundPage();
+        }
+        return StudentDashboardPage(
+          orgId: userMaster.orgId,
+          deptId: userMaster.deptId,
+          displayName: userMaster.displayName,
+          uuid: uuid,
+          student: studentProfile,
         );
       case 'UNCLASSIFIED':
         if (!userMaster.isApproved) {
@@ -95,6 +106,17 @@ Future<Widget> resolveHomeWidget(String uuid) async {
       displayName: facultyByMobile.fullName,
       uuid: uuid,
       faculty: facultyByMobile,
+    );
+  }
+
+  final studentByUuid = await studentService.getStudentByUuid(uuid);
+  if (studentByUuid != null) {
+    return StudentDashboardPage(
+      orgId: studentByUuid.orgId,
+      deptId: studentByUuid.deptId,
+      displayName: studentByUuid.fullName,
+      uuid: uuid,
+      student: studentByUuid,
     );
   }
 

@@ -15,8 +15,19 @@ class StudentImportValidator {
       errors.add("Name Missing");
     }
 
-    if(student.mobile.length != 10){
-      errors.add("Invalid Mobile");
+    if (student.mobile.trim().isEmpty) {
+      errors.add('Mobile Missing');
+    } else {
+      final digits = student.mobile.replaceAll(RegExp(r'\D'), '');
+      final bool validMobile = digits.length == 10 ||
+          (digits.length == 12 && digits.startsWith('91'));
+      if (!validMobile) {
+        errors.add('Invalid Mobile');
+      }
+    }
+
+    if (student.resolvedUuid.isEmpty) {
+      errors.add('Invalid login UUID (check mobile number)');
     }
 
     if(!student.email.contains('@')){

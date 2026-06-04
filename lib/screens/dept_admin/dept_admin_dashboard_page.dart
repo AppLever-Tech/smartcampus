@@ -405,26 +405,10 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         for (int i = 1; i < rows.length; i++) {
           final row = rows[i];
 
-          final student = StudentModel(
-            studentId: row[0]?.value.toString() ?? '',
-            fullName: row[1]?.value.toString() ?? '',
-            gender: row[2]?.value.toString() ?? '',
-            dateOfBirth: row[3]?.value.toString() ?? '',
-            aadhaarNumber: row[4]?.value.toString() ?? '',
-            category: row[5]?.value.toString() ?? '',
-            nationality: row[6]?.value.toString() ?? '',
-            bloodGroup: row[7]?.value.toString() ?? '',
-            mobile: row[8]?.value.toString() ?? '',
-            email: row[9]?.value.toString() ?? '',
-            permanentAddress: row[10]?.value.toString() ?? '',
-            correspondenceAddress: row[11]?.value.toString() ?? '',
-            emergencyContactName: row[12]?.value.toString() ?? '',
-            emergencyContactRelation: row[13]?.value.toString() ?? '',
-            emergencyContactMobile: row[14]?.value.toString() ?? '',
-            photographUrl: '',
+          final student = StudentModel.fromExcelRow(
+            row,
             orgId: scopedOrgId,
             deptId: scopedDeptId,
-            createdOn: DateTime.now().toIso8601String(),
           );
 
           await studentService.createStudent(student);
@@ -1552,6 +1536,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                 photographUrl = await ref.getDownloadURL();
               }
 
+              final mobile = mobileCtrl.text.trim();
               final student = StudentModel(
                 documentId: studentToEdit?.documentId,
                 studentId: studentIdCtrl.text.trim().toUpperCase(),
@@ -1564,7 +1549,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                 category: selectedCategory ?? '',
                 nationality: selectedNationality ?? '',
                 bloodGroup: selectedBloodGroup ?? '',
-                mobile: mobileCtrl.text.trim(),
+                uuid: StudentModel.normalizeUuid(mobile),
+                mobile: mobile,
                 email: emailCtrl.text.trim().toLowerCase(),
                 permanentAddress: permanentAddrCtrl.text.trim(),
                 correspondenceAddress: correspondenceAddrCtrl.text.trim(),

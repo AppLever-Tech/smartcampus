@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/course_model.dart';
 import '../data/faculty_model.dart';
+import '../data/student_model.dart';
 import '../data/org_field.dart';
 
 class CourseFirestoreService {
@@ -93,6 +94,30 @@ class CourseFirestoreService {
   ) {
     return courses
         .where((course) => isCourseAssignedToFaculty(course, faculty))
+        .toList();
+  }
+
+  static String studentEnrollmentKey(StudentModel student) {
+    if (student.documentId != null && student.documentId!.isNotEmpty) {
+      return student.documentId!;
+    }
+    return student.studentId;
+  }
+
+  static bool isCourseEnrolledForStudent(
+    CourseModel course,
+    StudentModel student,
+  ) {
+    final key = studentEnrollmentKey(student);
+    return course.enrolledStudentIds.contains(key);
+  }
+
+  static List<CourseModel> filterCoursesForStudent(
+    List<CourseModel> courses,
+    StudentModel student,
+  ) {
+    return courses
+        .where((course) => isCourseEnrolledForStudent(course, student))
         .toList();
   }
 }

@@ -13,6 +13,8 @@ class PersonDetailPage extends StatefulWidget {
   final VoidCallback? onMaximize;
   final VoidCallback? onBackFromMaximized;
   final VoidCallback? onEditStudent;
+  /// When false, hides back/close in the embedded header (e.g. student own profile).
+  final bool showLeadingAction;
 
   const PersonDetailPage({
     super.key,
@@ -24,6 +26,7 @@ class PersonDetailPage extends StatefulWidget {
     this.onMaximize,
     this.onBackFromMaximized,
     this.onEditStudent,
+    this.showLeadingAction = true,
   });
 
   @override
@@ -115,16 +118,19 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
       padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
       child: Row(
         children: [
-          IconButton(
-            icon: Icon(
-              isMaximized ? Icons.arrow_back_rounded : Icons.close_rounded,
-              color: Colors.white,
-            ),
-            tooltip: isMaximized ? 'Back' : 'Close',
-            onPressed: isMaximized
-                ? widget.onBackFromMaximized
-                : widget.onClose,
-          ),
+          if (widget.showLeadingAction)
+            IconButton(
+              icon: Icon(
+                isMaximized ? Icons.arrow_back_rounded : Icons.close_rounded,
+                color: Colors.white,
+              ),
+              tooltip: isMaximized ? 'Back' : 'Close',
+              onPressed: isMaximized
+                  ? widget.onBackFromMaximized
+                  : widget.onClose,
+            )
+          else
+            const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

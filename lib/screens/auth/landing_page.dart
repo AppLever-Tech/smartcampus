@@ -99,6 +99,17 @@ class LandingPageState extends State<LandingPage> {
     );
   }
 
+  void submitAuthForm() {
+    if (isLoading) {
+      return;
+    }
+    if (showOtpInput) {
+      onVerifyOtp();
+    } else {
+      onGetOtp();
+    }
+  }
+
   void onVerifyOtp() {
     if (pendingUuidForOtp == null) {
       setState(() {
@@ -738,6 +749,8 @@ class LandingPageState extends State<LandingPage> {
                     child: TextField(
                       controller: uuidController,
                       keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => submitAuthForm(),
                       inputFormatters: [
                         FilteringTextInputFormatter.digitsOnly,
                         LengthLimitingTextInputFormatter(10),
@@ -761,6 +774,8 @@ class LandingPageState extends State<LandingPage> {
             Pinput(
               controller: otpController,
               length: 6,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => submitAuthForm(),
               onCompleted: (value) {
                 if (!isLoading) {
                   onVerifyOtp();
@@ -840,9 +855,7 @@ class LandingPageState extends State<LandingPage> {
             width: double.infinity,
             height: 52,
             child: ElevatedButton(
-              onPressed: isLoading
-                  ? null
-                  : (showOtpInput ? onVerifyOtp : onGetOtp),
+              onPressed: isLoading ? null : submitAuthForm,
               style: ElevatedButton.styleFrom(
                 elevation: 0,
                 backgroundColor: ColorConst.primaryBlue,

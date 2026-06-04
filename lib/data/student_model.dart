@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:smartcampus/data/org_field.dart';
 
 /// Firestore collection: smcStudentMaster
@@ -19,6 +18,8 @@ class StudentModel {
   final String bloodGroup;
 
   // ── Contact Details ────────────────────────────────────────────
+  /// Login id: mobile with country code, no + (e.g. 91XXXXXXXXXX).
+  final String uuid;
   final String mobile;
   final String email;
 
@@ -49,6 +50,7 @@ class StudentModel {
     this.category = 'Gen',
     this.nationality = 'Indian',
     this.bloodGroup = '',
+    this.uuid = '',
     required this.mobile,
     required this.email,
     this.permanentAddress = '',
@@ -61,6 +63,90 @@ class StudentModel {
     this.status = 'Active',
     required this.createdOn,
   });
+
+  /// Normalizes a mobile or uuid to country-code digits without '+'.
+  static String normalizeUuid(String mobileOrUuid) {
+    final raw = mobileOrUuid.trim();
+    final digitsOnly = raw.replaceAll(RegExp(r'\D'), '');
+    if (digitsOnly.length == 10) {
+      return '91$digitsOnly';
+    }
+    if (digitsOnly.length == 12 && digitsOnly.startsWith('91')) {
+      return digitsOnly;
+    }
+    return digitsOnly;
+  }
+
+  String get resolvedUuid {
+    if (uuid.trim().isNotEmpty) {
+      return normalizeUuid(uuid);
+    }
+    if (mobile.trim().isNotEmpty) {
+      return normalizeUuid(mobile);
+    }
+    return '';
+  }
+
+  static String excelCellValue(dynamic cell) {
+    if (cell == null) {
+      return '';
+    }
+    try {
+      final dynamic value = (cell as dynamic).value;
+      if (value != null) {
+        return value.toString().trim();
+      }
+    } catch (_) {
+      // Not an Excel Data cell — fall through to toString().
+    }
+    return cell.toString().trim();
+  }
+
+  /// Builds a student from a spreadsheet row (dept admin import template).
+  /// Column 8 is mobile; optional column 15 is explicit login [uuid].
+  factory StudentModel.fromExcelRow(
+    List<dynamic> row, {
+    required String orgId,
+    required String deptId,
+    String createdOn = '',
+  }) {
+    String cell(int index) {
+      if (index < 0 || index >= row.length) {
+        return '';
+      }
+      return excelCellValue(row[index]);
+    }
+
+    final mobile = cell(8);
+    final explicitUuid = cell(15);
+    final loginUuid = explicitUuid.isNotEmpty
+        ? normalizeUuid(explicitUuid)
+        : normalizeUuid(mobile);
+
+    return StudentModel(
+      studentId: cell(0),
+      fullName: cell(1),
+      gender: cell(2),
+      dateOfBirth: cell(3),
+      aadhaarNumber: cell(4),
+      category: cell(5),
+      nationality: cell(6),
+      bloodGroup: cell(7),
+      uuid: loginUuid,
+      mobile: mobile,
+      email: cell(9),
+      permanentAddress: cell(10),
+      correspondenceAddress: cell(11),
+      emergencyContactName: cell(12),
+      emergencyContactRelation: cell(13),
+      emergencyContactMobile: cell(14),
+      orgId: orgId,
+      deptId: deptId,
+      createdOn: createdOn.isNotEmpty
+          ? createdOn
+          : DateTime.now().toIso8601String(),
+    );
+  }
 
   // ── Firestore serialisation ────────────────────────────────────
   factory StudentModel.fromMap(Map<String, dynamic> data, {String? documentId}) {
@@ -81,6 +167,7 @@ class StudentModel {
       category: (data['category'] ?? 'Gen').toString().trim(),
       nationality: (data['nationality'] ?? 'Indian').toString().trim(),
       bloodGroup: (data['blood_group'] ?? '').toString().trim(),
+      uuid: _readUuidFromMap(data),
       mobile: (data['mobile'] ?? '').toString().trim(),
       email: (data['email'] ?? '').toString().trim(),
       permanentAddress: (data['permanent_address'] ?? '').toString().trim(),
@@ -97,6 +184,18 @@ class StudentModel {
     );
   }
 
+  static String _readUuidFromMap(Map<String, dynamic> data) {
+    final stored = (data['uuid'] ?? '').toString().trim();
+    if (stored.isNotEmpty) {
+      return normalizeUuid(stored);
+    }
+    final mobile = (data['mobile'] ?? '').toString().trim();
+    if (mobile.isNotEmpty) {
+      return normalizeUuid(mobile);
+    }
+    return '';
+  }
+
   StudentModel copyWith({
     String? documentId,
     String? studentId,
@@ -109,6 +208,7 @@ class StudentModel {
     String? category,
     String? nationality,
     String? bloodGroup,
+    String? uuid,
     String? mobile,
     String? email,
     String? permanentAddress,
@@ -133,6 +233,7 @@ class StudentModel {
       category: category ?? this.category,
       nationality: nationality ?? this.nationality,
       bloodGroup: bloodGroup ?? this.bloodGroup,
+      uuid: uuid ?? this.uuid,
       mobile: mobile ?? this.mobile,
       email: email ?? this.email,
       permanentAddress: permanentAddress ?? this.permanentAddress,
@@ -159,6 +260,7 @@ class StudentModel {
       'category': category,
       'nationality': nationality,
       'blood_group': bloodGroup,
+      if (resolvedUuid.isNotEmpty) 'uuid': resolvedUuid,
       'mobile': mobile,
       'email': email,
       'permanent_address': permanentAddress,
