@@ -3,7 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' as excel;
 import 'dart:typed_data';
 import 'package:file_saver/file_saver.dart';
-
+import 'package:smartcampus/screens/student_import_preview_page.dart';
 import '../data/student_model.dart';
 import '../services/student_firestore_service.dart';
 import '../models/student_import_row.dart';
@@ -243,7 +243,9 @@ class _StudentImportDialogState
   Future<void> processExcelBytes(
       Uint8List bytes,
       ) async {
-
+    setState(() {
+      loading = true;
+    });
     final workbook =
     excel.Excel.decodeBytes(bytes);
 
@@ -254,7 +256,15 @@ class _StudentImportDialogState
 
     final service =
     StudentFirestoreService();
+    final existingStudents =
+    await service.listStudentsForOrg(
+      widget.orgId,
+    );
 
+    final existingIds =
+    existingStudents
+        .map((e) => e.studentId)
+        .toSet();
     for(int i = 1;
     i < sheet.rows.length;
     i++) {
@@ -320,12 +330,12 @@ class _StudentImportDialogState
       final errors =
       validateStudent(student);
 
-      final existing =
-      await service.findStudent(
-        orgId: widget.orgId,
-        studentId:
-        student.studentId,
-      );
+      // final existing =
+      // await service.findStudent(
+      //   orgId: widget.orgId,
+      //   studentId:
+      //   student.studentId,
+      // );
 
       imported.add(
 
@@ -336,17 +346,26 @@ class _StudentImportDialogState
           errors: errors,
 
           existsInSystem:
-          existing != null,
-
+          existingIds.contains(
+            student.studentId,
+          ),
         ),
       );
     }
-
     setState(() {
-
-      rows = imported;
-
+      loading = false;
     });
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StudentImportPreviewScreen(
+          rows: imported,
+          orgId: widget.orgId,
+          deptId: widget.deptId,
+        ),
+      ),
+    );
   }
 
   Future<void> pickExcel() async {
@@ -367,160 +386,160 @@ class _StudentImportDialogState
     );
   }
 
-  Future<void> importStudents() async {
-    setState(() {
-
-      importing = true;
-
-      progress = 0;
-
-    });
-    final confirm =
-    await showDialog<bool>(
-      context: context,
-      builder: (_) =>
-          AlertDialog(
-
-            title: const Text(
-              "Confirm Import",
-            ),
-
-            content: Text(
-              """
-                New Records : $validRows
-                
-                Overwrite : $overwriteRows
-                
-                Skipped : $skippedRows
-                
-                Continue?
-                """,
-            ),
-
-            actions: [
-
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(
-                    context,
-                    false,
-                  );
-                },
-                child: const Text(
-                  "Cancel",
-                ),
-              ),
-
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(
-                    context,
-                    true,
-                  );
-                },
-                child: const Text(
-                  "Import",
-                ),
-              ),
-            ],
-          ),
-    );
-
-    if (confirm != true) {
-
-      setState(() {
-        importing = false;
-      });
-
-      return;
-    }
-    final service =
-    StudentFirestoreService();
-
-    int imported = 0;
-
-    int overwritten = 0;
-
-    int skipped = 0;
-
-    for(
-    int i = 0;
-    i < rows.length;
-    i++
-    ){final row = rows[i];
-      if (!row.selected) {
-        skipped++;
-
-        continue;
-      }
-
-      if (row.hasError) {
-        skipped++;
-
-        continue;
-      }
-
-      final existing =
-      await service.findStudent(
-        orgId: widget.orgId,
-        studentId:
-        row.student.studentId,
-      );
-
-      if (existing != null) {
-        if (row.overwrite) {
-          await service.updateStudent(
-            documentId:
-            existing.documentId!,
-            updated: row.student,
-          );
-
-          overwritten++;
-        } else {
-          skipped++;
-        }
-      } else {
-        await service.createStudent(
-          row.student,
-        );
-
-        imported++;
-      }
-    setState(() {
-      if(rows.isNotEmpty) {
-        progress =
-            (i + 1) /
-                rows.length;
-      }
-    });
-    }
-
-    if (!mounted) return;
-    setState(() {
-
-      importing = false;
-
-    });
-    Navigator.pop(context);
-
-    ScaffoldMessenger.of(context)
-        .showSnackBar(
-
-      SnackBar(
-        content: Text(
-          """
-          Import Completed
-          
-          Imported : $imported
-          
-          Overwritten : $overwritten
-          
-          Skipped : $skipped
-          """,
-        ),
-      ),
-    );
-  }
+  // Future<void> importStudents() async {
+  //   setState(() {
+  //
+  //     importing = true;
+  //
+  //     progress = 0;
+  //
+  //   });
+  //   final confirm =
+  //   await showDialog<bool>(
+  //     context: context,
+  //     builder: (_) =>
+  //         AlertDialog(
+  //
+  //           title: const Text(
+  //             "Confirm Import",
+  //           ),
+  //
+  //           content: Text(
+  //             """
+  //               New Records : $validRows
+  //
+  //               Overwrite : $overwriteRows
+  //
+  //               Skipped : $skippedRows
+  //
+  //               Continue?
+  //               """,
+  //           ),
+  //
+  //           actions: [
+  //
+  //             TextButton(
+  //               onPressed: () {
+  //                 Navigator.pop(
+  //                   context,
+  //                   false,
+  //                 );
+  //               },
+  //               child: const Text(
+  //                 "Cancel",
+  //               ),
+  //             ),
+  //
+  //             ElevatedButton(
+  //               onPressed: () {
+  //                 Navigator.pop(
+  //                   context,
+  //                   true,
+  //                 );
+  //               },
+  //               child: const Text(
+  //                 "Import",
+  //               ),
+  //             ),
+  //           ],
+  //         ),
+  //   );
+  //
+  //   if (confirm != true) {
+  //
+  //     setState(() {
+  //       importing = false;
+  //     });
+  //
+  //     return;
+  //   }
+  //   final service =
+  //   StudentFirestoreService();
+  //
+  //   int imported = 0;
+  //
+  //   int overwritten = 0;
+  //
+  //   int skipped = 0;
+  //
+  //   for(
+  //   int i = 0;
+  //   i < rows.length;
+  //   i++
+  //   ){final row = rows[i];
+  //     if (!row.selected) {
+  //       skipped++;
+  //
+  //       continue;
+  //     }
+  //
+  //     if (row.hasError) {
+  //       skipped++;
+  //
+  //       continue;
+  //     }
+  //
+  //     final existing =
+  //     await service.findStudent(
+  //       orgId: widget.orgId,
+  //       studentId:
+  //       row.student.studentId,
+  //     );
+  //
+  //     if (existing != null) {
+  //       if (row.overwrite) {
+  //         await service.updateStudent(
+  //           documentId:
+  //           existing.documentId!,
+  //           updated: row.student,
+  //         );
+  //
+  //         overwritten++;
+  //       } else {
+  //         skipped++;
+  //       }
+  //     } else {
+  //       await service.createStudent(
+  //         row.student,
+  //       );
+  //
+  //       imported++;
+  //     }
+  //   setState(() {
+  //     if(rows.isNotEmpty) {
+  //       progress =
+  //           (i + 1) /
+  //               rows.length;
+  //     }
+  //   });
+  //   }
+  //
+  //   if (!mounted) return;
+  //   setState(() {
+  //
+  //     importing = false;
+  //
+  //   });
+  //   Navigator.pop(context);
+  //
+  //   ScaffoldMessenger.of(context)
+  //       .showSnackBar(
+  //
+  //     SnackBar(
+  //       content: Text(
+  //         """
+  //         Import Completed
+  //
+  //         Imported : $imported
+  //
+  //         Overwritten : $overwritten
+  //
+  //         Skipped : $skipped
+  //         """,
+  //       ),
+  //     ),
+  //   );
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -633,97 +652,54 @@ class _StudentImportDialogState
             const SizedBox(height: 20),
 
             Expanded(
-              child: ListView.builder(
-                itemCount: rows.length,
-                itemBuilder: (context, index) {
-                  final row = rows[index];
-
-                  return CheckboxListTile(
-                    value: row.selected,
-
-                    onChanged: (v) {
-                      setState(() {
-                        row.selected = v ?? false;
-                      });
-                    },
-
-                    title: Text(
-                      "${row.student.studentId} - "
-                          "${row.student.fullName}",
-                    ),
-
-                    subtitle: Column(
-                      crossAxisAlignment:
-                      CrossAxisAlignment.start,
-                      children: [
-
-                        if (row.hasError)
-                          Text(
-                            row.errors.join(", "),
-                            style: const TextStyle(
-                              color: Colors.red,
-                            ),
-                          ),
-
-                        if (row.existsInSystem)
-                          const Text(
-                            "Student Already Exists",
-                            style: TextStyle(
-                              color: Colors.orange,
-                            ),
-                          ),
-                      ],
-                    ),
-
-                    secondary: row.existsInSystem
-                        ? Checkbox(
-                      value: row.overwrite,
-                      onChanged: (v) {
-                        setState(() {
-                          row.overwrite =
-                              v ?? false;
-                        });
-                      },
-                    )
-                        : null,
-                  );
-                },
-              ),
-            ),
-
-            Container(
-              margin: const EdgeInsets.all(12),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: Colors.grey.shade300,
+              child: loading
+                  ? const Center(
+                child: CircularProgressIndicator(),
+              )
+                  : const Center(
+                child: Text(
+                  "Upload an Excel file to preview students",
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontSize: 16,
+                  ),
                 ),
-                borderRadius:
-                BorderRadius.circular(12),
               ),
-              child: Column(
-                children: [
+            )
 
-                  Text(
-                    "Total Records : $totalRows",
-                  ),
+            // Container(
+            //   margin: const EdgeInsets.all(12),
+            //   padding: const EdgeInsets.all(12),
+            //   decoration: BoxDecoration(
+            //     border: Border.all(
+            //       color: Colors.grey.shade300,
+            //     ),
+            //     borderRadius:
+            //     BorderRadius.circular(12),
+            //   ),
+            //   child: Column(
+            //     children: [
+            //
+            //       Text(
+            //         "Total Records : $totalRows",
+            //       ),
+            //
+            //       Text(
+            //         "New Records : $validRows",
+            //       ),
+            //
+            //       Text(
+            //         "Overwrite : $overwriteRows",
+            //       ),
+            //
+            //       Text(
+            //         "Skipped : $skippedRows",
+            //       ),
+            //     ],
+            //   ),
+            // ),
 
-                  Text(
-                    "New Records : $validRows",
-                  ),
-
-                  Text(
-                    "Overwrite : $overwriteRows",
-                  ),
-
-                  Text(
-                    "Skipped : $skippedRows",
-                  ),
-                ],
-              ),
-            ),
-
-            if(importing)
+            ,if(importing)
 
               Padding(
                 padding:
@@ -764,14 +740,18 @@ class _StudentImportDialogState
 
                   const SizedBox(width: 12),
 
-                  ElevatedButton(
-                    onPressed: rows.isEmpty
-                        ? null
-                        : importStudents,
-                    child: const Text(
-                      "Import Students",
-                    ),
-                  ),
+                  // ElevatedButton(
+                  //   style: ElevatedButton.styleFrom(
+                  //     backgroundColor: Colors.blue,
+                  //     foregroundColor: Colors.white,
+                  //   ),
+                  //   onPressed: () {
+                  //     // action here
+                  //   },
+                  //   child: const Text(
+                  //     "View Preview Files",
+                  //   ),
+                  // )
                 ],
               ),
             ),
