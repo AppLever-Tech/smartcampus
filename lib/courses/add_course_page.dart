@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:smartcampus/models/course_model.dart';
+import 'package:smartcampus/services/course_firestore_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AddCoursePage extends StatefulWidget {
@@ -242,7 +243,7 @@ class _AddCoursePageState extends State<AddCoursePage> {
                     onPressed: () async{
 
                       await FirebaseFirestore.instance
-                          .collection('courses')
+                          .collection(CourseFirestoreService.collection)
                           .add({
 
                         'batch': selectedBatch,

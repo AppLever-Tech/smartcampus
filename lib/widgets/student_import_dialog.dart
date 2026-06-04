@@ -3,7 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' as excel;
 import 'dart:typed_data';
 import 'package:file_saver/file_saver.dart';
-import 'package:smartcampus/screens/student_import_preview_page.dart';
+import 'package:smartcampus/screens/shared/student_import_preview_page.dart';
 import '../data/student_model.dart';
 import '../services/student_firestore_service.dart';
 import '../models/student_import_row.dart';

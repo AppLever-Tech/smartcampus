@@ -2,8 +2,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:smartcampus/const/color_const.dart';
-import 'package:smartcampus/screens/landing_page.dart';
-import 'package:smartcampus/screens/screen_brancher.dart';
+import 'package:smartcampus/screens/auth/landing_page.dart';
+import 'package:smartcampus/screens/auth/screen_brancher.dart';
 import 'package:smartcampus/widgets/mouse_drag_scroll_behavior.dart';
 
 import 'firebase_options.dart';

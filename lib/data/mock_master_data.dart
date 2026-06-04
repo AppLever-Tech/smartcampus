@@ -77,39 +77,93 @@ class OrgUserRoleMappingItem {
 
 class UserMasterItem {
   final String uuid;
+  final String userName;
+  final String userRole;
+  final String status;
+  final String orgId;
+  final String deptId;
+
+  // Legacy / auxiliary fields kept for backward compatibility while reading.
   final String name;
   final String email;
   final String mobile;
   final String photoUrl;
   final String userType;
   final String roleId;
-  final String orgId;
   final String requestedOrgId;
   final String requestedOrgName;
-  final String status;
   final String requestedOn;
-  final String deptId;
 
   const UserMasterItem({
     required this.uuid,
-    required this.name,
-    required this.email,
-    required this.mobile,
-    required this.photoUrl,
-    required this.userType,
-    required this.roleId,
-    required this.orgId,
-    required this.requestedOrgId,
-    required this.requestedOrgName,
+    this.userName = '',
+    this.userRole = '',
     required this.status,
-    required this.requestedOn,
+    this.orgId = '',
     this.deptId = '',
+    this.name = '',
+    this.email = '',
+    this.mobile = '',
+    this.photoUrl = '',
+    this.userType = '',
+    this.roleId = '',
+    this.requestedOrgId = '',
+    this.requestedOrgName = '',
+    this.requestedOn = '',
   });
 
+  String get displayName =>
+      userName.isNotEmpty ? userName : (name.isNotEmpty ? name : 'User');
+
+  String get normalizedUserRole {
+    final raw = userRole.isNotEmpty ? userRole : roleId;
+    if (raw.isEmpty) {
+      return userType.toUpperCase().replaceAll(' ', '_');
+    }
+    return raw.toUpperCase().trim().replaceAll(' ', '_');
+  }
+
+  bool get isUnclassified => normalizedUserRole == 'UNCLASSIFIED';
+
+  bool get isPendingApproval {
+    final normalized = status.toLowerCase().trim();
+    return normalized == 'pending approval' ||
+        normalized == 'registered' ||
+        normalized == 'pending';
+  }
+
+  bool get isApproved {
+    final normalized = status.toLowerCase().trim();
+    return normalized == 'approved';
+  }
+
+  String get displayStatus {
+    if (isApproved) {
+      return 'Approved';
+    }
+    if (isPendingApproval) {
+      return 'Pending Approval';
+    }
+    return status;
+  }
+
   factory UserMasterItem.fromMap(Map<String, dynamic> data) {
+    final String resolvedName =
+        (data['user_name'] ?? data['name'] ?? '').toString().trim();
+    final String resolvedRole = (data['user_role'] ??
+            data['role_id'] ??
+            data['user_type'] ??
+            '')
+        .toString()
+        .trim();
     return UserMasterItem(
       uuid: (data['uuid'] ?? '').toString().trim(),
-      name: (data['name'] ?? '').toString().trim(),
+      userName: resolvedName,
+      userRole: resolvedRole,
+      status: (data['status'] ?? 'Pending Approval').toString().trim(),
+      orgId: (data['org_id'] ?? '').toString().trim(),
+      deptId: (data['dept_id'] ?? '').toString().trim(),
+      name: resolvedName,
       email: (data['email'] ?? '').toString().trim(),
       mobile: (data['mobile'] ?? data['phone'] ?? '').toString().trim(),
       photoUrl: (data['photo_url'] ?? data['profile_pic'] ?? '')
@@ -118,68 +172,77 @@ class UserMasterItem {
       userType: (data['user_type'] ?? data['designation'] ?? 'User')
           .toString()
           .trim(),
-      roleId: (data['role_id'] ?? '').toString().trim(),
-      orgId: (data['org_id'] ?? '').toString().trim(),
+      roleId: resolvedRole,
       requestedOrgId: (data['requested_org_id'] ?? data['org_id'] ?? '')
           .toString()
           .trim(),
       requestedOrgName: (data['requested_org_name'] ?? '').toString().trim(),
-      status: (data['status'] ?? 'Pending').toString().trim(),
       requestedOn: (data['requested_on'] ?? data['created_at'] ?? '')
           .toString()
           .trim(),
-      deptId: (data['dept_id'] ?? '').toString().trim(),
     );
+  }
+
+  /// Canonical write shape — four primary identity fields plus optional scope.
+  Map<String, dynamic> toCoreMap({String? orgId, String? deptId}) {
+    return <String, dynamic>{
+      'uuid': uuid,
+      'user_name': displayName,
+      'user_role': userRole.isNotEmpty ? userRole : roleId,
+      'status': status,
+      if ((orgId ?? this.orgId).isNotEmpty) 'org_id': orgId ?? this.orgId,
+      if ((deptId ?? this.deptId).isNotEmpty) 'dept_id': deptId ?? this.deptId,
+    };
   }
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
-      'uuid': uuid,
-      'name': name,
+      ...toCoreMap(),
+      'name': displayName,
       'email': email,
-      'mobile': mobile,
+      'mobile': mobile.isNotEmpty ? mobile : uuid,
       'photo_url': photoUrl,
       'user_type': userType,
-      'role_id': roleId,
-      'org_id': orgId,
+      'role_id': userRole.isNotEmpty ? userRole : roleId,
       'requested_org_id': requestedOrgId,
       'requested_org_name': requestedOrgName,
-      'status': status,
       'requested_on': requestedOn,
-      'dept_id': deptId,
     };
   }
 
-
   UserMasterItem copyWith({
     String? uuid,
+    String? userName,
+    String? userRole,
+    String? status,
+    String? orgId,
+    String? deptId,
     String? name,
     String? email,
     String? mobile,
     String? photoUrl,
     String? userType,
     String? roleId,
-    String? orgId,
     String? requestedOrgId,
     String? requestedOrgName,
-    String? status,
     String? requestedOn,
-    String? deptId,
   }) {
     return UserMasterItem(
       uuid: uuid ?? this.uuid,
+      userName: userName ?? this.userName,
+      userRole: userRole ?? this.userRole,
+      status: status ?? this.status,
+      orgId: orgId ?? this.orgId,
+      deptId: deptId ?? this.deptId,
       name: name ?? this.name,
       email: email ?? this.email,
       mobile: mobile ?? this.mobile,
       photoUrl: photoUrl ?? this.photoUrl,
       userType: userType ?? this.userType,
       roleId: roleId ?? this.roleId,
-      orgId: orgId ?? this.orgId,
       requestedOrgId: requestedOrgId ?? this.requestedOrgId,
       requestedOrgName: requestedOrgName ?? this.requestedOrgName,
-      status: status ?? this.status,
       requestedOn: requestedOn ?? this.requestedOn,
-      deptId: deptId ?? this.deptId,
     );
   }
 }

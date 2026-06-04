@@ -179,6 +179,53 @@ class OrgRoleFirestoreService {
     return <DepartmentMasterItem>[];
   }
 
+  Future<DepartmentMasterItem?> findDepartmentByCode(String code) async {
+    final normalized = code.trim().toUpperCase();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    for (final col in [deptCollection]) {
+      try {
+        final byDeptId = await FirebaseFirestore.instance
+            .collection(col)
+            .where('dept_id', isEqualTo: normalized)
+            .limit(1)
+            .get();
+        if (byDeptId.docs.isNotEmpty) {
+          return DepartmentMasterItem.fromMap(
+            byDeptId.docs.first.data(),
+            documentId: byDeptId.docs.first.id,
+          );
+        }
+
+        final byUniqueId = await FirebaseFirestore.instance
+            .collection(col)
+            .where('dept_unique_id', isEqualTo: normalized)
+            .limit(1)
+            .get();
+        if (byUniqueId.docs.isNotEmpty) {
+          return DepartmentMasterItem.fromMap(
+            byUniqueId.docs.first.data(),
+            documentId: byUniqueId.docs.first.id,
+          );
+        }
+
+        final all = await FirebaseFirestore.instance.collection(col).limit(500).get();
+        for (final doc in all.docs) {
+          final dept = DepartmentMasterItem.fromMap(doc.data(), documentId: doc.id);
+          if (dept.deptId.toUpperCase() == normalized ||
+              dept.deptUniqueId.toUpperCase() == normalized) {
+            return dept;
+          }
+        }
+      } catch (_) {
+        continue;
+      }
+    }
+    return null;
+  }
+
   Future<void> createOrUpdateDepartment({
     required String orgId,
     required String deptId,
@@ -348,13 +395,14 @@ class OrgRoleFirestoreService {
       {
         ...user
             .copyWith(
+              userRole: 'ORG_ADMIN',
               roleId: 'ORG_ADMIN',
               orgId: orgIdUpper,
               requestedOrgId: orgIdUpper,
               requestedOrgName: organization.orgName,
               status: 'Approved',
             )
-            .toMap(),
+            .toCoreMap(),
         'updated_at': FieldValue.serverTimestamp(),
       },
       SetOptions(merge: true),
