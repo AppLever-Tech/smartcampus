@@ -3,6 +3,9 @@ import 'package:smartcampus/const/color_const.dart';
 import 'package:smartcampus/data/faculty_model.dart';
 import 'package:smartcampus/data/student_model.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:smartcampus/models/course_model.dart';
+import 'package:smartcampus/services/course_firestore_service.dart';
 
 class PersonDetailPage extends StatefulWidget {
   final dynamic person; // Can be StudentModel or FacultyModel
@@ -188,6 +191,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
     }
     return const [
       'Basic Details',
+      'Assigned Courses',
       'Achievements',
       'Publications',
     ];
@@ -234,6 +238,8 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
         return _buildBasicDetails();
       case 'Courses Enrolled':
         return _buildCoursesOpted();
+      case 'Assigned Courses':
+        return _buildAssignedCourses();
       case 'Achievements':
         return _buildAchievements();
       case 'Publications':
@@ -250,6 +256,68 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
     return _buildFacultyBasicDetails();
   }
 
+  Widget _buildAssignedCourses() {
+    final FacultyModel faculty = widget.person as FacultyModel;
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection(CourseFirestoreService.collection)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(
+            child: Text('No courses assigned'),
+          );
+        }
+
+        final assignedCourses = snapshot.data!.docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+
+          return (data['faculty'] ?? '')
+                  .toString()
+                  .trim()
+                  .toLowerCase() ==
+              faculty.fullName.trim().toLowerCase();
+        }).toList();
+
+        if (assignedCourses.isEmpty) {
+          return const Center(
+            child: Text('No courses assigned'),
+          );
+        }
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: assignedCourses.map((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  leading: const Icon(Icons.menu_book_outlined),
+                  title: Text(
+                    data['courseTitle']?.toString() ?? '',
+                  ),
+                  subtitle: Text(
+                    'Code: ${data['courseCode'] ?? ''}\n'
+                    'Semester: ${data['semester'] ?? ''}\n'
+                    'Credits: ${data['credits'] ?? ''}',
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
+  }
   Widget _buildFacultyBasicDetails() {
     final FacultyModel f = widget.person as FacultyModel;
     final String photoUrl = _normalizePhotoUrl(f.photographUrl);
