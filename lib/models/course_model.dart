@@ -1,5 +1,9 @@
+import 'package:smartcampus/data/org_field.dart';
+
 class CourseModel {
   final String id;
+  final String orgId;
+  final String deptId;
   final String batch;
   final String semester;
   final String courseTitle;
@@ -8,6 +12,9 @@ class CourseModel {
   final String credits;
   final String courseType;
   final String syllabus;
+  final String syllabusPdfUrl;
+  final String syllabusPdfName;
+  final List<String> enrolledStudentIds;
   final int lectureHrs;
   final int tutorialHrs;
   final int practicalHrs;
@@ -20,6 +27,8 @@ class CourseModel {
 
   CourseModel({
     required this.id,
+    this.orgId = '',
+    this.deptId = '',
     required this.batch,
     required this.semester,
     required this.courseTitle,
@@ -28,6 +37,9 @@ class CourseModel {
     required this.credits,
     required this.courseType,
     required this.syllabus,
+    this.syllabusPdfUrl = '',
+    this.syllabusPdfName = '',
+    this.enrolledStudentIds = const [],
     this.lectureHrs = 0,
     this.tutorialHrs = 0,
     this.practicalHrs = 0,
@@ -51,6 +63,8 @@ class CourseModel {
 
     return CourseModel(
       id: id,
+      orgId: OrgField.readOrgId(data),
+      deptId: OrgField.readDeptId(data),
       batch: data['batch'] ?? '',
       semester: data['semester'] ?? '',
       courseTitle: data['courseTitle'] ?? '',
@@ -59,6 +73,19 @@ class CourseModel {
       credits: data['credits'] ?? '',
       courseType: data['courseType'] ?? '',
       syllabus: data['syllabus'] ?? '',
+      syllabusPdfUrl: (data['syllabus_pdf_url'] ??
+              data['syllabusPdfUrl'] ??
+              '')
+          .toString()
+          .trim(),
+      syllabusPdfName: (data['syllabus_pdf_name'] ??
+              data['syllabusPdfName'] ??
+              '')
+          .toString()
+          .trim(),
+      enrolledStudentIds: _parseStringList(
+        data['enrolled_student_ids'] ?? data['enrolledStudentIds'],
+      ),
       lectureHrs: _parseInt(data['lectureHrs']),
       tutorialHrs: _parseInt(data['tutorialHrs']),
       practicalHrs: _parseInt(data['practicalHrs']),
@@ -78,6 +105,13 @@ class CourseModel {
     return int.tryParse(value.toString()) ?? fallback;
   }
 
+  static List<String> _parseStringList(dynamic value) {
+    if (value is List) {
+      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList();
+    }
+    return const [];
+  }
+
   /// SEE marks count as either theory or lab (whichever is entered).
   int get seeMarks => seeTheoryMarks > 0 ? seeTheoryMarks : seeLabMarks;
 
@@ -86,6 +120,8 @@ class CourseModel {
     final int computedTotal = totalMarks > 0 ? totalMarks : cieMarks + computedSee;
 
     return {
+      ...OrgField.orgIdWrite(orgId),
+      if (OrgField.normalize(deptId).isNotEmpty) OrgField.deptIdKey: OrgField.normalize(deptId),
       'batch': batch,
       'semester': semester,
       'courseTitle': courseTitle,
@@ -94,6 +130,9 @@ class CourseModel {
       'credits': credits,
       'courseType': courseType,
       'syllabus': syllabus,
+      'syllabus_pdf_url': syllabusPdfUrl,
+      'syllabus_pdf_name': syllabusPdfName,
+      'enrolled_student_ids': enrolledStudentIds,
       'lectureHrs': lectureHrs,
       'tutorialHrs': tutorialHrs,
       'practicalHrs': practicalHrs,
@@ -105,5 +144,39 @@ class CourseModel {
       'seeMarks': computedSee,
       'totalMarks': computedTotal,
     };
+  }
+
+  CourseModel copyWith({
+    String? orgId,
+    String? deptId,
+    String? syllabusPdfUrl,
+    String? syllabusPdfName,
+    List<String>? enrolledStudentIds,
+  }) {
+    return CourseModel(
+      id: id,
+      orgId: orgId ?? this.orgId,
+      deptId: deptId ?? this.deptId,
+      batch: batch,
+      semester: semester,
+      courseTitle: courseTitle,
+      faculty: faculty,
+      courseCode: courseCode,
+      credits: credits,
+      courseType: courseType,
+      syllabus: syllabus,
+      syllabusPdfUrl: syllabusPdfUrl ?? this.syllabusPdfUrl,
+      syllabusPdfName: syllabusPdfName ?? this.syllabusPdfName,
+      enrolledStudentIds: enrolledStudentIds ?? this.enrolledStudentIds,
+      lectureHrs: lectureHrs,
+      tutorialHrs: tutorialHrs,
+      practicalHrs: practicalHrs,
+      othersHrs: othersHrs,
+      cieMarks: cieMarks,
+      seeExamDuration: seeExamDuration,
+      seeTheoryMarks: seeTheoryMarks,
+      seeLabMarks: seeLabMarks,
+      totalMarks: totalMarks,
+    );
   }
 }

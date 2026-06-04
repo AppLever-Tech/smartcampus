@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:smartcampus/const/color_const.dart';
 import 'package:smartcampus/data/mock_master_data.dart';
-import 'package:smartcampus/screens/landing_page.dart';
+import 'package:smartcampus/screens/auth/landing_page.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 
 class ProfilePendingApprovalPage extends StatelessWidget {

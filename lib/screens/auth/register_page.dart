@@ -6,10 +6,13 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:pinput/pinput.dart';
 import 'package:smartcampus/const/color_const.dart';
 import 'package:smartcampus/data/mock_master_data.dart';
-import 'package:smartcampus/screens/landing_page.dart';
+import 'package:smartcampus/screens/auth/landing_page.dart';
 import 'package:smartcampus/services/firebase_auth_service.dart';
+import 'package:smartcampus/services/org_role_firestore_service.dart';
+import 'package:smartcampus/services/user_master_firestore_service.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 
 class RegisterPage extends StatefulWidget {
@@ -31,7 +34,7 @@ class RegisterPageState extends State<RegisterPage> {
   final TextEditingController lastNameController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController mobileController = TextEditingController();
-  final TextEditingController orgIdController = TextEditingController();
+  final TextEditingController deptCodeController = TextEditingController();
   final ImagePicker imagePicker = ImagePicker();
   bool isSubmitting = false;
   String? formMessage;
@@ -50,7 +53,7 @@ class RegisterPageState extends State<RegisterPage> {
     lastNameController.dispose();
     emailController.dispose();
     mobileController.dispose();
-    orgIdController.dispose();
+    deptCodeController.dispose();
     super.dispose();
   }
 
@@ -64,8 +67,9 @@ class RegisterPageState extends State<RegisterPage> {
         '${firstNameController.text.trim()} ${lastNameController.text.trim()}'
             .trim();
     final normalizedUuid = firebaseAuthService.normalizeUuidForCompare(mobile);
-    final enteredOrgId = orgIdController.text.trim().toUpperCase();
-    const roleId = '';
+    final enteredAccessCode = OrgRoleFirestoreService.normalizeDeptAccessCode(
+      deptCodeController.text,
+    );
 
     setState(() {
       isSubmitting = true;
@@ -74,89 +78,57 @@ class RegisterPageState extends State<RegisterPage> {
     var movedToNextScreen = false;
 
     try {
-      String photoUrl = '';
-      if (selectedProfileImage != null) {
-        try {
-          photoUrl = await uploadProfileImage(normalizedUuid).timeout(
-            const Duration(seconds: 20),
-            onTimeout: () => throw TimeoutException('Profile image upload timeout'),
-          );
-        } catch (_) {
-          photoUrl = '';
-        }
-      }
-
-      final organization = await firebaseAuthService
-          .getOrganizationById(enteredOrgId)
-          .timeout(
-            const Duration(seconds: 20),
-            onTimeout: () => throw TimeoutException('Organization lookup timeout'),
-          );
-      if (organization == null) {
-        setState(() {
-          isSubmitting = false;
-          formMessage = 'Org ID not found. Check with your system admin.';
-        });
-        return;
-      }
-
-      final existingMapping = await firebaseAuthService.getRoleByUuidAndOrgId(
-        normalizedUuid,
-        organization.orgId,
-      ).timeout(
-        const Duration(seconds: 20),
-        onTimeout: () => throw TimeoutException('Role mapping lookup timeout'),
+      final roleService = OrgRoleFirestoreService();
+      final userMasterService = UserMasterFirestoreService(
+        authService: firebaseAuthService,
       );
-      if (existingMapping != null) {
+
+      final department =
+          await roleService.findDepartmentByAccessCode(enteredAccessCode).timeout(
+                const Duration(seconds: 20),
+                onTimeout: () =>
+                    throw TimeoutException('Department lookup timeout'),
+              );
+      if (department == null) {
         setState(() {
           isSubmitting = false;
           formMessage =
-              'This mobile number is already assigned to ${organization.orgName}. Please sign in.';
+              'Department access code not found. Check the 4-digit code with your department admin.';
         });
         return;
       }
 
-      final user = UserMasterItem(
+      final existingUser = await userMasterService.getByUuid(normalizedUuid);
+      if (existingUser != null) {
+        setState(() {
+          isSubmitting = false;
+          formMessage =
+              'This mobile number is already registered. Please sign in.';
+        });
+        return;
+      }
+
+      await userMasterService.upsertUser(
         uuid: normalizedUuid,
-        name: fullName,
-        email: emailController.text.trim(),
-        mobile: mobile,
-        photoUrl: photoUrl,
-        userType: 'Org Admin',
-        roleId: roleId,
-        orgId: '',
-        requestedOrgId: organization.orgId,
-        requestedOrgName: organization.orgName,
-        status: 'Registered',
-        requestedOn: readableNow(),
+        userName: fullName,
+        userRole: UserRoles.unclassified,
+        status: UserStatus.pendingApproval,
+        orgId: department.orgId,
+        deptId: department.deptId,
       );
 
-      final batch = FirebaseFirestore.instance.batch();
-
-      final userRef = FirebaseFirestore.instance
-          .collection('smcUserMaster')
-          .doc(normalizedUuid);
-      batch.set(userRef, <String, dynamic>{
-        ...user.toMap(),
-        'updated_at': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      final mappingRef = FirebaseFirestore.instance
-          .collection('smcOrgUserRoleMapping')
-          .doc();
-      batch.set(mappingRef, <String, dynamic>{
-        'uuid': normalizedUuid,
-        'org_id': organization.orgId,
-        'role_id': '',
-        'name': user.name,
-        'status': 'Registered',
-        'created_at': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-
-      await batch.commit().timeout(
-        const Duration(seconds: 20),
-        onTimeout: () => throw TimeoutException('Registration save timeout'),
+      final user = UserMasterItem(
+        uuid: normalizedUuid,
+        userName: fullName,
+        userRole: UserRoles.unclassified,
+        status: UserStatus.pendingApproval,
+        orgId: department.orgId,
+        deptId: department.deptId,
+        name: fullName,
+        mobile: mobile,
+        requestedOrgId: department.orgId,
+        requestedOrgName: department.deptName,
+        requestedOn: readableNow(),
       );
 
       if (!mounted) {
@@ -358,7 +330,7 @@ class RegisterPageState extends State<RegisterPage> {
                     SizedBox(height: 8),
                     smcText(
                       textToDisplay:
-                          'Use the Org ID shared by your institution. We will show pending approval right after submission.',
+                          'Enter the 4-digit department access code shared by your department admin. Your request will appear in User Management for approval.',
                       textSize: 13,
                       colorOfText: ColorConst.textSecondary,
                       maxLines: 3,
@@ -408,7 +380,7 @@ class RegisterPageState extends State<RegisterPage> {
             keyboardType: TextInputType.phone,
           ),
           const SizedBox(height: 14),
-          buildField(controller: orgIdController, label: 'Org ID'),
+          buildDepartmentCodeInput(),
           if (formMessage != null) ...[
             const SizedBox(height: 16),
             buildMessageBanner(formMessage!),
@@ -533,6 +505,128 @@ class RegisterPageState extends State<RegisterPage> {
           ),
         ],
       ],
+    );
+  }
+
+  static const int _departmentCodeLength = 4;
+
+  PinTheme get _departmentCodePinTheme => PinTheme(
+        width: 52,
+        height: 52,
+        textStyle: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          color: ColorConst.textPrimary,
+        ),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF7F9FF),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: ColorConst.primaryBlue,
+            width: 1.5,
+          ),
+        ),
+      );
+
+  PinTheme get _departmentCodeFocusedPinTheme => PinTheme(
+        width: 52,
+        height: 52,
+        textStyle: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          color: ColorConst.textPrimary,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: ColorConst.primaryBlueDark,
+            width: 2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: ColorConst.primaryBlue.withValues(alpha: 0.15),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+      );
+
+  PinTheme get _departmentCodeSubmittedPinTheme => PinTheme(
+        width: 52,
+        height: 52,
+        textStyle: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          color: ColorConst.textPrimary,
+        ),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEAF0FF),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: ColorConst.primaryBlue,
+            width: 1.5,
+          ),
+        ),
+      );
+
+  Widget buildDepartmentCodeInput() {
+    return FormField<String>(
+      validator: (_) {
+        final digits =
+            deptCodeController.text.replaceAll(RegExp(r'\D'), '');
+        if (digits.isEmpty) {
+          return 'Enter department access code';
+        }
+        if (digits.length < _departmentCodeLength) {
+          return 'Enter all $_departmentCodeLength digits';
+        }
+        return null;
+      },
+      builder: (field) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const smcText(
+              textToDisplay: 'Department Access Code',
+              textSize: 14,
+              textBoldness: 4,
+              colorOfText: ColorConst.textSecondary,
+            ),
+            const SizedBox(height: 6),
+            const smcText(
+              textToDisplay:
+                  'Enter the 4-digit code from your department admin.',
+              textSize: 12,
+              colorOfText: ColorConst.textSecondary,
+              maxLines: 2,
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Pinput(
+                mainAxisAlignment: MainAxisAlignment.start,
+                controller: deptCodeController,
+                length: _departmentCodeLength,
+                enabled: !isSubmitting,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(_departmentCodeLength),
+                ],
+                defaultPinTheme: _departmentCodePinTheme,
+                focusedPinTheme: _departmentCodeFocusedPinTheme,
+                submittedPinTheme: _departmentCodeSubmittedPinTheme,
+                forceErrorState: field.hasError,
+                errorText: field.errorText,
+                onChanged: (_) => field.didChange(deptCodeController.text),
+                onCompleted: (_) => field.didChange(deptCodeController.text),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -866,7 +960,7 @@ class RegistrationPendingPage extends StatelessWidget {
           const SizedBox(height: 8),
           smcText(
             textToDisplay:
-                '${user.name}, your request for ${user.requestedOrgName} is recorded.',
+                '${user.displayName}, your request for ${user.requestedOrgName} is recorded.',
             textSize: 14,
             colorOfText: ColorConst.textSecondary,
             maxLines: 3,
@@ -874,16 +968,19 @@ class RegistrationPendingPage extends StatelessWidget {
           const SizedBox(height: 18),
           Center(
             child: buildSafeAvatar(
-              name: user.name,
+              name: user.displayName,
               photoUrl: user.photoUrl,
             ),
           ),
           const SizedBox(height: 18),
           buildInfoRow('Mobile', user.mobile),
           const SizedBox(height: 10),
-          buildInfoRow('Role', user.roleId.isEmpty ? '-' : user.roleId),
+          buildInfoRow(
+            'Role',
+            user.userRole.isNotEmpty ? user.userRole : user.roleId,
+          ),
           const SizedBox(height: 10),
-          buildInfoRow('Org ID', user.requestedOrgId),
+          buildInfoRow('Department', user.requestedOrgName),
           const SizedBox(height: 10),
           buildInfoRow('Requested On', user.requestedOn),
         ],

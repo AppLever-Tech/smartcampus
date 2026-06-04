@@ -3,8 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:cool_alert/cool_alert.dart';
 import 'package:pinput/pinput.dart';
 import 'package:smartcampus/const/color_const.dart';
-import 'package:smartcampus/screens/register_page.dart';
-import 'package:smartcampus/screens/screen_brancher.dart';
+import 'package:smartcampus/screens/auth/register_page.dart';
+import 'package:smartcampus/screens/auth/screen_brancher.dart';
 import 'package:smartcampus/services/firebase_auth_service.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 
@@ -775,9 +775,12 @@ class LandingPageState extends State<LandingPage> {
                   color: ColorConst.textPrimary,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: const Color(0xFFF7F9FF),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: ColorConst.borderSoft),
+                  border: Border.all(
+                    color: ColorConst.primaryBlue,
+                    width: 1.5,
+                  ),
                 ),
               ),
               focusedPinTheme: PinTheme(
@@ -791,7 +794,34 @@ class LandingPageState extends State<LandingPage> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: ColorConst.primaryBlue, width: 1.4),
+                  border: Border.all(
+                    color: ColorConst.primaryBlueDark,
+                    width: 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: ColorConst.primaryBlue.withValues(alpha: 0.15),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+              ),
+              submittedPinTheme: PinTheme(
+                width: 46,
+                height: 52,
+                textStyle: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: ColorConst.textPrimary,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF0FF),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: ColorConst.primaryBlue,
+                    width: 1.5,
+                  ),
                 ),
               ),
             ),

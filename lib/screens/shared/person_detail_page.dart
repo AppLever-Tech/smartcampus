@@ -8,7 +8,10 @@ class PersonDetailPage extends StatefulWidget {
   final dynamic person; // Can be StudentModel or FacultyModel
   final bool isStudent;
   final bool embedded;
+  final bool embeddedMaximized;
   final VoidCallback? onClose;
+  final VoidCallback? onMaximize;
+  final VoidCallback? onBackFromMaximized;
   final VoidCallback? onEditStudent;
 
   const PersonDetailPage({
@@ -16,7 +19,10 @@ class PersonDetailPage extends StatefulWidget {
     required this.person,
     required this.isStudent,
     this.embedded = false,
+    this.embeddedMaximized = false,
     this.onClose,
+    this.onMaximize,
+    this.onBackFromMaximized,
     this.onEditStudent,
   });
 
@@ -51,11 +57,15 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
       return DecoratedBox(
         decoration: BoxDecoration(
           color: const Color(0xFFF6F7FB),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: widget.embeddedMaximized
+              ? BorderRadius.zero
+              : BorderRadius.circular(14),
           border: Border.all(color: const Color(0xFFE3EAF8)),
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: widget.embeddedMaximized
+              ? BorderRadius.zero
+              : BorderRadius.circular(14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -98,15 +108,22 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
   }
 
   Widget _buildEmbeddedHeader() {
+    final bool isMaximized = widget.embeddedMaximized;
+
     return Container(
       color: ColorConst.primaryBlue,
-      padding: const EdgeInsets.fromLTRB(4, 8, 12, 8),
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.close_rounded, color: Colors.white),
-            tooltip: 'Close',
-            onPressed: widget.onClose,
+            icon: Icon(
+              isMaximized ? Icons.arrow_back_rounded : Icons.close_rounded,
+              color: Colors.white,
+            ),
+            tooltip: isMaximized ? 'Back' : 'Close',
+            onPressed: isMaximized
+                ? widget.onBackFromMaximized
+                : widget.onClose,
           ),
           Expanded(
             child: Column(
@@ -128,6 +145,12 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
               ],
             ),
           ),
+          if (!isMaximized && widget.onMaximize != null)
+            IconButton(
+              icon: const Icon(Icons.open_in_new, color: Colors.white),
+              tooltip: 'Maximize',
+              onPressed: widget.onMaximize,
+            ),
         ],
       ),
     );
@@ -158,7 +181,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
     if (widget.isStudent) {
       return const [
         'Basic Details',
-        'Courses Opted',
+        'Courses Enrolled',
         'Achievements',
         'Publications',
       ];
@@ -209,7 +232,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
     switch (tab) {
       case 'Basic Details':
         return _buildBasicDetails();
-      case 'Courses Opted':
+      case 'Courses Enrolled':
         return _buildCoursesOpted();
       case 'Achievements':
         return _buildAchievements();
@@ -224,34 +247,108 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
     if (widget.isStudent) {
       return _buildStudentBasicDetails();
     }
+    return _buildFacultyBasicDetails();
+  }
 
-    final f = widget.person as FacultyModel;
-    final Map<String, String> details = {
-      'Full Name': f.fullName,
-      'Faculty ID': f.facultyId,
-      'Email': f.email,
-      'Mobile': f.mobile,
-      'Gender': f.gender,
-      'DOB': f.dateOfBirth,
-      'Aadhaar': f.aadhaarNumber,
-      'PAN': f.panNumber,
-      'Permanent Address': f.permanentAddress,
-      'Current Address': f.currentAddress,
-    };
+  Widget _buildFacultyBasicDetails() {
+    final FacultyModel f = widget.person as FacultyModel;
+    final String photoUrl = _normalizePhotoUrl(f.photographUrl);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE3EAF8)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: details.entries.map((e) => _buildDetailRow(e.key, e.value)).toList(),
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: _buildDetailsSection(
+                    title: 'Basic Profile Information',
+                    icon: Icons.person_outline_rounded,
+                    children: [
+                      _buildDetailRow('Faculty ID', f.facultyId),
+                      _buildDetailRow('Full Name', f.fullName),
+                      _buildDetailRow('Gender', f.gender),
+                      _buildDetailRow(
+                        'Date of Birth',
+                        _formatDisplayDate(f.dateOfBirth),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  flex: 2,
+                  child: _buildDetailsSection(
+                    title: 'Photograph',
+                    icon: Icons.photo_camera_outlined,
+                    stretchContent: true,
+                    children: [
+                      photoUrl.isNotEmpty
+                          ? Center(
+                              child: FittedBox(
+                                fit: BoxFit.contain,
+                                child: _buildPhotographPreview(
+                                  photoUrl,
+                                  width: 130,
+                                  height: 195,
+                                ),
+                              ),
+                            )
+                          : const Center(
+                              child: Icon(
+                                Icons.image_not_supported_outlined,
+                                size: 40,
+                                color: ColorConst.textSecondary,
+                              ),
+                            ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildDetailsSection(
+            title: 'Identity & Compliance',
+            icon: Icons.verified_user_outlined,
+            children: [
+              _buildDetailRow('Aadhaar / Govt ID', f.aadhaarNumber),
+              _buildDetailRow('PAN', f.panNumber),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildDetailsSection(
+            title: 'Contact Details',
+            icon: Icons.contact_phone_outlined,
+            children: [
+              _buildDetailRow('Mobile Number', f.mobile),
+              _buildDetailRow('Email Address', f.email),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildDetailsSection(
+            title: 'Address',
+            icon: Icons.home_outlined,
+            children: [
+              _buildDetailRow('Permanent Address', f.permanentAddress),
+              _buildDetailRow('Current Address', f.currentAddress),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildDetailsSection(
+            title: 'Emergency Contact',
+            icon: Icons.emergency_outlined,
+            children: [
+              _buildDetailRow('Contact Person Name', f.emergencyContactName),
+              _buildDetailRow('Relation', f.emergencyContactRelation),
+              _buildDetailRow('Emergency Mobile', f.emergencyContactMobile),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -551,7 +648,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
   Widget _buildCoursesOpted() {
     return const Center(
       child: smcText(
-        textToDisplay: 'No courses opted yet.',
+        textToDisplay: 'No courses enrolled yet.',
         textSize: 14,
         colorOfText: ColorConst.textSecondary,
       ),

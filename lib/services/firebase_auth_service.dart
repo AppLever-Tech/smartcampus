@@ -9,90 +9,30 @@ class FirebaseAuthService {
   String? lastLookupError;
 
   Future<OrgUserRoleMappingItem?> getRoleByUuid(String uuid) async {
-    lastLookupError = null;
-    try {
-      final candidates = uuidCandidates(uuid);
-      for (final candidate in candidates) {
-        final query = await FirebaseFirestore.instance
-            .collection('smcOrgUserRoleMapping')
-            .where('uuid', isEqualTo: candidate)
-            .limit(1)
-            .get();
-
-        if (query.docs.isEmpty) {
-          continue;
-        }
-
-        final doc = query.docs.first;
-        return OrgUserRoleMappingItem.fromMap(doc.data(), documentId: doc.id);
-      }
-
-      final allDocs = await FirebaseFirestore.instance
-          .collection('smcOrgUserRoleMapping')
-          .limit(200)
-          .get();
-      for (final doc in allDocs.docs) {
-        final data = doc.data();
-        final dbUuid = normalizeUuidForCompare(data['uuid']);
-        if (dbUuid.isEmpty) {
-          continue;
-        }
-        for (final candidate in candidates) {
-          if (dbUuid == normalizeUuidForCompare(candidate)) {
-            return OrgUserRoleMappingItem.fromMap(data, documentId: doc.id);
-          }
-        }
-      }
-      return null;
-    } catch (error) {
-      lastLookupError = error.toString();
+    final user = await getUserByUuid(uuid);
+    if (user == null || user.normalizedUserRole.isEmpty) {
       return null;
     }
+    return OrgUserRoleMappingItem.fromUserMaster(user);
   }
 
   Future<OrgUserRoleMappingItem?> getRoleByUuidAndOrgId(
     String uuid,
     String orgId,
   ) async {
-    lastLookupError = null;
-    try {
-      final candidates = uuidCandidates(uuid);
-      for (final candidate in candidates) {
-        final query = await FirebaseFirestore.instance
-            .collection('smcOrgUserRoleMapping')
-            .where('uuid', isEqualTo: candidate)
-            .where('org_id', isEqualTo: orgId)
-            .limit(1)
-            .get();
-
-        if (query.docs.isNotEmpty) {
-          final doc = query.docs.first;
-          return OrgUserRoleMappingItem.fromMap(doc.data(), documentId: doc.id);
-        }
-      }
-
-      final allDocs = await FirebaseFirestore.instance
-          .collection('smcOrgUserRoleMapping')
-          .where('org_id', isEqualTo: orgId)
-          .limit(200)
-          .get();
-      for (final doc in allDocs.docs) {
-        final data = doc.data();
-        final dbUuid = normalizeUuidForCompare(data['uuid']);
-        if (dbUuid.isEmpty) {
-          continue;
-        }
-        for (final candidate in candidates) {
-          if (dbUuid == normalizeUuidForCompare(candidate)) {
-            return OrgUserRoleMappingItem.fromMap(data, documentId: doc.id);
-          }
-        }
-      }
-      return null;
-    } catch (error) {
-      lastLookupError = error.toString();
+    final user = await getUserByUuid(uuid);
+    if (user == null) {
       return null;
     }
+    final normOrg = orgId.trim().toUpperCase();
+    final userOrg = user.orgId.trim().toUpperCase();
+    if (userOrg.isNotEmpty && userOrg != normOrg) {
+      return null;
+    }
+    if (user.normalizedUserRole.isEmpty) {
+      return null;
+    }
+    return OrgUserRoleMappingItem.fromUserMaster(user);
   }
 
   Future<UserMasterItem?> getUserByUuid(String uuid) async {

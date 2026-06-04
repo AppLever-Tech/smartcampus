@@ -2,10 +2,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:smartcampus/const/color_const.dart';
 import 'package:smartcampus/data/mock_master_data.dart';
-import 'package:smartcampus/screens/landing_page.dart';
+import 'package:smartcampus/screens/auth/landing_page.dart';
 import 'package:smartcampus/services/org_role_firestore_service.dart';
+import 'package:smartcampus/widgets/department_form_sheet.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
-import 'package:smartcampus/screens/basic_details_screen.dart';
+import 'package:smartcampus/screens/shared/basic_details_screen.dart';
 
 
 
@@ -132,296 +133,47 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
   }
 
   Future<void> openCreateDepartmentSheet() async {
-    final deptIdController = TextEditingController();
-    final deptNameController = TextEditingController();
-    final establishedYearController = TextEditingController();
-    final affiliationController = TextEditingController();
-
-    String selectedDeptType = 'Engineering';
-    String selectedAccreditation = 'None';
-    final Set<String> selectedPrograms = {};
-
-    const deptTypes = ['Engineering', 'Management', 'Science', 'Arts', 'Other'];
-    const accreditationOptions = ['None', 'NBA', 'NAAC', 'NBA & NAAC'];
-    const programOptions = [
-      'B.E', 'B.Tech', 'M.Tech', 'MCA', 'MBA', 'M.Sc', 'B.Sc', 'BCA', 'Ph.D'
-    ];
-
-    bool saving = false;
-
-    await showModalBottomSheet<void>(
+    final saved = await showDepartmentFormSheet(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 24,
-                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header row
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const smcText(
-                          textToDisplay: 'Create Department',
-                          textSize: 18,
-                          textBoldness: 5,
-                          colorOfText: ColorConst.textPrimary,
-                        ),
-                        IconButton(
-                          onPressed: () => Navigator.pop(ctx),
-                          icon: const Icon(Icons.close_rounded),
-                          color: ColorConst.textSecondary,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Department ID
-                    TextField(
-                      controller: deptIdController,
-                      textCapitalization: TextCapitalization.characters,
-                      decoration: InputDecoration(
-                        labelText: 'Department ID *',
-                        hintText: 'e.g. CSE, ECE, MCA',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Department Name
-                    TextField(
-                      controller: deptNameController,
-                      decoration: InputDecoration(
-                        labelText: 'Department Name *',
-                        hintText: 'e.g. Computer Science & Engineering',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Established Year
-                    TextField(
-                      controller: establishedYearController,
-                      keyboardType: TextInputType.number,
-                      maxLength: 4,
-                      decoration: InputDecoration(
-                        labelText: 'Established Year',
-                        hintText: 'e.g. 2005',
-                        counterText: '',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Department Type
-                    InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: 'Department Type',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: selectedDeptType,
-                          isExpanded: true,
-                          isDense: true,
-                          items: deptTypes
-                              .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                              .toList(),
-                          onChanged: (v) {
-                            if (v != null) {
-                              setModalState(() => selectedDeptType = v);
-                            }
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Programs Offered
-                    const smcText(
-                      textToDisplay: 'Program(s) Offered',
-                      textSize: 13,
-                      colorOfText: ColorConst.textSecondary,
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 0,
-                      children: programOptions.map((prog) {
-                        final isSelected = selectedPrograms.contains(prog);
-                        return FilterChip(
-                          label: Text(prog),
-                          selected: isSelected,
-                          selectedColor: ColorConst.primaryBlue.withValues(alpha: 0.15),
-                          checkmarkColor: ColorConst.primaryBlue,
-                          onSelected: (val) {
-                            setModalState(() {
-                              if (val) {
-                                selectedPrograms.add(prog);
-                              } else {
-                                selectedPrograms.remove(prog);
-                              }
-                            });
-                          },
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Affiliation / University
-                    TextField(
-                      controller: affiliationController,
-                      decoration: InputDecoration(
-                        labelText: 'Affiliation / University',
-                        hintText: 'e.g. Visvesvaraya Technological University',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Accreditation Status
-                    InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: 'Accreditation Status',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: selectedAccreditation,
-                          isExpanded: true,
-                          isDense: true,
-                          items: accreditationOptions
-                              .map((a) => DropdownMenuItem(value: a, child: Text(a)))
-                              .toList(),
-                          onChanged: (v) {
-                            if (v != null) {
-                              setModalState(() => selectedAccreditation = v);
-                            }
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: saving
-                            ? null
-                            : () async {
-                                final deptId =
-                                    deptIdController.text.trim().toUpperCase();
-                                final deptName = deptNameController.text.trim();
-                                if (deptId.isEmpty || deptName.isEmpty) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: smcText(
-                                        textToDisplay:
-                                            'Department ID and name are required.',
-                                        textSize: 14,
-                                        colorOfText: Colors.white,
-                                      ),
-                                    ),
-                                  );
-                                  return;
-                                }
-                                setModalState(() => saving = true);
-                                try {
-                                  await roleService.createOrUpdateDepartment(
-                                    orgId: widget.orgId,
-                                    deptId: deptId,
-                                    deptName: deptName,
-                                    establishedYear:
-                                        establishedYearController.text.trim(),
-                                    deptType: selectedDeptType,
-                                    programsOffered: selectedPrograms.toList(),
-                                    affiliation:
-                                        affiliationController.text.trim(),
-                                    accreditationStatus: selectedAccreditation,
-                                    createdBy: FirebaseAuth.instance.currentUser
-                                            ?.uid ??
-                                        '',
-                                  );
-                                  if (!context.mounted) {
-                                    return;
-                                  }
-                                  Navigator.pop(ctx);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: smcText(
-                                        textToDisplay:
-                                            'Department saved successfully.',
-                                        textSize: 14,
-                                        colorOfText: Colors.white,
-                                      ),
-                                    ),
-                                  );
-                                  await refresh();
-                                } catch (_) {
-                                  if (!context.mounted) {
-                                    return;
-                                  }
-                                  setModalState(() => saving = false);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: smcText(
-                                        textToDisplay: 'Failed to save department.',
-                                        textSize: 14,
-                                        colorOfText: Colors.white,
-                                      ),
-                                    ),
-                                  );
-                                }
-                              },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: ColorConst.primaryBlue,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: smcText(
-                          textToDisplay:
-                              saving ? 'Saving...' : 'Save Department',
-                          textSize: 15,
-                          textBoldness: 4,
-                          colorOfText: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+      roleService: roleService,
+      orgId: widget.orgId,
     );
+    if (!mounted || !saved) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: smcText(
+          textToDisplay: 'Department saved successfully.',
+          textSize: 14,
+          colorOfText: Colors.white,
+        ),
+      ),
+    );
+    await refresh();
+  }
+
+  Future<void> openEditDepartmentSheet(DepartmentMasterItem department) async {
+    final saved = await showDepartmentFormSheet(
+      context: context,
+      roleService: roleService,
+      orgId: widget.orgId,
+      department: department,
+      lockDeptId: true,
+    );
+    if (!mounted || !saved) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: smcText(
+          textToDisplay: 'Department updated successfully.',
+          textSize: 14,
+          colorOfText: Colors.white,
+        ),
+      ),
+    );
+    await refresh();
   }
 
   Future<void> openDetailSheet(OrgUserRoleMappingItem mapping) async {
@@ -1008,7 +760,6 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                     ],
                   ],
                 )
-
                     : selectedMenuIndex == 1
                     ? BasicDetailsScreen(
                   isAdmin: true,
@@ -1168,27 +919,22 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                 departments[index];
 
                 return Card(
-
                   child: ListTile(
-
-                    leading:
-                    const CircleAvatar(
-
-                      child: Icon(
-                        Icons.account_tree,
-                      ),
+                    leading: const CircleAvatar(
+                      child: Icon(Icons.account_tree),
                     ),
-
-                    title: Text(
-                      dept.deptName,
-                    ),
-
+                    title: Text(dept.deptName),
                     subtitle: Text(
-                      "ID : ${dept.deptId}",
+                      'ID: ${dept.deptId}'
+                      '${dept.deptAccessCode.isNotEmpty ? '  ·  Access code: ${dept.deptAccessCode}' : ''}',
                     ),
-
+                    trailing: IconButton(
+                      icon: const Icon(Icons.edit_outlined),
+                      color: ColorConst.primaryBlue,
+                      onPressed: () => openEditDepartmentSheet(dept),
+                    ),
+                    onTap: () => openEditDepartmentSheet(dept),
                   ),
-
                 );
 
               },
