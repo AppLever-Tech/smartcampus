@@ -1,10 +1,11 @@
 import 'dart:typed_data';
-
+import 'package:smartcampus/screens/shared/course_enrollment_excel_review_page.dart';
 import 'package:excel/excel.dart' as excel;
 import 'package:file_picker/file_picker.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
+import 'package:smartcampus/widgets/course_assign_faculty_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:smartcampus/const/color_const.dart';
 import 'package:smartcampus/data/faculty_model.dart';
@@ -15,7 +16,7 @@ import 'package:smartcampus/widgets/course_enroll_search_dialog.dart';
 import 'package:smartcampus/widgets/pdf_preview.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 import 'package:url_launcher/url_launcher.dart';
-
+import 'package:smartcampus/services/faculty_firestore_service.dart';
 class CourseDetailPage extends StatefulWidget {
   const CourseDetailPage({
     super.key,
@@ -56,10 +57,17 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
   bool _enrollingStudents = false;
   late String _syllabusPdfUrl;
   late String _syllabusPdfName;
+  List<FacultyModel> _allFaculty = [];
   final CourseFirestoreService _courseService = CourseFirestoreService();
   final TextEditingController _enrolledSearchController = TextEditingController();
+  final TextEditingController _facultySearchController = TextEditingController();
+  final FacultyFirestoreService
+  _facultyService =
+  FacultyFirestoreService();
   int _enrolledCurrentPage = 1;
   int _enrolledRowsPerPage = 25;
+  int _facultyCurrentPage = 1;
+  int _facultyRowsPerPage = 25;
 
   static const List<String> _tabLabels = [
     'Course Details',
@@ -75,11 +83,13 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
     super.initState();
     _syllabusPdfUrl = widget.course.syllabusPdfUrl;
     _syllabusPdfName = widget.course.syllabusPdfName;
+    _loadFaculty();
   }
 
   @override
   void dispose() {
     _enrolledSearchController.dispose();
+    _facultySearchController.dispose();
     super.dispose();
   }
 
@@ -116,6 +126,21 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
         .toList();
   }
 
+  List<FacultyModel> get _assignedFacultyList {
+    final assignedIds =
+    _course.assignedFacultyIds.toSet();
+
+    return _allFaculty.where((faculty) {
+
+      final id =
+          faculty.documentId ??
+              faculty.facultyId;
+
+      return assignedIds.contains(id);
+
+    }).toList();
+  }
+
   List<StudentModel> get _availableStudentsForEnrollment {
     final Set<String> enrolledIds = _course.enrolledStudentIds.toSet();
     return widget.allStudents
@@ -139,6 +164,89 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
           color: ColorConst.primaryBlue,
           fontWeight: FontWeight.w700,
           fontSize: 14,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _loadFaculty() async {
+    try {
+
+      final faculty =
+      await _facultyService
+          .listFacultyForOrg(
+        widget.course.orgId,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _allFaculty = faculty;
+      });
+
+    } catch (e) {
+      debugPrint(
+        'Faculty load failed: $e',
+      );
+    }
+  }
+  Future<void> _showAssignFacultyDialog() async {
+    final List<FacultyModel>? selectedFaculties =
+    await showDialog<List<FacultyModel>>(
+      context: context,
+      builder: (_) =>
+          CourseAssignSearchDialog(
+            faculties: _allFaculty
+                .where((faculty) =>
+            !_course.assignedFacultyIds.contains(
+              faculty.documentId?.isNotEmpty == true
+                  ? faculty.documentId!
+                  : faculty.facultyId,
+            ))
+                .toList(),
+          ),
+    );
+
+    if (selectedFaculties == null ||
+        selectedFaculties.isEmpty) {
+      return;
+    }
+
+
+    final List<String> newIds = [
+      ..._course.assignedFacultyIds,
+    ];
+
+    for (final faculty in selectedFaculties) {
+      final id =
+      faculty.documentId?.isNotEmpty == true
+          ? faculty.documentId!
+          : faculty.facultyId;
+
+      if (!newIds.contains(id)) {
+        newIds.add(id);
+      }
+    }
+
+    await _courseService.updateCourseFields(
+      _course.id,
+      {
+        'assignedFacultyIds': newIds,
+      },
+    );
+
+    widget.onCourseUpdated?.call(
+      _course.copyWith(
+        assignedFacultyIds: newIds,
+      ),
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${selectedFaculties.length} faculty assigned successfully',
         ),
       ),
     );
@@ -677,81 +785,423 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
   }
 
   Widget _buildAssignedFaculty() {
-    final List<FacultyModel> faculty = widget.assignedFaculty;
-    if (faculty.isEmpty) {
-      return _buildEmptyState(
-        _course.faculty.trim().isEmpty
-            ? 'No faculty assigned yet.'
-            : 'Assigned faculty: ${_course.faculty}',
-      );
-    }
+    final List<FacultyModel> assigned = _assignedFacultyList;
 
-    return ListView.separated(
-      padding: const EdgeInsets.all(20),
-      itemCount: faculty.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (context, index) {
-        final FacultyModel f = faculty[index];
-        return Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFE3EAF8)),
-          ),
-          child: Row(
+    final String searchTerm =
+    _facultySearchController.text.trim().toLowerCase();
+
+    final List<FacultyModel> searched = assigned.where((f) {
+      if (searchTerm.isEmpty) return true;
+
+      return '${f.facultyId} ${f.fullName} ${f.email} ${f.mobile}'
+          .toLowerCase()
+          .contains(searchTerm);
+    }).toList()
+      ..sort(
+            (a, b) => a.fullName
+            .toLowerCase()
+            .compareTo(b.fullName.toLowerCase()),
+      );
+
+    final int totalRows = searched.length;
+
+    final int totalPages =
+    totalRows == 0 ? 1 : ((totalRows - 1) ~/ _facultyRowsPerPage) + 1;
+
+    final int safePage =
+    _facultyCurrentPage.clamp(1, totalPages);
+
+    final int startIndex =
+        (safePage - 1) * _facultyRowsPerPage;
+
+    final int endIndex =
+    (startIndex + _facultyRowsPerPage)
+        .clamp(0, totalRows);
+
+    final List<FacultyModel> pageRows =
+    totalRows == 0
+        ? <FacultyModel>[]
+        : searched.sublist(startIndex, endIndex);
+
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+
+          Row(
             children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: const Color(0xFFEAF0FF),
+
+              const smcText(
+                textToDisplay: 'Assigned Faculties',
+                textSize: 16,
+                textBoldness: 5,
+                colorOfText: Color(0xFF1F2F52),
+              ),
+
+              const SizedBox(width: 8),
+
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF4FF),
+                  borderRadius: BorderRadius.circular(999),
+                ),
                 child: smcText(
-                  textToDisplay: f.fullName.trim().isEmpty
-                      ? '?'
-                      : f.fullName.trim().substring(0, 1).toUpperCase(),
-                  textSize: 16,
-                  textBoldness: 5,
+                  textToDisplay: '${assigned.length}',
+                  textSize: 12,
+                  textBoldness: 4,
                   colorOfText: ColorConst.primaryBlue,
                 ),
               ),
+
               const SizedBox(width: 12),
+
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    smcText(
-                      textToDisplay: _displayText(f.fullName),
-                      textSize: 14,
-                      textBoldness: 4,
-                      colorOfText: ColorConst.textPrimary,
-                      maxLines: 1,
+                child: SizedBox(
+                  height: 44,
+                  child: TextField(
+                    controller: _facultySearchController,
+                    onChanged: (_) => setState(
+                          () => _facultyCurrentPage = 1,
                     ),
-                    const SizedBox(height: 2),
-                    smcText(
-                      textToDisplay:
-                          'Faculty ID: ${_displayText(f.facultyId)}',
-                      textSize: 12,
-                      colorOfText: ColorConst.textSecondary,
-                      maxLines: 1,
-                    ),
-                    if (f.email.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      smcText(
-                        textToDisplay: f.email,
-                        textSize: 12,
-                        colorOfText: ColorConst.textSecondary,
-                        maxLines: 1,
+                    decoration: InputDecoration(
+                      hintText: 'Search faculty...',
+                      prefixIcon: const Icon(
+                        Icons.search_rounded,
+                        size: 20,
+                        color: Color(0xFF8A96B2),
                       ),
-                    ],
-                  ],
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding:
+                      const EdgeInsets.symmetric(
+                        vertical: 0,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius:
+                        BorderRadius.circular(10),
+                        borderSide: const BorderSide(
+                          color: Color(0xFFE2E8F5),
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius:
+                        BorderRadius.circular(10),
+                        borderSide: const BorderSide(
+                          color: Color(0xFFE2E8F5),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius:
+                        BorderRadius.circular(10),
+                        borderSide: const BorderSide(
+                          color: ColorConst.primaryBlue,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 10),
+
+              SizedBox(
+                height: 44,
+                child: OutlinedButton(
+                  onPressed: () {
+                    setState(() {
+                      _facultySearchController.clear();
+                      _facultyCurrentPage = 1;
+                    });
+                  },
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const smcText(
+                    textToDisplay: 'Reset',
+                    textSize: 12,
+                    textBoldness: 3,
+                    colorOfText: Color(0xFF4F5E7D),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+
+              ElevatedButton.icon(
+                onPressed: _showAssignFacultyDialog,
+                icon: const Icon(
+                  Icons.person_add_alt_1_rounded,
+                  size: 18,
+                  color: Colors.white,
+                ),
+                label: const smcText(
+                  textToDisplay: 'Assign Faculty',
+                  textSize: 13,
+                  textBoldness: 4,
+                  colorOfText: Colors.white,
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ColorConst.primaryBlue,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
               ),
             ],
           ),
-        );
-      },
+
+          const SizedBox(height: 12),
+
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius:
+                BorderRadius.circular(14),
+                border: Border.all(
+                  color: const Color(0xFFE3EAF8),
+                ),
+              ),
+              child: totalRows == 0
+                  ? const Center(
+                child: smcText(
+                  textToDisplay:
+                  'No faculty assigned yet.',
+                  textSize: 13,
+                  colorOfText:
+                  Color(0xFF8A96B2),
+                ),
+              )
+                  : Column(
+                children: [
+
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection:
+                      Axis.horizontal,
+                      child: DataTable(
+                        showCheckboxColumn: false,
+                        headingRowColor:
+                        MaterialStateProperty.all(
+                          const Color(
+                              0xFFF4F7FF),
+                        ),
+                        border: TableBorder.all(
+                          color:
+                          const Color(
+                              0xFFE3EAF8),
+                        ),
+                        columns: const [
+
+                          DataColumn(
+                            label: Text('S.No'),
+                          ),
+
+                          DataColumn(
+                            label:
+                            Text('Faculty ID'),
+                          ),
+
+                          DataColumn(
+                            label:
+                            Text('Faculty Name'),
+                          ),
+
+                          DataColumn(
+                            label:
+                            Text('Email'),
+                          ),
+
+                          DataColumn(
+                            label:
+                            Text('Mobile'),
+                          ),
+                        ],
+                        rows: pageRows
+                            .asMap()
+                            .entries
+                            .map((entry) {
+
+                          final index =
+                              entry.key;
+
+                          final faculty =
+                              entry.value;
+
+                          final serialNo =
+                              startIndex +
+                                  index +
+                                  1;
+
+                          return DataRow(
+                            cells: [
+
+                              DataCell(
+                                Text(
+                                  '$serialNo',
+                                ),
+                              ),
+
+                              DataCell(
+                                Text(
+                                  faculty
+                                      .facultyId,
+                                ),
+                              ),
+
+                              DataCell(
+                                Row(
+                                  children: [
+
+                                    CircleAvatar(
+                                      radius: 18,
+                                      backgroundColor:
+                                      const Color(
+                                        0xFFEAF0FF,
+                                      ),
+                                      child: Text(
+                                        faculty
+                                            .fullName
+                                            .isEmpty
+                                            ? '?'
+                                            : faculty
+                                            .fullName[
+                                        0]
+                                            .toUpperCase(),
+                                      ),
+                                    ),
+
+                                    const SizedBox(
+                                        width: 10),
+
+                                    Text(
+                                      faculty
+                                          .fullName,
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              DataCell(
+                                Text(
+                                  faculty.email,
+                                ),
+                              ),
+
+                              DataCell(
+                                Text(
+                                  faculty.mobile,
+                                ),
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+
+                  Container(
+                    height: 58,
+                    padding:
+                    const EdgeInsets.symmetric(
+                      horizontal: 14,
+                    ),
+                    child: Row(
+                      mainAxisAlignment:
+                      MainAxisAlignment.end,
+                      children: [
+
+                        Text(
+                          totalRows == 0
+                              ? 'Showing 0 entries'
+                              : 'Showing ${startIndex + 1} to $endIndex of $totalRows entries',
+                        ),
+
+                        const SizedBox(width: 16),
+
+                        DropdownButton<int>(
+                          value:
+                          _facultyRowsPerPage,
+                          items: const [
+                            DropdownMenuItem(
+                              value: 10,
+                              child: Text('10'),
+                            ),
+                            DropdownMenuItem(
+                              value: 25,
+                              child: Text('25'),
+                            ),
+                            DropdownMenuItem(
+                              value: 50,
+                              child: Text('50'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() {
+                                _facultyRowsPerPage =
+                                    value;
+                                _facultyCurrentPage =
+                                1;
+                              });
+                            }
+                          },
+                        ),
+
+                        IconButton(
+                          onPressed:
+                          safePage > 1
+                              ? () {
+                            setState(() {
+                              _facultyCurrentPage--;
+                            });
+                          }
+                              : null,
+                          icon: const Icon(
+                            Icons.chevron_left,
+                          ),
+                        ),
+
+                        Text('$safePage'),
+
+                        IconButton(
+                          onPressed:
+                          safePage <
+                              totalPages
+                              ? () {
+                            setState(() {
+                              _facultyCurrentPage++;
+                            });
+                          }
+                              : null,
+                          icon: const Icon(
+                            Icons.chevron_right,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
-
   Widget _buildEnrolledStudents() {
     final List<StudentModel> enrolled = _enrolledStudentsList;
     final String searchTerm = _enrolledSearchController.text.trim().toLowerCase();
@@ -1342,52 +1792,82 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
         allowedExtensions: const ['xlsx'],
         withData: true,
       );
+
       if (result == null || result.files.isEmpty) {
         return;
       }
 
       final Uint8List? bytes = result.files.single.bytes;
+
       if (bytes == null || bytes.isEmpty) {
         if (!mounted) return;
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not read the selected Excel file.')),
+          const SnackBar(
+            content: Text(
+              'Could not read the selected Excel file.',
+            ),
+          ),
         );
         return;
       }
 
-      final excel.Excel workbook = excel.Excel.decodeBytes(bytes);
+      final excel.Excel workbook =
+      excel.Excel.decodeBytes(bytes);
+
       if (workbook.tables.isEmpty) {
         if (!mounted) return;
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No sheets found in the Excel file.')),
+          const SnackBar(
+            content: Text(
+              'No sheets found in the Excel file.',
+            ),
+          ),
         );
         return;
       }
 
-      final excel.Sheet sheet = workbook.tables.values.first;
+      final excel.Sheet sheet =
+          workbook.tables.values.first;
+
       if (sheet.rows.length <= 1) {
         if (!mounted) return;
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No student IDs found in the Excel file.')),
+          const SnackBar(
+            content: Text(
+              'No student IDs found in the Excel file.',
+            ),
+          ),
         );
         return;
       }
 
       final Map<String, StudentModel> availableById = {
-        for (final StudentModel student in _availableStudentsForEnrollment)
+        for (final StudentModel student
+        in _availableStudentsForEnrollment)
           student.studentId.trim().toUpperCase(): student,
       };
 
-      final List<StudentModel> matched = <StudentModel>[];
-      final Set<String> seenIds = <String>{};
+      final List<StudentModel> matched = [];
+
+      final Set<String> seenIds = {};
+
       for (int i = 1; i < sheet.rows.length; i++) {
         final List<excel.Data?> row = sheet.rows[i];
+
         final String studentId =
             row[0]?.value?.toString().trim().toUpperCase() ?? '';
-        if (studentId.isEmpty || seenIds.contains(studentId)) {
+
+        if (studentId.isEmpty ||
+            seenIds.contains(studentId)) {
           continue;
         }
-        final StudentModel? student = availableById[studentId];
+
+        final StudentModel? student =
+        availableById[studentId];
+
         if (student != null) {
           matched.add(student);
           seenIds.add(studentId);
@@ -1396,19 +1876,57 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
 
       if (matched.isEmpty) {
         if (!mounted) return;
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('No matching unenrolled students found in the Excel file.'),
+            content: Text(
+              'No matching unenrolled students found in the Excel file.',
+            ),
           ),
         );
         return;
       }
 
-      await _enrollStudents(matched);
+      if (!mounted) return;
+
+      final bool? enrolled =
+      await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              CourseEnrollmentExcelReviewPage(
+                course: _course,
+                students: matched,
+                studentAvatarBuilder:
+                widget.studentAvatarBuilder,
+              ),
+        ),
+      );
+
+      if (enrolled == true) {
+        final List<String> keys =
+        matched.map(_studentKey).toList();
+
+        final List<String> updatedIds = {
+          ..._course.enrolledStudentIds,
+          ...keys,
+        }.toList();
+
+        widget.onCourseUpdated?.call(
+          _course.copyWith(
+            enrolledStudentIds: updatedIds,
+          ),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to import enrollments: $e')),
+        SnackBar(
+          content: Text(
+            'Failed to import enrollments: $e',
+          ),
+        ),
       );
     }
   }

@@ -15,6 +15,7 @@ class CourseModel {
   final String syllabusPdfUrl;
   final String syllabusPdfName;
   final List<String> enrolledStudentIds;
+  final List<String> assignedFacultyIds;
   final int lectureHrs;
   final int tutorialHrs;
   final int practicalHrs;
@@ -40,6 +41,7 @@ class CourseModel {
     this.syllabusPdfUrl = '',
     this.syllabusPdfName = '',
     this.enrolledStudentIds = const [],
+    this.assignedFacultyIds = const [],
     this.lectureHrs = 0,
     this.tutorialHrs = 0,
     this.practicalHrs = 0,
@@ -85,6 +87,10 @@ class CourseModel {
           .trim(),
       enrolledStudentIds: _parseStringList(
         data['enrolled_student_ids'] ?? data['enrolledStudentIds'],
+      ),
+      assignedFacultyIds:
+      List<String>.from(
+        data['assignedFacultyIds'] ?? [],
       ),
       lectureHrs: _parseInt(data['lectureHrs']),
       tutorialHrs: _parseInt(data['tutorialHrs']),
@@ -133,6 +139,7 @@ class CourseModel {
       'syllabus_pdf_url': syllabusPdfUrl,
       'syllabus_pdf_name': syllabusPdfName,
       'enrolled_student_ids': enrolledStudentIds,
+      'assignedFacultyIds': assignedFacultyIds,
       'lectureHrs': lectureHrs,
       'tutorialHrs': tutorialHrs,
       'practicalHrs': practicalHrs,
@@ -152,6 +159,8 @@ class CourseModel {
     String? syllabusPdfUrl,
     String? syllabusPdfName,
     List<String>? enrolledStudentIds,
+    List<String>? assignedFacultyIds,
+
   }) {
     return CourseModel(
       id: id,
@@ -168,6 +177,9 @@ class CourseModel {
       syllabusPdfUrl: syllabusPdfUrl ?? this.syllabusPdfUrl,
       syllabusPdfName: syllabusPdfName ?? this.syllabusPdfName,
       enrolledStudentIds: enrolledStudentIds ?? this.enrolledStudentIds,
+      assignedFacultyIds:
+      assignedFacultyIds ??
+          this.assignedFacultyIds,
       lectureHrs: lectureHrs,
       tutorialHrs: tutorialHrs,
       practicalHrs: practicalHrs,
