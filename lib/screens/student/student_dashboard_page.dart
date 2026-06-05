@@ -9,11 +9,13 @@ import 'package:smartcampus/data/user_org_scope.dart';
 import 'package:smartcampus/models/course_model.dart';
 import 'package:smartcampus/screens/auth/landing_page.dart';
 import 'package:smartcampus/screens/shared/person_detail_page.dart';
+import 'package:smartcampus/screens/student/student_dashboard_mobile_layout.dart';
 import 'package:smartcampus/screens/student/student_profile_not_found_page.dart';
 import 'package:smartcampus/services/course_firestore_service.dart';
 import 'package:smartcampus/services/org_role_firestore_service.dart';
 import 'package:smartcampus/services/student_firestore_service.dart';
 import 'package:smartcampus/services/user_master_firestore_service.dart';
+import 'package:smartcampus/widgets/profile_photo_avatar.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 
 class StudentDashboardPage extends StatefulWidget {
@@ -161,6 +163,11 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
     );
   }
 
+  static const double _mobileLayoutBreakpoint = 768;
+
+  bool _isMobileLayout(BuildContext context) =>
+      MediaQuery.sizeOf(context).width < _mobileLayoutBreakpoint;
+
   @override
   Widget build(BuildContext context) {
     if (loading) {
@@ -173,7 +180,19 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
       return StudentProfileNotFoundPage(onLogout: onLogout);
     }
 
-    final String welcomeName = studentProfile!.fullName;
+    final student = studentProfile!;
+
+    if (_isMobileLayout(context)) {
+      return StudentDashboardMobileLayout(
+        selectedIndex: selectedMenuIndex,
+        onIndexChanged: (index) => setState(() => selectedMenuIndex = index),
+        onLogout: onLogout,
+        student: student,
+        displayName: widget.displayName,
+        dashboardContent: _buildDashboardView(),
+        profileContent: _buildProfileView(),
+      );
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
@@ -184,7 +203,7 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: _buildSelectedView(welcomeName),
+                child: _buildSelectedView(),
               ),
             ),
           ],
@@ -193,14 +212,14 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
     );
   }
 
-  Widget _buildSelectedView(String welcomeName) {
+  Widget _buildSelectedView() {
     if (selectedMenuIndex == 1) {
       return _buildProfileView();
     }
-    return _buildDashboardView(welcomeName);
+    return _buildDashboardView();
   }
 
-  Widget _buildDashboardView(String welcomeName) {
+  Widget _buildDashboardView() {
     final courses = enrolledCourses;
     final totalCredits = courses.fold<int>(
       0,
@@ -210,17 +229,22 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        smcText(
-          textToDisplay: 'Welcome, $welcomeName',
-          textSize: 20,
-          textBoldness: 5,
-          colorOfText: ColorConst.textPrimary,
-        ),
-        const SizedBox(height: 6),
-        smcText(
-          textToDisplay: organizationDisplayName,
-          textSize: 14,
-          colorOfText: ColorConst.textSecondary,
+        Row(
+          children: [
+            const smcText(
+              textToDisplay: 'USN: ',
+              textSize: 14,
+              colorOfText: ColorConst.textSecondary,
+            ),
+            smcText(
+              textToDisplay: (studentProfile?.studentId ?? '').trim().isEmpty
+                  ? '—'
+                  : studentProfile!.studentId,
+              textSize: 14,
+              textBoldness: 5,
+              colorOfText: ColorConst.textPrimary,
+            ),
+          ],
         ),
         if (departmentDisplayName.isNotEmpty) ...[
           const SizedBox(height: 4),
@@ -251,20 +275,10 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
             const SizedBox(width: 16),
             Expanded(
               child: _buildStatCard(
-                title: 'Total Credits',
+                title: 'Total\nCredits',
                 count: totalCredits.toString(),
                 icon: Icons.star_outline_rounded,
                 color: Colors.green,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _buildStatCard(
-                title: 'USN',
-                count: studentProfile?.studentId ?? '—',
-                icon: Icons.badge_outlined,
-                color: Colors.orange,
-                compactValue: true,
               ),
             ),
           ],
@@ -385,6 +399,7 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
       embedded: true,
       embeddedMaximized: true,
       showLeadingAction: false,
+      showEmbeddedHeader: !_isMobileLayout(context),
     );
   }
 
@@ -393,7 +408,6 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
     required String count,
     required IconData icon,
     required Color color,
-    bool compactValue = false,
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -422,11 +436,12 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
                   textToDisplay: title,
                   textSize: 13,
                   colorOfText: ColorConst.textSecondary,
+                  maxLines: 2,
                 ),
                 const SizedBox(height: 4),
                 smcText(
                   textToDisplay: count,
-                  textSize: compactValue ? 14 : 22,
+                  textSize: 22,
                   textBoldness: 5,
                   colorOfText: ColorConst.textPrimary,
                   maxLines: 1,
@@ -436,6 +451,23 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSidebarProfileAvatar({required double radius}) {
+    final student = studentProfile;
+    final String name = student?.fullName ?? widget.displayName;
+    final String initial = name.trim().isEmpty
+        ? 'S'
+        : name.trim().substring(0, 1).toUpperCase();
+    final String photoUrl = normalizeProfilePhotoUrl(
+      student?.photographUrl ?? '',
+    );
+
+    return ProfilePhotoAvatar(
+      photoUrl: photoUrl,
+      fallbackInitial: initial,
+      radius: radius,
     );
   }
 
@@ -460,13 +492,27 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
                 padding: const EdgeInsets.only(left: 4, bottom: 12),
                 child: Row(
                   children: [
-                    const Expanded(
-                      child: smcText(
-                        textToDisplay: 'Student Portal',
-                        textSize: 18,
-                        textBoldness: 5,
-                        colorOfText: ColorConst.textPrimary,
-                        maxLines: 1,
+                    _buildSidebarProfileAvatar(radius: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          smcText(
+                            textToDisplay:
+                                'Welcome, ${(studentProfile?.fullName ?? '').trim().isNotEmpty ? studentProfile!.fullName : widget.displayName}',
+                            textSize: 14,
+                            textBoldness: 5,
+                            colorOfText: ColorConst.textPrimary,
+                            maxLines: 1,
+                          ),
+                          const smcText(
+                            textToDisplay: 'Student Portal',
+                            textSize: 12,
+                            colorOfText: ColorConst.textSecondary,
+                            maxLines: 1,
+                          ),
+                        ],
                       ),
                     ),
                     IconButton(
@@ -478,13 +524,15 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
                   ],
                 ),
               )
-            else
+            else ...[
+              _buildSidebarProfileAvatar(radius: 24),
               IconButton(
                 icon: const Icon(Icons.chevron_right_rounded),
                 tooltip: 'Expand menu',
                 color: ColorConst.primaryBlue,
                 onPressed: () => setState(() => sidebarExpanded = true),
               ),
+            ],
             const SizedBox(height: 8),
             _menuTile(
               title: 'Dashboard',

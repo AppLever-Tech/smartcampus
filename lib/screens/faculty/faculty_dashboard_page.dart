@@ -14,6 +14,7 @@ import 'package:smartcampus/services/course_firestore_service.dart';
 import 'package:smartcampus/services/faculty_firestore_service.dart';
 import 'package:smartcampus/services/org_role_firestore_service.dart';
 import 'package:smartcampus/services/user_master_firestore_service.dart';
+import 'package:smartcampus/widgets/profile_photo_avatar.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 
 class FacultyDashboardPage extends StatefulWidget {
@@ -739,6 +740,23 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
     );
   }
 
+  Widget _buildSidebarProfileAvatar({required double radius}) {
+    final faculty = facultyProfile;
+    final String name = faculty?.fullName ?? widget.displayName;
+    final String initial = name.trim().isEmpty
+        ? 'F'
+        : name.trim().substring(0, 1).toUpperCase();
+    final String photoUrl = normalizeProfilePhotoUrl(
+      faculty?.photographUrl ?? '',
+    );
+
+    return ProfilePhotoAvatar(
+      photoUrl: photoUrl,
+      fallbackInitial: initial,
+      radius: radius,
+    );
+  }
+
   Widget _buildSidebar() {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
@@ -760,13 +778,27 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
                 padding: const EdgeInsets.only(left: 4, bottom: 12),
                 child: Row(
                   children: [
-                    const Expanded(
-                      child: smcText(
-                        textToDisplay: 'Faculty Portal',
-                        textSize: 18,
-                        textBoldness: 5,
-                        colorOfText: ColorConst.textPrimary,
-                        maxLines: 1,
+                    _buildSidebarProfileAvatar(radius: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          smcText(
+                            textToDisplay: facultyProfile?.fullName ??
+                                widget.displayName,
+                            textSize: 14,
+                            textBoldness: 5,
+                            colorOfText: ColorConst.textPrimary,
+                            maxLines: 1,
+                          ),
+                          const smcText(
+                            textToDisplay: 'Faculty Portal',
+                            textSize: 12,
+                            colorOfText: ColorConst.textSecondary,
+                            maxLines: 1,
+                          ),
+                        ],
                       ),
                     ),
                     IconButton(
@@ -778,13 +810,15 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
                   ],
                 ),
               )
-            else
+            else ...[
+              _buildSidebarProfileAvatar(radius: 24),
               IconButton(
                 icon: const Icon(Icons.chevron_right_rounded),
                 tooltip: 'Expand menu',
                 color: ColorConst.primaryBlue,
                 onPressed: () => setState(() => sidebarExpanded = true),
               ),
+            ],
             const SizedBox(height: 8),
             _menuTile(
               title: 'Dashboard',

@@ -18,6 +18,8 @@ class PersonDetailPage extends StatefulWidget {
   final VoidCallback? onEditStudent;
   /// When false, hides back/close in the embedded header (e.g. student own profile).
   final bool showLeadingAction;
+  /// When false, hides the blue embedded header (e.g. student mobile profile tab).
+  final bool showEmbeddedHeader;
 
   const PersonDetailPage({
     super.key,
@@ -30,6 +32,7 @@ class PersonDetailPage extends StatefulWidget {
     this.onBackFromMaximized,
     this.onEditStudent,
     this.showLeadingAction = true,
+    this.showEmbeddedHeader = true,
   });
 
   @override
@@ -38,6 +41,16 @@ class PersonDetailPage extends StatefulWidget {
 
 class _PersonDetailPageState extends State<PersonDetailPage> {
   int _selectedIndex = 0;
+  String _selectedEnrolledSemester = 'I';
+  final CourseFirestoreService _courseService = CourseFirestoreService();
+  Stream<List<CourseModel>>? _enrolledCoursesStream;
+
+  static const List<String> _enrolledSemesterOptions = [
+    'I',
+    'II',
+    'III',
+    'IV',
+  ];
 
   String get _name => widget.isStudent
       ? (widget.person as StudentModel).fullName
@@ -48,6 +61,34 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
       : (widget.person as FacultyModel).facultyId;
 
   String get _idLabel => widget.isStudent ? 'USN' : 'Faculty ID';
+
+  @override
+  void initState() {
+    super.initState();
+    _bindEnrolledCoursesStream();
+  }
+
+  @override
+  void didUpdateWidget(PersonDetailPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isStudent &&
+        widget.person is StudentModel &&
+        (oldWidget.person is! StudentModel ||
+            (oldWidget.person as StudentModel).orgId !=
+                (widget.person as StudentModel).orgId)) {
+      _bindEnrolledCoursesStream();
+    }
+  }
+
+  void _bindEnrolledCoursesStream() {
+    if (!widget.isStudent || widget.person is! StudentModel) {
+      _enrolledCoursesStream = null;
+      return;
+    }
+    final StudentModel student = widget.person as StudentModel;
+    _enrolledCoursesStream =
+        _courseService.getCoursesForOrg(orgId: student.orgId);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -75,7 +116,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildEmbeddedHeader(),
+              if (widget.showEmbeddedHeader) _buildEmbeddedHeader(),
               Expanded(child: body),
             ],
           ),
@@ -720,11 +761,237 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
   }
 
   Widget _buildCoursesOpted() {
-    return const Center(
-      child: smcText(
-        textToDisplay: 'No courses enrolled yet.',
-        textSize: 14,
-        colorOfText: ColorConst.textSecondary,
+    final StudentModel student = widget.person as StudentModel;
+    final Stream<List<CourseModel>> coursesStream =
+        _enrolledCoursesStream ??
+            _courseService.getCoursesForOrg(orgId: student.orgId);
+
+    return StreamBuilder<List<CourseModel>>(
+      stream: coursesStream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final List<CourseModel> enrolledCourses =
+            CourseFirestoreService.filterCoursesForStudent(
+          snapshot.data ?? const <CourseModel>[],
+          student,
+        );
+
+        if (enrolledCourses.isEmpty) {
+          return const Center(
+            child: smcText(
+              textToDisplay: 'No courses enrolled yet.',
+              textSize: 14,
+              colorOfText: ColorConst.textSecondary,
+              textAlign: TextAlign.center,
+              maxLines: 3,
+            ),
+          );
+        }
+
+        final List<CourseModel> semesterCourses = enrolledCourses
+            .where(
+              (course) => _courseMatchesSemester(
+                course,
+                _selectedEnrolledSemester,
+              ),
+            )
+            .toList();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              child: Row(
+                children: [
+                  const smcText(
+                    textToDisplay: 'Semester',
+                    textSize: 13,
+                    textBoldness: 4,
+                    colorOfText: ColorConst.textSecondary,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (int i = 0;
+                              i < _enrolledSemesterOptions.length;
+                              i++) ...[
+                            if (i > 0) const SizedBox(width: 8),
+                            _buildSemesterFilterChip(
+                              semester: _enrolledSemesterOptions[i],
+                              enrolledCourses: enrolledCourses,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: semesterCourses.isEmpty
+                  ? Center(
+                      child: smcText(
+                        textToDisplay:
+                            'No courses enrolled in Semester $_selectedEnrolledSemester.',
+                        textSize: 14,
+                        colorOfText: ColorConst.textSecondary,
+                        textAlign: TextAlign.center,
+                        maxLines: 3,
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                      itemCount: semesterCourses.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        return _buildEnrolledCourseTile(semesterCourses[index]);
+                      },
+                    ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  bool _courseMatchesSemester(CourseModel course, String semester) {
+    return course.semester.trim().toUpperCase() ==
+        semester.trim().toUpperCase();
+  }
+
+  Widget _buildSemesterFilterChip({
+    required String semester,
+    required List<CourseModel> enrolledCourses,
+  }) {
+    final bool isSelected = _selectedEnrolledSemester == semester;
+    final int courseCount = enrolledCourses
+        .where((course) => _courseMatchesSemester(course, semester))
+        .length;
+
+    return InkWell(
+      onTap: () => setState(() => _selectedEnrolledSemester = semester),
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFE8F0FE) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? const Color(0xFF1967D2)
+                : const Color(0xFFD1D5DB),
+            width: isSelected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isSelected) ...[
+              const Icon(Icons.check, size: 14, color: Color(0xFF1967D2)),
+              const SizedBox(width: 6),
+            ],
+            smcText(
+              textToDisplay: semester,
+              textSize: 13,
+              textBoldness: isSelected ? 4 : 3,
+              colorOfText:
+                  isSelected ? const Color(0xFF1967D2) : const Color(0xFF6B7280),
+            ),
+            if (courseCount > 0) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? const Color(0xFF1967D2)
+                      : const Color(0xFFEEF2F8),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: smcText(
+                  textToDisplay: courseCount.toString(),
+                  textSize: 11,
+                  textBoldness: 4,
+                  colorOfText: isSelected
+                      ? Colors.white
+                      : ColorConst.textSecondary,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEnrolledCourseTile(CourseModel course) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE3EAF8)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: const Color(0xFFEAF0FF),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.menu_book_rounded,
+              color: ColorConst.primaryBlue,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                smcText(
+                  textToDisplay: course.courseCode.trim().isEmpty
+                      ? '—'
+                      : course.courseCode,
+                  textSize: 14,
+                  textBoldness: 4,
+                  colorOfText: ColorConst.textPrimary,
+                  maxLines: 1,
+                ),
+                if (course.courseTitle.trim().isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  smcText(
+                    textToDisplay: course.courseTitle,
+                    textSize: 13,
+                    textBoldness: 3,
+                    colorOfText: ColorConst.textPrimary,
+                    maxLines: 2,
+                  ),
+                ],
+                const SizedBox(height: 4),
+                smcText(
+                  textToDisplay:
+                      '${course.credits} credits • ${course.batch}',
+                  textSize: 12,
+                  colorOfText: ColorConst.textSecondary,
+                  maxLines: 2,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
