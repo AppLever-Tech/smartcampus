@@ -17,7 +17,14 @@ class OrgField {
   }
 
   static String readDeptId(Map<String, dynamic> data) {
-    return normalize((data[deptIdKey] ?? '').toString());
+    return normalize(
+      (data[deptIdKey] ??
+              data['Dept_id'] ??
+              data['department_id'] ??
+              data['departmentId'] ??
+              '')
+          .toString(),
+    );
   }
 
   static Map<String, dynamic> orgIdWrite(String orgId) {

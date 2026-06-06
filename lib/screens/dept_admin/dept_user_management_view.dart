@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:smartcampus/const/color_const.dart';
-import 'package:smartcampus/data/faculty_model.dart';
 import 'package:smartcampus/data/mock_master_data.dart';
-import 'package:smartcampus/data/student_model.dart';
 import 'package:smartcampus/services/faculty_firestore_service.dart';
 import 'package:smartcampus/services/student_firestore_service.dart';
 import 'package:smartcampus/services/user_master_firestore_service.dart';
@@ -236,34 +234,11 @@ class _DeptUserManagementViewState extends State<DeptUserManagementView> {
     idController.dispose();
 
     try {
-      if (selectedRole == UserRoles.student) {
-        final student = StudentModel(
-          studentId: recordId,
-          fullName: user.displayName,
-          gender: '',
-          dateOfBirth: '',
-          uuid: StudentModel.normalizeUuid(user.uuid),
-          mobile: user.uuid,
-          email: '',
-          orgId: widget.orgId,
-          deptId: widget.deptId,
-          createdOn: DateTime.now().toIso8601String(),
-        );
-        await studentService.createStudent(student);
-      } else {
-        final faculty = FacultyModel(
-          facultyId: recordId,
-          fullName: user.displayName,
-          gender: '',
-          dateOfBirth: '',
-          mobile: user.uuid,
-          email: '',
-          orgId: widget.orgId,
-          deptId: widget.deptId,
-          createdAt: DateTime.now().toIso8601String(),
-        );
-        await facultyService.createFaculty(faculty);
-      }
+      await _syncProfileForRole(
+        user: user,
+        role: selectedRole,
+        recordId: recordId,
+      );
 
       await userMasterService.classifyUser(
         uuid: user.uuid,
@@ -361,10 +336,62 @@ class _DeptUserManagementViewState extends State<DeptUserManagementView> {
     return value;
   }
 
+  bool _roleRequiresProfileRecord(String role) =>
+      role == UserRoles.student || role == UserRoles.faculty;
+
+  Future<String> _initialRecordIdForUser(
+    UserMasterItem user,
+    String role,
+  ) async {
+    if (role == UserRoles.faculty) {
+      final faculty = await facultyService.getFacultyByMobile(user.uuid);
+      return faculty?.facultyId ?? '';
+    }
+    if (role == UserRoles.student) {
+      final student = await studentService.getStudentByUuid(user.uuid);
+      return student?.studentId ?? '';
+    }
+    return '';
+  }
+
+  Future<void> _syncProfileForRole({
+    required UserMasterItem user,
+    required String role,
+    required String recordId,
+  }) async {
+    if (!_roleRequiresProfileRecord(role)) {
+      return;
+    }
+
+    final orgId = user.orgId.isNotEmpty ? user.orgId : widget.orgId;
+    final deptId = user.deptId.isNotEmpty ? user.deptId : widget.deptId;
+
+    if (role == UserRoles.student) {
+      await studentService.syncFromUserMaster(
+        user: user,
+        studentId: recordId,
+        orgId: orgId,
+        deptId: deptId,
+      );
+      return;
+    }
+
+    await facultyService.syncFromUserMaster(
+      user: user,
+      facultyId: recordId,
+      orgId: orgId,
+      deptId: deptId,
+    );
+  }
+
   Future<void> _openUserAssignmentDialog(UserMasterItem user) async {
     String selectedRole = _roleStorageValue(user);
     String selectedStatus = _statusForEdit(user);
     bool saving = false;
+    final formKey = GlobalKey<FormState>();
+    final idController = TextEditingController(
+      text: await _initialRecordIdForUser(user, selectedRole),
+    );
 
     await showDialog<void>(
       context: context,
@@ -380,10 +407,12 @@ class _DeptUserManagementViewState extends State<DeptUserManagementView> {
               ),
               content: SizedBox(
                 width: 420,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
                     smcText(
                       textToDisplay: user.displayName,
                       textSize: 15,
@@ -441,6 +470,44 @@ class _DeptUserManagementViewState extends State<DeptUserManagementView> {
                               setDialogState(() => selectedRole = value);
                             },
                     ),
+                    if (_roleRequiresProfileRecord(selectedRole)) ...[
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: idController,
+                        enabled: !saving,
+                        textCapitalization: TextCapitalization.characters,
+                        decoration: InputDecoration(
+                          labelText: selectedRole == UserRoles.student
+                              ? 'Student ID (USN)'
+                              : 'Faculty ID',
+                          filled: true,
+                          fillColor: const Color(0xFFF8FAFF),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide:
+                                const BorderSide(color: Color(0xFFE2E8F5)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide:
+                                const BorderSide(color: Color(0xFFE2E8F5)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide:
+                                const BorderSide(color: ColorConst.primaryBlue),
+                          ),
+                        ),
+                        validator: (value) {
+                          if ((value ?? '').trim().isEmpty) {
+                            return selectedRole == UserRoles.student
+                                ? 'Student ID is required'
+                                : 'Faculty ID is required';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     const smcText(
                       textToDisplay: 'Status',
@@ -487,6 +554,7 @@ class _DeptUserManagementViewState extends State<DeptUserManagementView> {
                   ],
                 ),
               ),
+              ),
               actions: [
                 TextButton(
                   onPressed: saving ? null : () => Navigator.pop(dialogCtx),
@@ -500,8 +568,19 @@ class _DeptUserManagementViewState extends State<DeptUserManagementView> {
                   onPressed: saving
                       ? null
                       : () async {
+                          if (_roleRequiresProfileRecord(selectedRole) &&
+                              formKey.currentState?.validate() != true) {
+                            return;
+                          }
                           setDialogState(() => saving = true);
                           try {
+                            if (_roleRequiresProfileRecord(selectedRole)) {
+                              await _syncProfileForRole(
+                                user: user,
+                                role: selectedRole,
+                                recordId: idController.text.trim(),
+                              );
+                            }
                             await userMasterService.updateUserRoleAndStatus(
                               uuid: user.uuid,
                               userRole: selectedRole,
@@ -565,6 +644,7 @@ class _DeptUserManagementViewState extends State<DeptUserManagementView> {
         );
       },
     );
+    idController.dispose();
   }
 
   void _selectAndOpenUserDialog(UserMasterItem user) {

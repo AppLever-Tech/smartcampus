@@ -74,10 +74,28 @@ class CourseFirestoreService {
     });
   }
 
+  static String facultyAssignmentKey(FacultyModel faculty) {
+    if (faculty.documentId != null && faculty.documentId!.trim().isNotEmpty) {
+      return faculty.documentId!.trim();
+    }
+    return faculty.facultyId.trim();
+  }
+
   static bool isCourseAssignedToFaculty(
     CourseModel course,
     FacultyModel faculty,
   ) {
+    final Set<String> facultyKeys = {
+      facultyAssignmentKey(faculty),
+      faculty.facultyId.trim(),
+      if (faculty.documentId?.trim().isNotEmpty == true)
+        faculty.documentId!.trim(),
+    }..removeWhere((key) => key.isEmpty);
+
+    if (course.assignedFacultyIds.any(facultyKeys.contains)) {
+      return true;
+    }
+
     final String facultyField = course.faculty.trim();
     if (facultyField.isEmpty) {
       return false;

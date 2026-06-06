@@ -32,11 +32,22 @@ class StudentModel {
   final String emergencyContactRelation;
   final String emergencyContactMobile;
 
+  // ── Family Details ────────────────────────────────────────────
+  final String fatherName;
+  final String motherName;
+  final String guardianName;
+
   // ── Org / Dept binding ────────────────────────────────────────
   final String orgId;
   final String deptId;
   final String status;          // 'Active' | 'Inactive'
   final String createdOn;       // ISO-8601 datetime string (stored with time)
+  /// courseId -> { gradePoints, letterGrade }
+  final Map<String, Map<String, String>> enrolledCourseMarks;
+  /// semester -> SGPA for that semester (e.g. "I" -> "8.5")
+  final Map<String, String> semesterSgpa;
+  /// Latest cumulative CGPA across all semesters.
+  final String cgpa;
 
   const StudentModel({
     this.documentId,
@@ -58,10 +69,16 @@ class StudentModel {
     this.emergencyContactName = '',
     this.emergencyContactRelation = '',
     this.emergencyContactMobile = '',
+    this.fatherName = '',
+    this.motherName = '',
+    this.guardianName = '',
     required this.orgId,
     required this.deptId,
     this.status = 'Active',
     required this.createdOn,
+    this.enrolledCourseMarks = const {},
+    this.semesterSgpa = const {},
+    this.cgpa = '',
   });
 
   /// Normalizes a mobile or uuid to country-code digits without '+'.
@@ -175,13 +192,144 @@ class StudentModel {
       emergencyContactName: (data['emergency_contact_name'] ?? '').toString().trim(),
       emergencyContactRelation: (data['emergency_contact_relation'] ?? '').toString().trim(),
       emergencyContactMobile: (data['emergency_contact_mobile'] ?? '').toString().trim(),
+      fatherName: (data['father_name'] ?? '').toString().trim(),
+      motherName: (data['mother_name'] ?? '').toString().trim(),
+      guardianName: (data['guardian_name'] ?? '').toString().trim(),
       orgId: OrgField.readOrgId(data),
       deptId: OrgField.readDeptId(data),
       status: (data['status'] ?? 'Active').toString().trim(),
       createdOn: (data['created_on'] ?? data['created_at'] ?? '')
           .toString()
           .trim(),
+      enrolledCourseMarks: parseEnrolledCourseMarks(
+        data['enrolled_course_marks'],
+      ),
+      semesterSgpa: parseSemesterSgpa(
+        data['semester_sgpa'],
+        legacySemesterGpa: data['semester_gpa'],
+      ),
+      cgpa: parseCgpa(
+        data['cgpa'],
+        legacySemesterGpa: data['semester_gpa'],
+      ),
     );
+  }
+
+  static Map<String, Map<String, String>> parseEnrolledCourseMarks(
+    dynamic value,
+  ) {
+    if (value is! Map) {
+      return const {};
+    }
+
+    final Map<String, Map<String, String>> marks = {};
+    value.forEach((dynamic courseId, dynamic rawMarks) {
+      if (courseId == null || rawMarks is! Map) {
+        return;
+      }
+      marks[courseId.toString()] = {
+        'gradePoints': (rawMarks['grade_points'] ?? rawMarks['gradePoints'] ?? '')
+            .toString()
+            .trim(),
+        'letterGrade':
+            (rawMarks['letter_grade'] ?? rawMarks['letterGrade'] ?? '')
+                .toString()
+                .trim(),
+      };
+    });
+    return marks;
+  }
+
+  static Map<String, dynamic> writeEnrolledCourseMarks(
+    Map<String, Map<String, String>> marks,
+  ) {
+    final Map<String, dynamic> serialized = {};
+    marks.forEach((courseId, values) {
+      final String gradePoints = values['gradePoints']?.trim() ?? '';
+      final String letterGrade = values['letterGrade']?.trim() ?? '';
+      if (gradePoints.isEmpty && letterGrade.isEmpty) {
+        return;
+      }
+      serialized[courseId] = {
+        if (gradePoints.isNotEmpty) 'grade_points': gradePoints,
+        if (letterGrade.isNotEmpty) 'letter_grade': letterGrade,
+      };
+    });
+    return serialized;
+  }
+
+  static Map<String, String> parseSemesterSgpa(
+    dynamic value, {
+    dynamic legacySemesterGpa,
+  }) {
+    final Map<String, String> semesterSgpa = {};
+    if (value is Map) {
+      value.forEach((dynamic semester, dynamic sgpa) {
+        if (semester == null) {
+          return;
+        }
+        final String trimmed = sgpa.toString().trim();
+        if (trimmed.isNotEmpty) {
+          semesterSgpa[semester.toString()] = trimmed;
+        }
+      });
+    }
+
+    if (legacySemesterGpa is Map) {
+      legacySemesterGpa.forEach((dynamic semester, dynamic rawGpa) {
+        if (semester == null || rawGpa is! Map) {
+          return;
+        }
+        final String key = semester.toString();
+        if (semesterSgpa.containsKey(key)) {
+          return;
+        }
+        final String sgpa = (rawGpa['sgpa'] ?? '').toString().trim();
+        if (sgpa.isNotEmpty) {
+          semesterSgpa[key] = sgpa;
+        }
+      });
+    }
+
+    return semesterSgpa;
+  }
+
+  static String parseCgpa(
+    dynamic value, {
+    dynamic legacySemesterGpa,
+  }) {
+    final String fromRoot = (value ?? '').toString().trim();
+    if (fromRoot.isNotEmpty) {
+      return fromRoot;
+    }
+
+    if (legacySemesterGpa is! Map) {
+      return '';
+    }
+
+    for (final String semester in ['IV', 'III', 'II', 'I']) {
+      final dynamic rawGpa = legacySemesterGpa[semester];
+      if (rawGpa is! Map) {
+        continue;
+      }
+      final String cgpa = (rawGpa['cgpa'] ?? '').toString().trim();
+      if (cgpa.isNotEmpty) {
+        return cgpa;
+      }
+    }
+
+    return '';
+  }
+
+  static Map<String, dynamic> writeSemesterSgpa(Map<String, String> semesterSgpa) {
+    final Map<String, dynamic> serialized = {};
+    semesterSgpa.forEach((semester, sgpa) {
+      final String trimmed = sgpa.trim();
+      if (trimmed.isNotEmpty) {
+        serialized[semester] = trimmed;
+      }
+    });
+    return serialized;
   }
 
   static String _readUuidFromMap(Map<String, dynamic> data) {
@@ -216,10 +364,16 @@ class StudentModel {
     String? emergencyContactName,
     String? emergencyContactRelation,
     String? emergencyContactMobile,
+    String? fatherName,
+    String? motherName,
+    String? guardianName,
     String? orgId,
     String? deptId,
     String? status,
     String? createdOn,
+    Map<String, Map<String, String>>? enrolledCourseMarks,
+    Map<String, String>? semesterSgpa,
+    String? cgpa,
   }) {
     return StudentModel(
       documentId: documentId ?? this.documentId,
@@ -239,12 +393,20 @@ class StudentModel {
       permanentAddress: permanentAddress ?? this.permanentAddress,
       correspondenceAddress: correspondenceAddress ?? this.correspondenceAddress,
       emergencyContactName: emergencyContactName ?? this.emergencyContactName,
-      emergencyContactRelation: emergencyContactRelation ?? this.emergencyContactRelation,
-      emergencyContactMobile: emergencyContactMobile ?? this.emergencyContactMobile,
+      emergencyContactRelation:
+          emergencyContactRelation ?? this.emergencyContactRelation,
+      emergencyContactMobile:
+          emergencyContactMobile ?? this.emergencyContactMobile,
+      fatherName: fatherName ?? this.fatherName,
+      motherName: motherName ?? this.motherName,
+      guardianName: guardianName ?? this.guardianName,
       orgId: orgId ?? this.orgId,
       deptId: deptId ?? this.deptId,
       status: status ?? this.status,
       createdOn: createdOn ?? this.createdOn,
+      enrolledCourseMarks: enrolledCourseMarks ?? this.enrolledCourseMarks,
+      semesterSgpa: semesterSgpa ?? this.semesterSgpa,
+      cgpa: cgpa ?? this.cgpa,
     );
   }
 
@@ -268,10 +430,19 @@ class StudentModel {
       'emergency_contact_name': emergencyContactName,
       'emergency_contact_relation': emergencyContactRelation,
       'emergency_contact_mobile': emergencyContactMobile,
+      'father_name': fatherName,
+      'mother_name': motherName,
+      'guardian_name': guardianName,
       ...OrgField.orgIdWrite(orgId),
       if (OrgField.normalize(deptId).isNotEmpty) OrgField.deptIdKey: OrgField.normalize(deptId),
       'status': status,
       'created_on': createdOn,
+      if (enrolledCourseMarks.isNotEmpty)
+        'enrolled_course_marks':
+            writeEnrolledCourseMarks(enrolledCourseMarks),
+      if (semesterSgpa.isNotEmpty)
+        'semester_sgpa': writeSemesterSgpa(semesterSgpa),
+      if (cgpa.trim().isNotEmpty) 'cgpa': cgpa.trim(),
     };
   }
 }

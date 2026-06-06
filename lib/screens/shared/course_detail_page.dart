@@ -116,6 +116,12 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
         : student.studentId;
   }
 
+  String _facultyKey(FacultyModel faculty) {
+    return faculty.documentId?.isNotEmpty == true
+        ? faculty.documentId!
+        : faculty.facultyId;
+  }
+
   List<StudentModel> get _enrolledStudentsList {
     final Set<String> enrolledIds = _course.enrolledStudentIds.toSet();
     if (enrolledIds.isEmpty) {
@@ -250,6 +256,100 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _unassignFaculty(FacultyModel faculty) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const smcText(
+          textToDisplay: 'Unassign Faculty',
+          textSize: 18,
+          textBoldness: 4,
+          colorOfText: ColorConst.textPrimary,
+        ),
+        content: smcText(
+          textToDisplay:
+              'Are you sure you want to unassign ${faculty.fullName.trim().isEmpty ? faculty.facultyId : faculty.fullName} from this course?',
+          textSize: 14,
+          colorOfText: ColorConst.textSecondary,
+          maxLines: 4,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const smcText(
+              textToDisplay: 'Cancel',
+              textSize: 14,
+              textBoldness: 3,
+              colorOfText: ColorConst.textSecondary,
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const smcText(
+              textToDisplay: 'Unassign',
+              textSize: 14,
+              textBoldness: 4,
+              colorOfText: Color(0xFFC62828),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    final String facultyId = _facultyKey(faculty);
+    final List<String> updatedIds = _course.assignedFacultyIds
+        .where((id) => id != facultyId)
+        .toList();
+
+    try {
+      await _courseService.updateCourseFields(
+        _course.id,
+        {
+          'assignedFacultyIds': updatedIds,
+        },
+      );
+
+      widget.onCourseUpdated?.call(
+        _course.copyWith(assignedFacultyIds: updatedIds),
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        if (_facultyCurrentPage > 1 &&
+            updatedIds.length <=
+                (_facultyCurrentPage - 1) * _facultyRowsPerPage) {
+          _facultyCurrentPage--;
+        }
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${faculty.fullName.trim().isEmpty ? faculty.facultyId : faculty.fullName} unassigned from course.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to unassign faculty: ${error.toString().replaceFirst('Exception: ', '')}',
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -989,127 +1089,285 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
                 children: [
 
                   Expanded(
-                    child: SingleChildScrollView(
-                      scrollDirection:
-                      Axis.horizontal,
-                      child: DataTable(
-                        showCheckboxColumn: false,
-                        headingRowColor:
-                        MaterialStateProperty.all(
-                          const Color(
-                              0xFFF4F7FF),
-                        ),
-                        border: TableBorder.all(
-                          color:
-                          const Color(
-                              0xFFE3EAF8),
-                        ),
-                        columns: const [
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final double tableWidth = constraints.maxWidth;
+                        const double actionsColumnWidth = 80;
+                        final double fixedColumnWidth = 60 +
+                            120 +
+                            140 +
+                            (widget.readOnly ? 0 : actionsColumnWidth);
+                        final double flexibleWidth =
+                            (tableWidth - fixedColumnWidth)
+                                .clamp(280.0, double.infinity);
+                        final double nameColumnWidth =
+                            flexibleWidth * 0.52;
+                        final double emailColumnWidth =
+                            flexibleWidth - nameColumnWidth;
 
-                          DataColumn(
-                            label: Text('S.No'),
-                          ),
-
-                          DataColumn(
-                            label:
-                            Text('Faculty ID'),
-                          ),
-
-                          DataColumn(
-                            label:
-                            Text('Faculty Name'),
-                          ),
-
-                          DataColumn(
-                            label:
-                            Text('Email'),
-                          ),
-
-                          DataColumn(
-                            label:
-                            Text('Mobile'),
-                          ),
-                        ],
-                        rows: pageRows
-                            .asMap()
-                            .entries
-                            .map((entry) {
-
-                          final index =
-                              entry.key;
-
-                          final faculty =
-                              entry.value;
-
-                          final serialNo =
-                              startIndex +
-                                  index +
-                                  1;
-
-                          return DataRow(
-                            cells: [
-
-                              DataCell(
-                                Text(
-                                  '$serialNo',
+                        return SingleChildScrollView(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: ConstrainedBox(
+                              constraints:
+                                  BoxConstraints(minWidth: tableWidth),
+                              child: DataTable(
+                                showCheckboxColumn: false,
+                                headingRowHeight: 50,
+                                dataRowMinHeight: 52,
+                                dataRowMaxHeight: 58,
+                                horizontalMargin: 0,
+                                columnSpacing: 0,
+                                dividerThickness: 1,
+                                headingRowColor:
+                                    MaterialStateProperty.all(
+                                  const Color(0xFFF4F7FF),
                                 ),
-                              ),
-
-                              DataCell(
-                                Text(
-                                  faculty
-                                      .facultyId,
+                                border: TableBorder.all(
+                                  color: const Color(0xFFE3EAF8),
+                                  width: 1,
                                 ),
-                              ),
-
-                              DataCell(
-                                Row(
-                                  children: [
-
-                                    CircleAvatar(
-                                      radius: 18,
-                                      backgroundColor:
-                                      const Color(
-                                        0xFFEAF0FF,
-                                      ),
-                                      child: Text(
-                                        faculty
-                                            .fullName
-                                            .isEmpty
-                                            ? '?'
-                                            : faculty
-                                            .fullName[
-                                        0]
-                                            .toUpperCase(),
+                                columns: [
+                                  DataColumn(
+                                    label: SizedBox(
+                                      width: 60,
+                                      child: Center(
+                                        child: smcText(
+                                          textToDisplay: 'S.No',
+                                          textSize: 12,
+                                          textBoldness: 4,
+                                          colorOfText: Color(0xFF5C6B8B),
+                                        ),
                                       ),
                                     ),
-
-                                    const SizedBox(
-                                        width: 10),
-
-                                    Text(
-                                      faculty
-                                          .fullName,
+                                  ),
+                                  DataColumn(
+                                    label: SizedBox(
+                                      width: 120,
+                                      child: Padding(
+                                        padding:
+                                            EdgeInsets.only(left: 8),
+                                        child: Align(
+                                          alignment:
+                                              Alignment.centerLeft,
+                                          child: smcText(
+                                            textToDisplay: 'Faculty ID',
+                                            textSize: 12,
+                                            textBoldness: 4,
+                                            colorOfText:
+                                                Color(0xFF5C6B8B),
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                  ],
-                                ),
-                              ),
+                                  ),
+                                  DataColumn(
+                                    label: SizedBox(
+                                      width: nameColumnWidth,
+                                      child: Padding(
+                                        padding:
+                                            EdgeInsets.only(left: 8),
+                                        child: Align(
+                                          alignment:
+                                              Alignment.centerLeft,
+                                          child: smcText(
+                                            textToDisplay:
+                                                'Faculty Name',
+                                            textSize: 12,
+                                            textBoldness: 4,
+                                            colorOfText:
+                                                Color(0xFF5C6B8B),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: SizedBox(
+                                      width: emailColumnWidth,
+                                      child: Center(
+                                        child: smcText(
+                                          textToDisplay: 'Email',
+                                          textSize: 12,
+                                          textBoldness: 4,
+                                          colorOfText: Color(0xFF5C6B8B),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: SizedBox(
+                                      width: 140,
+                                      child: Center(
+                                        child: smcText(
+                                          textToDisplay: 'Mobile',
+                                          textSize: 12,
+                                          textBoldness: 4,
+                                          colorOfText: Color(0xFF5C6B8B),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  if (!widget.readOnly)
+                                    DataColumn(
+                                      label: SizedBox(
+                                        width: actionsColumnWidth,
+                                        child: const Center(
+                                          child: smcText(
+                                            textToDisplay: 'Actions',
+                                            textSize: 12,
+                                            textBoldness: 4,
+                                            colorOfText: Color(0xFF5C6B8B),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                                rows: pageRows
+                                    .asMap()
+                                    .entries
+                                    .map((entry) {
+                                  final int index = entry.key;
+                                  final FacultyModel faculty =
+                                      entry.value;
+                                  final int serialNo =
+                                      startIndex + index + 1;
 
-                              DataCell(
-                                Text(
-                                  faculty.email,
-                                ),
+                                  return DataRow(
+                                    cells: [
+                                      DataCell(
+                                        Center(
+                                          child: smcText(
+                                            textToDisplay: '$serialNo',
+                                            textSize: 12,
+                                            colorOfText:
+                                                Color(0xFF2E3954),
+                                          ),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Padding(
+                                          padding: const EdgeInsets
+                                              .only(left: 8),
+                                          child: Align(
+                                            alignment:
+                                                Alignment.centerLeft,
+                                            child: smcText(
+                                              textToDisplay:
+                                                  faculty.facultyId,
+                                              textSize: 12,
+                                              textBoldness: 4,
+                                              colorOfText:
+                                                  Color(0xFF2E3954),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Padding(
+                                          padding:
+                                              const EdgeInsets.only(
+                                            left: 8,
+                                            right: 8,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              CircleAvatar(
+                                                radius: 18,
+                                                backgroundColor:
+                                                    const Color(
+                                                  0xFFEAF0FF,
+                                                ),
+                                                child: Text(
+                                                  faculty.fullName
+                                                          .isEmpty
+                                                      ? '?'
+                                                      : faculty
+                                                          .fullName[0]
+                                                          .toUpperCase(),
+                                                  style: const TextStyle(
+                                                    color: ColorConst
+                                                        .primaryBlue,
+                                                    fontWeight:
+                                                        FontWeight
+                                                            .w700,
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 10),
+                                              Expanded(
+                                                child: smcText(
+                                                  textToDisplay:
+                                                      faculty.fullName,
+                                                  textSize: 12,
+                                                  colorOfText:
+                                                      Color(0xFF2E3954),
+                                                  maxLines: 1,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Center(
+                                          child: smcText(
+                                            textToDisplay: faculty.email,
+                                            textSize: 12,
+                                            colorOfText:
+                                                Color(0xFF2E3954),
+                                            maxLines: 1,
+                                          ),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Center(
+                                          child: smcText(
+                                            textToDisplay: faculty.mobile,
+                                            textSize: 12,
+                                            colorOfText:
+                                                Color(0xFF2E3954),
+                                            maxLines: 1,
+                                          ),
+                                        ),
+                                      ),
+                                      if (!widget.readOnly)
+                                        DataCell(
+                                          Center(
+                                            child: PopupMenuButton<String>(
+                                              icon: const Icon(
+                                                Icons.more_vert_rounded,
+                                                size: 18,
+                                                color: Color(0xFF8A96B2),
+                                              ),
+                                              onSelected: (value) {
+                                                if (value == 'unassign') {
+                                                  _unassignFaculty(faculty);
+                                                }
+                                              },
+                                              itemBuilder: (context) => const [
+                                                PopupMenuItem<String>(
+                                                  value: 'unassign',
+                                                  child: Text(
+                                                    'Unassign Faculty',
+                                                    style: TextStyle(
+                                                      color: Color(0xFFC62828),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  );
+                                }).toList(),
                               ),
-
-                              DataCell(
-                                Text(
-                                  faculty.mobile,
-                                ),
-                              ),
-                            ],
-                          );
-                        }).toList(),
-                      ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
 

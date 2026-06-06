@@ -27,7 +27,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' as excel;
 import 'package:smartcampus/widgets/profile_photo_avatar.dart';
 import 'package:smartcampus/widgets/student_import_dialog.dart';
-import 'package:smartcampus/widgets/mouse_drag_scroll_behavior.dart';
+import 'package:smartcampus/widgets/course_list_table.dart';
 import 'package:smartcampus/services/user_master_firestore_service.dart';
 import 'package:smartcampus/services/settings_firestore_service.dart';
 import 'package:smartcampus/screens/dept_admin/dept_user_management_view.dart';
@@ -268,6 +268,16 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   }
 
   List<FacultyModel> _assignedFacultyForCourse(CourseModel course) {
+    final Set<String> assignedIds = course.assignedFacultyIds.toSet();
+    if (assignedIds.isNotEmpty) {
+      return facultyList.where((faculty) {
+        final String key = faculty.documentId?.isNotEmpty == true
+            ? faculty.documentId!
+            : faculty.facultyId;
+        return assignedIds.contains(key);
+      }).toList();
+    }
+
     final String facultyField = course.faculty.trim();
     if (facultyField.isEmpty) {
       return const [];
@@ -1406,6 +1416,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     final emergNameCtrl = TextEditingController(text: studentToEdit?.emergencyContactName ?? '');
     final emergRelationCtrl = TextEditingController(text: studentToEdit?.emergencyContactRelation ?? '');
     final emergMobileCtrl = TextEditingController(text: studentToEdit?.emergencyContactMobile ?? '');
+    final fatherNameCtrl = TextEditingController(text: studentToEdit?.fatherName ?? '');
+    final motherNameCtrl = TextEditingController(text: studentToEdit?.motherName ?? '');
+    final guardianNameCtrl = TextEditingController(text: studentToEdit?.guardianName ?? '');
 
     bool saving = false;
     int currentStep = 0;
@@ -1557,6 +1570,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                 emergencyContactName: emergNameCtrl.text.trim(),
                 emergencyContactRelation: emergRelationCtrl.text.trim(),
                 emergencyContactMobile: emergMobileCtrl.text.trim(),
+                fatherName: fatherNameCtrl.text.trim(),
+                motherName: motherNameCtrl.text.trim(),
+                guardianName: guardianNameCtrl.text.trim(),
                 orgId: scopedOrgId,
                 deptId: scopedDeptId,
                 createdOn: studentToEdit?.createdOn ??
@@ -2029,6 +2045,30 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         validator: (v) => (v == null || v.trim().isEmpty)
                             ? 'Correspondence address is required'
                             : null,
+                      ),
+                      _sectionHeader(
+                        'Family Details',
+                        Icons.family_restroom_outlined,
+                      ),
+                      TextFormField(
+                        controller: fatherNameCtrl,
+                        readOnly: isViewOnly,
+                        decoration: _fieldDecor('Father Name'),
+                        textCapitalization: TextCapitalization.words,
+                      ),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: motherNameCtrl,
+                        readOnly: isViewOnly,
+                        decoration: _fieldDecor('Mother Name'),
+                        textCapitalization: TextCapitalization.words,
+                      ),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: guardianNameCtrl,
+                        readOnly: isViewOnly,
+                        decoration: _fieldDecor('Guardian Name'),
+                        textCapitalization: TextCapitalization.words,
                       ),
                       _sectionHeader(
                         'Emergency Contact (Parent/Guardian)',
@@ -5611,564 +5651,16 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                   : Column(
                       children: [
                         Expanded(
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              final double tableWidth = constraints.maxWidth;
-                              const List<double> minColumnWidths = [
-                                52,
-                                76,
-                                76,
-                                108,
-                                128,
-                                220,
-                                68,
-                                72,
-                                72,
-                                72,
-                                72,
-                                88,
-                                128,
-                                112,
-                                108,
-                                92,
-                              ];
-                              final double minTableWidth = minColumnWidths
-                                  .fold(0.0, (a, b) => a + b);
-                              final double contentWidth = tableWidth < minTableWidth
-                                  ? minTableWidth
-                                  : tableWidth;
-                              final List<double> colWidths =
-                                  List<double>.from(minColumnWidths);
-                              if (contentWidth > minTableWidth) {
-                                colWidths[5] += contentWidth - minTableWidth;
-                              }
-
-                              int totalCreditsSum = 0;
-                              int totalLectureHrs = 0;
-                              int totalTutorialHrs = 0;
-                              int totalPracticalHrs = 0;
-                              int totalOthersHrs = 0;
-                              int totalCieMarks = 0;
-                              int totalSeeTheoryMarks = 0;
-                              int totalSeeLabMarks = 0;
-                              int totalMarksSum = 0;
-                              for (final CourseModel course in searched) {
-                                final String creditsRaw = course.credits.trim();
-                                if (creditsRaw.isNotEmpty) {
-                                  totalCreditsSum +=
-                                      int.tryParse(creditsRaw) ??
-                                      double.tryParse(creditsRaw)?.round() ??
-                                      0;
-                                }
-                                totalLectureHrs += course.lectureHrs;
-                                totalTutorialHrs += course.tutorialHrs;
-                                totalPracticalHrs += course.practicalHrs;
-                                totalOthersHrs += course.othersHrs;
-                                totalCieMarks += course.cieMarks;
-                                totalSeeTheoryMarks += course.seeTheoryMarks;
-                                totalSeeLabMarks += course.seeLabMarks;
-                                totalMarksSum += course.totalMarks;
-                              }
-
-                              Widget buildCourseTableContent() {
-                                const Color borderColor = Color(0xFFE3EAF8);
-                                const Color headerColor = Color(0xFFF4F7FF);
-                                const double groupHeaderHeight = 30;
-                                const double columnHeaderHeight = 44;
-                                const double dataRowHeight = 52;
-
-                                final Map<int, TableColumnWidth> columnWidthsMap = {
-                                  for (int i = 0; i < colWidths.length; i++)
-                                    i: FixedColumnWidth(colWidths[i]),
-                                };
-
-                                String cellText(String value) =>
-                                    value.trim().isEmpty ? '—' : value.trim();
-
-                                Widget headerLabel(
-                                  String text, {
-                                  Alignment alignment = Alignment.center,
-                                  int maxLines = 2,
-                                }) {
-                                  return Container(
-                                    height: columnHeaderHeight,
-                                    alignment: alignment,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                    ),
-                                    child: smcText(
-                                      textToDisplay: text,
-                                      textSize: 12,
-                                      textBoldness: 4,
-                                      colorOfText: const Color(0xFF5C6B8B),
-                                      maxLines: maxLines,
-                                    ),
-                                  );
-                                }
-
-                                Widget dataCell(
-                                  Widget child, {
-                                  Alignment alignment = Alignment.center,
-                                  Color? backgroundColor,
-                                  VoidCallback? onTap,
-                                }) {
-                                  return GestureDetector(
-                                    onTap: onTap,
-                                    behavior: HitTestBehavior.opaque,
-                                    child: Container(
-                                      height: dataRowHeight,
-                                      alignment: alignment,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 8,
-                                      ),
-                                      color: backgroundColor ?? Colors.white,
-                                      child: child,
-                                    ),
-                                  );
-                                }
-
-                                Widget numericDataCell(
-                                  int value, {
-                                  bool boldWhenNonZero = false,
-                                  Color? backgroundColor,
-                                  VoidCallback? onTap,
-                                }) {
-                                  return dataCell(
-                                    smcText(
-                                      textToDisplay: '$value',
-                                      textSize: 12,
-                                      textBoldness:
-                                          boldWhenNonZero && value != 0 ? 5 : 1,
-                                      colorOfText: const Color(0xFF2E3954),
-                                      maxLines: 1,
-                                    ),
-                                    backgroundColor: backgroundColor,
-                                    onTap: onTap,
-                                  );
-                                }
-
-                                Widget textDataCell(
-                                  String value, {
-                                  bool boldWhenNonEmpty = false,
-                                  Color? backgroundColor,
-                                  VoidCallback? onTap,
-                                }) {
-                                  final String display = cellText(value);
-                                  final bool emphasize = boldWhenNonEmpty &&
-                                      value.trim().isNotEmpty &&
-                                      display != '—';
-                                  return dataCell(
-                                    smcText(
-                                      textToDisplay: display,
-                                      textSize: 12,
-                                      textBoldness: emphasize ? 5 : 1,
-                                      colorOfText: const Color(0xFF2E3954),
-                                      maxLines: 2,
-                                    ),
-                                    backgroundColor: backgroundColor,
-                                    onTap: onTap,
-                                  );
-                                }
-
-                                Widget totalRowCell(
-                                  Widget child, {
-                                  Alignment alignment = Alignment.center,
-                                }) {
-                                  return Container(
-                                    height: dataRowHeight,
-                                    alignment: alignment,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 8,
-                                    ),
-                                    color: headerColor,
-                                    child: child,
-                                  );
-                                }
-
-                                Widget totalRowNumericCell(int value) {
-                                  return totalRowCell(
-                                    smcText(
-                                      textToDisplay: '$value',
-                                      textSize: 12,
-                                      textBoldness: 5,
-                                      colorOfText: const Color(0xFF2E3954),
-                                      maxLines: 1,
-                                    ),
-                                  );
-                                }
-
-                                const BorderSide headerBorderSide = BorderSide(
-                                  color: borderColor,
-                                  width: 1,
-                                );
-
-                                final double prefixColumnsWidth = colWidths
-                                    .sublist(0, 7)
-                                    .fold(0.0, (a, b) => a + b);
-                                final double teachingHoursWidth = colWidths
-                                    .sublist(7, 11)
-                                    .fold(0.0, (a, b) => a + b);
-                                final double examSchemeWidth = colWidths
-                                    .sublist(11, 15)
-                                    .fold(0.0, (a, b) => a + b);
-
-                                Widget buildGroupHeaderRow() {
-                                  return Row(
-                                    children: [
-                                      Container(
-                                        width: prefixColumnsWidth,
-                                        height: groupHeaderHeight,
-                                        decoration: const BoxDecoration(
-                                          color: headerColor,
-                                          border: Border(
-                                            top: headerBorderSide,
-                                            left: headerBorderSide,
-                                            bottom: headerBorderSide,
-                                          ),
-                                        ),
-                                      ),
-                                      Container(
-                                        width: teachingHoursWidth,
-                                        height: groupHeaderHeight,
-                                        alignment: Alignment.center,
-                                        decoration: const BoxDecoration(
-                                          color: headerColor,
-                                          border: Border(
-                                            top: headerBorderSide,
-                                            left: headerBorderSide,
-                                            right: headerBorderSide,
-                                            bottom: headerBorderSide,
-                                          ),
-                                        ),
-                                        child: const smcText(
-                                          textToDisplay: 'Teaching Hours / Week',
-                                          textSize: 12,
-                                          textBoldness: 4,
-                                          colorOfText: Color(0xFF5C6B8B),
-                                          maxLines: 1,
-                                        ),
-                                      ),
-                                      Container(
-                                        width: examSchemeWidth,
-                                        height: groupHeaderHeight,
-                                        alignment: Alignment.center,
-                                        decoration: const BoxDecoration(
-                                          color: headerColor,
-                                          border: Border(
-                                            top: headerBorderSide,
-                                            right: headerBorderSide,
-                                            bottom: headerBorderSide,
-                                          ),
-                                        ),
-                                        child: const smcText(
-                                          textToDisplay: 'Exam Scheme',
-                                          textSize: 12,
-                                          textBoldness: 4,
-                                          colorOfText: Color(0xFF5C6B8B),
-                                          maxLines: 1,
-                                        ),
-                                      ),
-                                      Container(
-                                        width: colWidths[15],
-                                        height: groupHeaderHeight,
-                                        decoration: const BoxDecoration(
-                                          color: headerColor,
-                                          border: Border(
-                                            top: headerBorderSide,
-                                            right: headerBorderSide,
-                                            bottom: headerBorderSide,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                }
-
-                                final List<TableRow> tableRows = [
-                                  TableRow(
-                                    decoration: const BoxDecoration(
-                                      color: headerColor,
-                                    ),
-                                    children: [
-                                      headerLabel('S.No'),
-                                      headerLabel('Scheme'),
-                                      headerLabel('Semester'),
-                                      headerLabel('Course Type'),
-                                      headerLabel(
-                                        'Course Code',
-                                        alignment: Alignment.centerLeft,
-                                      ),
-                                      headerLabel(
-                                        'Course Title',
-                                        alignment: Alignment.centerLeft,
-                                      ),
-                                      headerLabel('Credits'),
-                                      headerLabel('Lecture'),
-                                      headerLabel('Tutorial'),
-                                      headerLabel('Practical'),
-                                      headerLabel('Others'),
-                                      headerLabel('CIE Marks', maxLines: 2),
-                                      headerLabel(
-                                        'SEE Exam Duration',
-                                        maxLines: 2,
-                                      ),
-                                      headerLabel(
-                                        'SEE Theory Marks',
-                                        maxLines: 2,
-                                      ),
-                                      headerLabel(
-                                        'SEE Lab Marks',
-                                        maxLines: 2,
-                                      ),
-                                      headerLabel('Total Marks', maxLines: 2),
-                                    ],
-                                  ),
-                                  ...pageRows.asMap().entries.map((entry) {
-                                    final int index = entry.key;
-                                    final CourseModel c = entry.value;
-                                    final int serialNo = startIndex + index + 1;
-                                    final bool isSelected = _isSelectedCourse(c);
-                                    final Color rowColor = isSelected
-                                        ? const Color(0xFFE8F0FE)
-                                        : Colors.white;
-                                    void selectCourse() => openCourseDetail(c);
-
-                                    return TableRow(
-                                      children: [
-                                        dataCell(
-                                          smcText(
-                                            textToDisplay: '$serialNo',
-                                            textSize: 12,
-                                            colorOfText: const Color(0xFF2E3954),
-                                          ),
-                                          backgroundColor: rowColor,
-                                          onTap: selectCourse,
-                                        ),
-                                        dataCell(
-                                          smcText(
-                                            textToDisplay: cellText(c.batch),
-                                            textSize: 12,
-                                            colorOfText: const Color(0xFF2E3954),
-                                            maxLines: 1,
-                                          ),
-                                          backgroundColor: rowColor,
-                                          onTap: selectCourse,
-                                        ),
-                                        dataCell(
-                                          smcText(
-                                            textToDisplay: cellText(c.semester),
-                                            textSize: 12,
-                                            colorOfText: const Color(0xFF2E3954),
-                                            maxLines: 1,
-                                          ),
-                                          backgroundColor: rowColor,
-                                          onTap: selectCourse,
-                                        ),
-                                        dataCell(
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 10,
-                                              vertical: 5,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFEFF4FF),
-                                              borderRadius:
-                                                  BorderRadius.circular(999),
-                                            ),
-                                            child: smcText(
-                                              textToDisplay:
-                                                  cellText(c.courseType),
-                                              textSize: 11,
-                                              textBoldness: 3,
-                                              colorOfText: const Color(0xFF3558DA),
-                                              maxLines: 1,
-                                            ),
-                                          ),
-                                          backgroundColor: rowColor,
-                                          onTap: selectCourse,
-                                        ),
-                                        dataCell(
-                                          smcText(
-                                            textToDisplay: cellText(c.courseCode),
-                                            textSize: 12,
-                                            textBoldness: 4,
-                                            colorOfText: const Color(0xFF2E3954),
-                                            maxLines: 1,
-                                          ),
-                                          alignment: Alignment.centerLeft,
-                                          backgroundColor: rowColor,
-                                          onTap: selectCourse,
-                                        ),
-                                        dataCell(
-                                          smcText(
-                                            textToDisplay: cellText(c.courseTitle),
-                                            textSize: 12,
-                                            colorOfText: const Color(0xFF2E3954),
-                                            maxLines: 2,
-                                          ),
-                                          alignment: Alignment.centerLeft,
-                                          backgroundColor: rowColor,
-                                          onTap: selectCourse,
-                                        ),
-                                        dataCell(
-                                          smcText(
-                                            textToDisplay: cellText(c.credits),
-                                            textSize: 12,
-                                            colorOfText: const Color(0xFF2E3954),
-                                            maxLines: 1,
-                                          ),
-                                          backgroundColor: rowColor,
-                                          onTap: selectCourse,
-                                        ),
-                                        numericDataCell(
-                                          c.lectureHrs,
-                                          boldWhenNonZero: true,
-                                          backgroundColor: rowColor,
-                                          onTap: selectCourse,
-                                        ),
-                                        numericDataCell(
-                                          c.tutorialHrs,
-                                          boldWhenNonZero: true,
-                                          backgroundColor: rowColor,
-                                          onTap: selectCourse,
-                                        ),
-                                        numericDataCell(
-                                          c.practicalHrs,
-                                          boldWhenNonZero: true,
-                                          backgroundColor: rowColor,
-                                          onTap: selectCourse,
-                                        ),
-                                        numericDataCell(
-                                          c.othersHrs,
-                                          boldWhenNonZero: true,
-                                          backgroundColor: rowColor,
-                                          onTap: selectCourse,
-                                        ),
-                                        numericDataCell(
-                                          c.cieMarks,
-                                          boldWhenNonZero: true,
-                                          backgroundColor: rowColor,
-                                          onTap: selectCourse,
-                                        ),
-                                        textDataCell(
-                                          c.seeExamDuration,
-                                          boldWhenNonEmpty: true,
-                                          backgroundColor: rowColor,
-                                          onTap: selectCourse,
-                                        ),
-                                        numericDataCell(
-                                          c.seeTheoryMarks,
-                                          boldWhenNonZero: true,
-                                          backgroundColor: rowColor,
-                                          onTap: selectCourse,
-                                        ),
-                                        numericDataCell(
-                                          c.seeLabMarks,
-                                          boldWhenNonZero: true,
-                                          backgroundColor: rowColor,
-                                          onTap: selectCourse,
-                                        ),
-                                        numericDataCell(
-                                          c.totalMarks,
-                                          boldWhenNonZero: true,
-                                          backgroundColor: rowColor,
-                                          onTap: selectCourse,
-                                        ),
-                                      ],
-                                    );
-                                  }),
-                                  if (totalRows > 0)
-                                    TableRow(
-                                      children: [
-                                        totalRowCell(const SizedBox.shrink()),
-                                        totalRowCell(const SizedBox.shrink()),
-                                        totalRowCell(const SizedBox.shrink()),
-                                        totalRowCell(const SizedBox.shrink()),
-                                        totalRowCell(const SizedBox.shrink()),
-                                        totalRowCell(
-                                          const Align(
-                                            alignment: Alignment.centerRight,
-                                            child: smcText(
-                                              textToDisplay: 'Total',
-                                              textSize: 12,
-                                              textBoldness: 5,
-                                              colorOfText: Color(0xFF2E3954),
-                                            ),
-                                          ),
-                                          alignment: Alignment.centerRight,
-                                        ),
-                                        totalRowNumericCell(totalCreditsSum),
-                                        totalRowNumericCell(totalLectureHrs),
-                                        totalRowNumericCell(totalTutorialHrs),
-                                        totalRowNumericCell(totalPracticalHrs),
-                                        totalRowNumericCell(totalOthersHrs),
-                                        totalRowNumericCell(totalCieMarks),
-                                        totalRowCell(const SizedBox.shrink()),
-                                        totalRowNumericCell(totalSeeTheoryMarks),
-                                        totalRowNumericCell(totalSeeLabMarks),
-                                        totalRowNumericCell(totalMarksSum),
-                                      ],
-                                    ),
-                                ];
-
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    buildGroupHeaderRow(),
-                                    Table(
-                                      columnWidths: columnWidthsMap,
-                                      border: TableBorder.all(
-                                        color: borderColor,
-                                        width: 1,
-                                      ),
-                                      defaultVerticalAlignment:
-                                          TableCellVerticalAlignment.middle,
-                                      children: tableRows,
-                                    ),
-                                  ],
-                                );
-                              }
-
-                              return ScrollConfiguration(
-                                behavior: const MouseDragScrollBehavior(),
-                                child: Scrollbar(
-                                  controller: courseTableHorizontalScrollController,
-                                  thumbVisibility: true,
-                                  interactive: true,
-                                  notificationPredicate: (notification) =>
-                                      notification.metrics.axis ==
-                                      Axis.horizontal,
-                                  child: SingleChildScrollView(
-                                    controller:
-                                        courseTableHorizontalScrollController,
-                                    scrollDirection: Axis.horizontal,
-                                    physics: const ClampingScrollPhysics(
-                                      parent: AlwaysScrollableScrollPhysics(),
-                                    ),
-                                    child: SizedBox(
-                                      width: contentWidth,
-                                      child: Scrollbar(
-                                        controller:
-                                            courseTableVerticalScrollController,
-                                        thumbVisibility: true,
-                                        interactive: true,
-                                        child: SingleChildScrollView(
-                                          controller:
-                                              courseTableVerticalScrollController,
-                                          physics: const ClampingScrollPhysics(
-                                            parent:
-                                                AlwaysScrollableScrollPhysics(),
-                                          ),
-                                          child: buildCourseTableContent(),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
+                          child: CourseListTable(
+                            courses: pageRows,
+                            totalsCourses: searched,
+                            startIndex: startIndex,
+                            selectedCourseId: selectedCourseDetail?.id,
+                            onCourseTap: openCourseDetail,
+                            horizontalScrollController:
+                                courseTableHorizontalScrollController,
+                            verticalScrollController:
+                                courseTableVerticalScrollController,
                           ),
                         ),
                         Container(

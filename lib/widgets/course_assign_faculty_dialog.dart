@@ -71,6 +71,74 @@ class _CourseAssignSearchDialogState
     );
   }
 
+  List<FacultyModel> _selectedFaculties() {
+    return widget.faculties
+        .where(
+          (faculty) => _selectedKeys.contains(_facultyKey(faculty)),
+        )
+        .toList();
+  }
+
+  String _assignConfirmationMessage(List<FacultyModel> selected) {
+    if (selected.length == 1) {
+      final FacultyModel faculty = selected.first;
+      final String name = faculty.fullName.trim().isEmpty
+          ? faculty.facultyId
+          : faculty.fullName;
+      return 'Are you sure you want to assign $name to this course?';
+    }
+    return 'Are you sure you want to assign ${selected.length} selected faculty members to this course?';
+  }
+
+  Future<void> _confirmAssign() async {
+    final List<FacultyModel> selected = _selectedFaculties();
+    if (selected.isEmpty) {
+      return;
+    }
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const smcText(
+          textToDisplay: 'Assign Faculty',
+          textSize: 18,
+          textBoldness: 4,
+          colorOfText: ColorConst.textPrimary,
+        ),
+        content: smcText(
+          textToDisplay: _assignConfirmationMessage(selected),
+          textSize: 14,
+          colorOfText: ColorConst.textSecondary,
+          maxLines: 4,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const smcText(
+              textToDisplay: 'Cancel',
+              textSize: 14,
+              textBoldness: 3,
+              colorOfText: ColorConst.textSecondary,
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const smcText(
+              textToDisplay: 'Assign',
+              textSize: 14,
+              textBoldness: 4,
+              colorOfText: ColorConst.primaryBlue,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      Navigator.pop(context, selected);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final String searchTerm =
@@ -374,32 +442,7 @@ class _CourseAssignSearchDialogState
 
                   ElevatedButton(
                     onPressed:
-                    _selectedKeys
-                        .isEmpty
-                        ? null
-                        : () {
-                      final List<
-                          FacultyModel>
-                      selected =
-                      widget
-                          .faculties
-                          .where(
-                            (
-                            faculty,
-                            ) =>
-                            _selectedKeys.contains(
-                              _facultyKey(
-                                faculty,
-                              ),
-                            ),
-                      )
-                          .toList();
-
-                      Navigator.pop(
-                        context,
-                        selected,
-                      );
-                    },
+                    _selectedKeys.isEmpty ? null : _confirmAssign,
                     style:
                     ElevatedButton
                         .styleFrom(

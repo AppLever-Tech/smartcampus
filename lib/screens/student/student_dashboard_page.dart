@@ -52,7 +52,6 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
       _orgScope?.orgId ?? OrgField.normalize(widget.orgId);
 
   bool loading = true;
-  bool coursesLoaded = false;
   int selectedMenuIndex = 0;
   bool sidebarExpanded = false;
 
@@ -85,7 +84,6 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
       }
       setState(() {
         allCourses = courses;
-        coursesLoaded = true;
       });
     });
   }
@@ -153,6 +151,48 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
   }
 
   Future<void> onLogout() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const smcText(
+          textToDisplay: 'Logout',
+          textSize: 18,
+          textBoldness: 4,
+          colorOfText: ColorConst.textPrimary,
+        ),
+        content: const smcText(
+          textToDisplay: 'Are you sure you want to logout?',
+          textSize: 14,
+          colorOfText: ColorConst.textSecondary,
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const smcText(
+              textToDisplay: 'No',
+              textSize: 14,
+              textBoldness: 3,
+              colorOfText: ColorConst.textSecondary,
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const smcText(
+              textToDisplay: 'Yes',
+              textSize: 14,
+              textBoldness: 4,
+              colorOfText: ColorConst.primaryBlue,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
     await FirebaseAuth.instance.signOut();
     if (!mounted) {
       return;
@@ -216,7 +256,12 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
     if (selectedMenuIndex == 1) {
       return _buildProfileView();
     }
-    return _buildDashboardView();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildDashboardView(),
+      ],
+    );
   }
 
   Widget _buildDashboardView() {
@@ -225,10 +270,15 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
       0,
       (sum, course) => sum + (int.tryParse(course.credits) ?? 0),
     );
+    final String cgpaDisplay = () {
+      final String cgpa = (studentProfile?.cgpa ?? '').trim();
+      return cgpa.isEmpty ? 'NA' : cgpa;
+    }();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
         Row(
           children: [
             const smcText(
@@ -262,124 +312,115 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
           colorOfText: ColorConst.textPrimary,
         ),
         const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: _buildStatCard(
-                title: 'Enrolled Courses',
-                count: courses.length.toString(),
-                icon: Icons.menu_book_rounded,
-                color: ColorConst.primaryBlue,
+        if (_isMobileLayout(context)) ...[
+          Row(
+            children: [
+              Expanded(
+                child: _buildStatCard(
+                  title: 'Enrolled\nCourses',
+                  count: courses.length.toString(),
+                  icon: Icons.menu_book_rounded,
+                  color: ColorConst.primaryBlue,
+                ),
               ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _buildStatCard(
-                title: 'Total\nCredits',
-                count: totalCredits.toString(),
-                icon: Icons.star_outline_rounded,
-                color: Colors.green,
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildStatCard(
+                  title: 'Total\nCredits',
+                  count: totalCredits.toString(),
+                  icon: Icons.star_outline_rounded,
+                  color: Colors.green,
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildStatCard(
+                  title: 'My\nCGPA',
+                  count: cgpaDisplay,
+                  icon: Icons.school_rounded,
+                  color: Colors.deepPurple,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildStatCard(
+                  title: 'My\nAttendance',
+                  count: '40.5 %',
+                  icon: Icons.event_available_rounded,
+                  color: Colors.orange,
+                ),
+              ),
+            ],
+          ),
+        ] else
+          Row(
+            children: [
+              Expanded(
+                child: _buildStatCard(
+                  title: 'Enrolled\nCourses',
+                  count: courses.length.toString(),
+                  icon: Icons.menu_book_rounded,
+                  color: ColorConst.primaryBlue,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildStatCard(
+                  title: 'Total\nCredits',
+                  count: totalCredits.toString(),
+                  icon: Icons.star_outline_rounded,
+                  color: Colors.green,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildStatCard(
+                  title: 'My\nCGPA',
+                  count: cgpaDisplay,
+                  icon: Icons.school_rounded,
+                  color: Colors.deepPurple,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildStatCard(
+                  title: 'My\nAttendance',
+                  count: '40.5 %',
+                  icon: Icons.event_available_rounded,
+                  color: Colors.orange,
+                ),
+              ),
+            ],
+          ),
         const SizedBox(height: 24),
-        Expanded(
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE3EAF8)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const smcText(
-                  textToDisplay: 'My Enrolled Courses',
-                  textSize: 16,
-                  textBoldness: 5,
-                  colorOfText: ColorConst.textPrimary,
-                ),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: !coursesLoaded
-                      ? const Center(child: CircularProgressIndicator())
-                      : courses.isEmpty
-                          ? const Center(
-                              child: smcText(
-                                textToDisplay:
-                                    'No enrolled courses yet. Your department admin will enroll you in courses.',
-                                textSize: 14,
-                                colorOfText: ColorConst.textSecondary,
-                                maxLines: 3,
-                                textAlign: TextAlign.center,
-                              ),
-                            )
-                          : ListView.separated(
-                              itemCount: courses.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(height: 10),
-                              itemBuilder: (context, index) {
-                                return _buildCourseListTile(courses[index]);
-                              },
-                            ),
-                ),
-              ],
-            ),
+        const smcText(
+          textToDisplay: 'Events & Announcements',
+          textSize: 16,
+          textBoldness: 5,
+          colorOfText: ColorConst.textPrimary,
+        ),
+        const SizedBox(height: 16),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE3EAF8)),
+          ),
+          child: const smcText(
+            textToDisplay:
+                'No events & announcements currently available',
+            textSize: 14,
+            colorOfText: ColorConst.textSecondary,
+            maxLines: 3,
+            textAlign: TextAlign.center,
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildCourseListTile(CourseModel course) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFF),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE3EAF8)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEAF0FF),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.menu_book_rounded,
-              color: ColorConst.primaryBlue,
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                smcText(
-                  textToDisplay: course.courseTitle,
-                  textSize: 14,
-                  textBoldness: 4,
-                  colorOfText: ColorConst.textPrimary,
-                  maxLines: 1,
-                ),
-                const SizedBox(height: 4),
-                smcText(
-                  textToDisplay:
-                      '${course.courseCode} • ${course.credits} credits • ${course.semester}',
-                  textSize: 12,
-                  colorOfText: ColorConst.textSecondary,
-                  maxLines: 1,
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
@@ -400,6 +441,10 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
       embeddedMaximized: true,
       showLeadingAction: false,
       showEmbeddedHeader: !_isMobileLayout(context),
+      allowStudentProfileEdit: true,
+      onStudentProfileUpdated: (updated) {
+        setState(() => studentProfile = updated);
+      },
     );
   }
 

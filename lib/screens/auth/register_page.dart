@@ -9,8 +9,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:pinput/pinput.dart';
 import 'package:smartcampus/const/color_const.dart';
 import 'package:smartcampus/data/mock_master_data.dart';
-import 'package:smartcampus/data/student_model.dart';
 import 'package:smartcampus/screens/auth/landing_page.dart';
+import 'package:smartcampus/services/faculty_firestore_service.dart';
 import 'package:smartcampus/services/firebase_auth_service.dart';
 import 'package:smartcampus/services/org_role_firestore_service.dart';
 import 'package:smartcampus/services/student_firestore_service.dart';
@@ -101,9 +101,12 @@ class RegisterPageState extends State<RegisterPage> {
       }
 
       final studentService = StudentFirestoreService();
+      final facultyService = FacultyFirestoreService();
       final existingStudent =
           await studentService.getStudentByUuid(normalizedUuid);
-      if (existingStudent != null) {
+      final existingFaculty =
+          await facultyService.getFacultyByMobile(normalizedUuid);
+      if (existingStudent != null || existingFaculty != null) {
         setState(() {
           isSubmitting = false;
           formMessage =
@@ -124,22 +127,6 @@ class RegisterPageState extends State<RegisterPage> {
 
       final photographUrl = await uploadProfileImage(normalizedUuid);
 
-      await studentService.createStudent(
-        StudentModel(
-          studentId: 'REG-$normalizedUuid',
-          fullName: fullName,
-          gender: '',
-          dateOfBirth: '',
-          uuid: normalizedUuid,
-          mobile: mobile,
-          email: emailController.text.trim().toLowerCase(),
-          photographUrl: photographUrl,
-          orgId: department.orgId,
-          deptId: department.deptId,
-          createdOn: DateTime.now().toIso8601String(),
-        ),
-      );
-
       await userMasterService.upsertUser(
         uuid: normalizedUuid,
         userName: fullName,
@@ -147,6 +134,20 @@ class RegisterPageState extends State<RegisterPage> {
         status: UserStatus.pendingApproval,
         orgId: department.orgId,
         deptId: department.deptId,
+      );
+
+      await FirebaseFirestore.instance
+          .collection(UserMasterFirestoreService.collection)
+          .doc(normalizedUuid)
+          .set(
+        {
+          'email': emailController.text.trim().toLowerCase(),
+          if (photographUrl.isNotEmpty) 'photo_url': photographUrl,
+          'requested_org_id': department.orgId,
+          'requested_org_name': department.deptName,
+          'requested_on': readableNow(),
+        },
+        SetOptions(merge: true),
       );
 
       final user = UserMasterItem(
@@ -158,6 +159,8 @@ class RegisterPageState extends State<RegisterPage> {
         deptId: department.deptId,
         name: fullName,
         mobile: mobile,
+        email: emailController.text.trim().toLowerCase(),
+        photoUrl: photographUrl,
         requestedOrgId: department.orgId,
         requestedOrgName: department.deptName,
         requestedOn: readableNow(),
@@ -362,10 +365,10 @@ class RegisterPageState extends State<RegisterPage> {
                     SizedBox(height: 8),
                     smcText(
                       textToDisplay:
-                          'Enter the 4-digit department access code shared by your department admin. Your request will appear in User Management for approval.',
+                          'Enter the 4-digit department access code shared by your department admin. Your request will appear in User Management, where the admin will classify you as Student or Faculty.',
                       textSize: 13,
                       colorOfText: ColorConst.textSecondary,
-                      maxLines: 3,
+                      maxLines: 4,
                     ),
                   ],
                 ),

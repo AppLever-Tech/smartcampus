@@ -1,11 +1,14 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:smartcampus/const/color_const.dart';
 import 'package:smartcampus/data/faculty_model.dart';
 import 'package:smartcampus/data/student_model.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:smartcampus/models/course_model.dart';
 import 'package:smartcampus/services/course_firestore_service.dart';
+import 'package:smartcampus/services/student_firestore_service.dart';
+import 'package:smartcampus/widgets/course_list_table.dart';
 
 class PersonDetailPage extends StatefulWidget {
   final dynamic person; // Can be StudentModel or FacultyModel
@@ -16,6 +19,9 @@ class PersonDetailPage extends StatefulWidget {
   final VoidCallback? onMaximize;
   final VoidCallback? onBackFromMaximized;
   final VoidCallback? onEditStudent;
+  /// When true, student can edit their own profile (except Student ID).
+  final bool allowStudentProfileEdit;
+  final ValueChanged<StudentModel>? onStudentProfileUpdated;
   /// When false, hides back/close in the embedded header (e.g. student own profile).
   final bool showLeadingAction;
   /// When false, hides the blue embedded header (e.g. student mobile profile tab).
@@ -31,6 +37,8 @@ class PersonDetailPage extends StatefulWidget {
     this.onMaximize,
     this.onBackFromMaximized,
     this.onEditStudent,
+    this.allowStudentProfileEdit = false,
+    this.onStudentProfileUpdated,
     this.showLeadingAction = true,
     this.showEmbeddedHeader = true,
   });
@@ -43,7 +51,17 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
   int _selectedIndex = 0;
   String _selectedEnrolledSemester = 'I';
   final CourseFirestoreService _courseService = CourseFirestoreService();
+  final StudentFirestoreService _studentService = StudentFirestoreService();
   Stream<List<CourseModel>>? _enrolledCoursesStream;
+  final Map<String, Map<String, String>> _enrolledCourseMarks = {};
+  final Map<String, String> _semesterSgpaBySemester = {};
+  String _cgpa = '';
+  bool _loadingEnrolledCourseMarks = false;
+  bool _savingEnrolledCourseMarks = false;
+  StudentModel? _studentProfileOverride;
+
+  StudentModel get _studentModel => _studentProfileOverride ??
+      widget.person as StudentModel;
 
   static const List<String> _enrolledSemesterOptions = [
     'I',
@@ -66,6 +84,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
   void initState() {
     super.initState();
     _bindEnrolledCoursesStream();
+    _loadEnrolledCourseMarks();
   }
 
   @override
@@ -75,8 +94,68 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
         widget.person is StudentModel &&
         (oldWidget.person is! StudentModel ||
             (oldWidget.person as StudentModel).orgId !=
-                (widget.person as StudentModel).orgId)) {
+                (widget.person as StudentModel).orgId ||
+            (oldWidget.person as StudentModel).documentId !=
+                (widget.person as StudentModel).documentId)) {
       _bindEnrolledCoursesStream();
+      _loadEnrolledCourseMarks();
+      _studentProfileOverride = null;
+    }
+  }
+
+  void _seedEnrolledCourseMarksFromStudent(StudentModel student) {
+    _enrolledCourseMarks
+      ..clear()
+      ..addAll(
+        student.enrolledCourseMarks.map(
+          (courseId, marks) => MapEntry(
+            courseId,
+            Map<String, String>.from(marks),
+          ),
+        ),
+      );
+    _semesterSgpaBySemester
+      ..clear()
+      ..addAll(student.semesterSgpa);
+    _cgpa = student.cgpa.trim();
+  }
+
+  String _sgpaDisplayForSemester(String semester) {
+    final String value = _semesterSgpaBySemester[semester]?.trim() ?? '';
+    return value.isEmpty ? 'NA' : value;
+  }
+
+  String _cgpaDisplay() {
+    return _cgpa.trim().isEmpty ? 'NA' : _cgpa.trim();
+  }
+
+  Future<void> _loadEnrolledCourseMarks() async {
+    if (!widget.isStudent || widget.person is! StudentModel) {
+      return;
+    }
+
+    final StudentModel student = widget.person as StudentModel;
+    _seedEnrolledCourseMarksFromStudent(student);
+
+    final String? documentId = student.documentId?.trim();
+    if (documentId == null || documentId.isEmpty) {
+      if (mounted) {
+        setState(() {});
+      }
+      return;
+    }
+
+    setState(() => _loadingEnrolledCourseMarks = true);
+    try {
+      final StudentModel? fresh =
+          await _studentService.getStudentByDocumentId(documentId);
+      if (fresh != null && mounted) {
+        _seedEnrolledCourseMarksFromStudent(fresh);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loadingEnrolledCourseMarks = false);
+      }
     }
   }
 
@@ -233,7 +312,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
     if (widget.isStudent) {
       return const [
         'Basic Details',
-        'Courses Enrolled',
+        'Enrolled Courses',
         'Achievements',
         'Publications',
       ];
@@ -285,7 +364,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
     switch (tab) {
       case 'Basic Details':
         return _buildBasicDetails();
-      case 'Courses Enrolled':
+      case 'Enrolled Courses':
         return _buildCoursesOpted();
       case 'Assigned Courses':
         return _buildAssignedCourses();
@@ -308,61 +387,85 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
   Widget _buildAssignedCourses() {
     final FacultyModel faculty = widget.person as FacultyModel;
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection(CourseFirestoreService.collection)
-          .snapshots(),
+    return StreamBuilder<List<CourseModel>>(
+      stream: _courseService.getCoursesForOrg(orgId: faculty.orgId),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
         }
 
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(
-            child: Text('No courses assigned'),
+        final List<CourseModel> assignedCourses =
+            CourseFirestoreService.filterCoursesForFaculty(
+          snapshot.data ?? const <CourseModel>[],
+          faculty,
+        )..sort(
+            (a, b) => a.courseTitle
+                .toLowerCase()
+                .compareTo(b.courseTitle.toLowerCase()),
           );
-        }
-
-        final assignedCourses = snapshot.data!.docs.where((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-
-          return (data['faculty'] ?? '')
-                  .toString()
-                  .trim()
-                  .toLowerCase() ==
-              faculty.fullName.trim().toLowerCase();
-        }).toList();
 
         if (assignedCourses.isEmpty) {
           return const Center(
-            child: Text('No courses assigned'),
+            child: smcText(
+              textToDisplay: 'No courses assigned yet.',
+              textSize: 14,
+              colorOfText: ColorConst.textSecondary,
+              textAlign: TextAlign.center,
+              maxLines: 3,
+            ),
           );
         }
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            children: assignedCourses.map((doc) {
-              final data = doc.data() as Map<String, dynamic>;
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final bool useTable = constraints.maxWidth >= 600;
 
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ListTile(
-                  leading: const Icon(Icons.menu_book_outlined),
-                  title: Text(
-                    data['courseTitle']?.toString() ?? '',
+            if (useTable) {
+              return Padding(
+                padding: const EdgeInsets.all(14),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE3EAF8)),
                   ),
-                  subtitle: Text(
-                    'Code: ${data['courseCode'] ?? ''}\n'
-                    'Semester: ${data['semester'] ?? ''}\n'
-                    'Credits: ${data['credits'] ?? ''}',
+                  child: CourseListTable(
+                    courses: assignedCourses,
+                    totalsCourses: assignedCourses,
                   ),
                 ),
               );
-            }).toList(),
-          ),
+            }
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: assignedCourses.map((course) {
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      leading: const Icon(Icons.menu_book_outlined),
+                      title: smcText(
+                        textToDisplay: course.courseTitle,
+                        textSize: 14,
+                        textBoldness: 4,
+                        colorOfText: ColorConst.textPrimary,
+                        maxLines: 2,
+                      ),
+                      subtitle: smcText(
+                        textToDisplay:
+                            'Code: ${course.courseCode} • Sem ${course.semester} • ${course.credits} credits',
+                        textSize: 12,
+                        colorOfText: ColorConst.textSecondary,
+                        maxLines: 2,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            );
+          },
         );
       },
     );
@@ -435,7 +538,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
   }
 
   Widget _buildStudentBasicDetails() {
-    final StudentModel s = widget.person as StudentModel;
+    final StudentModel s = _studentModel;
     final String photoUrl = _normalizePhotoUrl(s.photographUrl);
 
     return SingleChildScrollView(
@@ -448,35 +551,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
             profileSection: _buildDetailsSection(
               title: 'Basic Profile Information',
               icon: Icons.person_outline_rounded,
-              headerTrailing: widget.onEditStudent == null
-                  ? null
-                  : OutlinedButton.icon(
-                      onPressed: widget.onEditStudent,
-                      icon: const Icon(
-                        Icons.edit_outlined,
-                        size: 14,
-                        color: ColorConst.primaryBlue,
-                      ),
-                      label: const smcText(
-                        textToDisplay: 'Edit',
-                        textSize: 11,
-                        textBoldness: 4,
-                        colorOfText: ColorConst.primaryBlue,
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: ColorConst.primaryBlue,
-                        side: const BorderSide(color: ColorConst.primaryBlue),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
-                        ),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
+              headerTrailing: _buildStudentProfileHeaderActions(),
               children: [
                 _buildDetailRow('Student ID (USN)', s.studentId),
                 _buildDetailRow('Full Name', s.fullName),
@@ -520,6 +595,16 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
             children: [
               _buildDetailRow('Mobile Number', s.mobile),
               _buildDetailRow('Email Address', s.email),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildDetailsSection(
+            title: 'Family Details',
+            icon: Icons.family_restroom_outlined,
+            children: [
+              _buildDetailRow('Father Name', s.fatherName),
+              _buildDetailRow('Mother Name', s.motherName),
+              _buildDetailRow('Guardian Name', s.guardianName),
             ],
           ),
           const SizedBox(height: 16),
@@ -790,6 +875,105 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
     return rawDate;
   }
 
+  Widget? _buildStudentProfileHeaderActions() {
+    if (widget.onEditStudent != null) {
+      return OutlinedButton.icon(
+        onPressed: widget.onEditStudent,
+        icon: const Icon(
+          Icons.edit_outlined,
+          size: 14,
+          color: ColorConst.primaryBlue,
+        ),
+        label: const smcText(
+          textToDisplay: 'Edit',
+          textSize: 11,
+          textBoldness: 4,
+          colorOfText: ColorConst.primaryBlue,
+        ),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: ColorConst.primaryBlue,
+          side: const BorderSide(color: ColorConst.primaryBlue),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    }
+    if (!widget.allowStudentProfileEdit) {
+      return null;
+    }
+    return OutlinedButton.icon(
+      onPressed: _showStudentProfileEditDialog,
+      icon: const Icon(
+        Icons.edit_outlined,
+        size: 14,
+        color: ColorConst.primaryBlue,
+      ),
+      label: const smcText(
+        textToDisplay: 'Edit',
+        textSize: 11,
+        textBoldness: 4,
+        colorOfText: ColorConst.primaryBlue,
+      ),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: ColorConst.primaryBlue,
+        side: const BorderSide(color: ColorConst.primaryBlue),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
+  Future<void> _showStudentProfileEditDialog() async {
+    final StudentModel? updated = await showDialog<StudentModel>(
+      context: context,
+      builder: (ctx) => _StudentProfileEditDialog(student: _studentModel),
+    );
+    if (updated == null || !mounted) {
+      return;
+    }
+
+    final String? documentId = updated.documentId?.trim();
+    if (documentId == null || documentId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to save profile: student record not found.'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      await _studentService.updateStudent(
+        documentId: documentId,
+        updated: updated,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() => _studentProfileOverride = updated);
+      _seedEnrolledCourseMarksFromStudent(updated);
+      widget.onStudentProfileUpdated?.call(updated);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile updated successfully.')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to save profile: ${error.toString().replaceFirst('Exception: ', '')}',
+          ),
+        ),
+      );
+    }
+  }
+
   Widget _buildDetailRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -820,7 +1004,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
   }
 
   Widget _buildCoursesOpted() {
-    final StudentModel student = widget.person as StudentModel;
+    final StudentModel student = _studentModel;
     final Stream<List<CourseModel>> coursesStream =
         _enrolledCoursesStream ??
             _courseService.getCoursesForOrg(orgId: student.orgId);
@@ -868,38 +1052,28 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                  child: Row(
-                    children: [
-                      const smcText(
-                        textToDisplay: 'Semester',
-                        textSize: 13,
-                        textBoldness: 4,
-                        colorOfText: ColorConst.textSecondary,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              for (int i = 0;
-                                  i < _enrolledSemesterOptions.length;
-                                  i++) ...[
-                                if (i > 0) const SizedBox(width: 8),
-                                _buildSemesterFilterChip(
-                                  semester: _enrolledSemesterOptions[i],
-                                  enrolledCourses: enrolledCourses,
-                                ),
-                              ],
-                            ],
+                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (int i = 0;
+                            i < _enrolledSemesterOptions.length;
+                            i++) ...[
+                          if (i > 0) const SizedBox(width: 8),
+                          _buildSemesterFilterChip(
+                            semester: _enrolledSemesterOptions[i],
                           ),
-                        ),
-                      ),
-                    ],
+                        ],
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
+                  child: _buildEnrolledSemesterSummaryRow(semesterCourses),
+                ),
+                const SizedBox(height: 10),
                 Expanded(
                   child: semesterCourses.isEmpty
                       ? Center(
@@ -934,12 +1108,8 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
 
   Widget _buildSemesterFilterChip({
     required String semester,
-    required List<CourseModel> enrolledCourses,
   }) {
     final bool isSelected = _selectedEnrolledSemester == semester;
-    final int courseCount = enrolledCourses
-        .where((course) => _courseMatchesSemester(course, semester))
-        .length;
 
     return InkWell(
       onTap: () => setState(() => _selectedEnrolledSemester = semester),
@@ -964,41 +1134,221 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
               const SizedBox(width: 6),
             ],
             smcText(
-              textToDisplay: semester,
+              textToDisplay: 'Sem: $semester',
               textSize: 13,
               textBoldness: isSelected ? 4 : 3,
               colorOfText:
                   isSelected ? const Color(0xFF1967D2) : const Color(0xFF6B7280),
             ),
-            if (courseCount > 0) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? const Color(0xFF1967D2)
-                      : const Color(0xFFEEF2F8),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: smcText(
-                  textToDisplay: courseCount.toString(),
-                  textSize: 11,
-                  textBoldness: 4,
-                  colorOfText: isSelected
-                      ? Colors.white
-                      : ColorConst.textSecondary,
-                ),
-              ),
-            ],
           ],
         ),
       ),
     );
   }
 
+  Widget _buildEnrolledSummaryDivider() {
+    return Container(
+      width: 1,
+      height: 18,
+      margin: const EdgeInsets.symmetric(horizontal: 12),
+      color: const Color(0xFFD1D5DB),
+    );
+  }
+
+  Widget _buildEnrolledSemesterSummaryRow(List<CourseModel> semesterCourses) {
+    final Widget editMarksButton = OutlinedButton.icon(
+      onPressed: semesterCourses.isEmpty ||
+              _savingEnrolledCourseMarks ||
+              _loadingEnrolledCourseMarks
+          ? null
+          : () => _showEditMarksDialog(semesterCourses),
+      icon: const Icon(
+        Icons.edit_outlined,
+        size: 16,
+        color: ColorConst.primaryBlue,
+      ),
+      label: const smcText(
+        textToDisplay: 'Edit',
+        textSize: 12,
+        textBoldness: 4,
+        colorOfText: ColorConst.primaryBlue,
+      ),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: ColorConst.primaryBlue,
+        side: const BorderSide(color: ColorConst.primaryBlue),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 11,
+        ),
+        minimumSize: const Size(0, 42),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
+
+    return Wrap(
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        smcText(
+          textToDisplay:
+              'SGPA: ${_sgpaDisplayForSemester(_selectedEnrolledSemester)}',
+          textSize: 13,
+          textBoldness: 4,
+          colorOfText: ColorConst.textPrimary,
+        ),
+        _buildEnrolledSummaryDivider(),
+        smcText(
+          textToDisplay: 'CGPA: ${_cgpaDisplay()}',
+          textSize: 13,
+          textBoldness: 4,
+          colorOfText: ColorConst.textPrimary,
+        ),
+        _buildEnrolledSummaryDivider(),
+        editMarksButton,
+      ],
+    );
+  }
+
   String _enrolledCourseCellText(String value) {
     final String trimmed = value.trim();
     return trimmed.isEmpty ? '—' : trimmed;
+  }
+
+  String _gradePointsForCourse(CourseModel course) {
+    return _enrolledCourseCellText(
+      _enrolledCourseMarks[course.id]?['gradePoints'] ?? '',
+    );
+  }
+
+  String _letterGradeForCourse(CourseModel course) {
+    return _enrolledCourseCellText(
+      _enrolledCourseMarks[course.id]?['letterGrade'] ?? '',
+    );
+  }
+
+  Future<void> _showEditMarksDialog(List<CourseModel> courses) async {
+    final _EditMarksDialogResult? result =
+        await showDialog<_EditMarksDialogResult>(
+      context: context,
+      builder: (ctx) => _EditMarksDialog(
+        courses: courses,
+        semester: _selectedEnrolledSemester,
+        initialMarks: _enrolledCourseMarks,
+        initialSgpa: _semesterSgpaBySemester[_selectedEnrolledSemester] ?? '',
+        initialCgpa: _cgpa,
+      ),
+    );
+
+    if (result == null || !mounted) {
+      return;
+    }
+
+    final Map<String, Map<String, String>> updatedMarks =
+        Map<String, Map<String, String>>.from(
+      _enrolledCourseMarks.map(
+        (courseId, marks) => MapEntry(
+          courseId,
+          Map<String, String>.from(marks),
+        ),
+      ),
+    );
+
+    for (final CourseModel course in courses) {
+      final Map<String, String>? marks = result.courseMarks[course.id];
+      if (marks == null) {
+        updatedMarks.remove(course.id);
+        continue;
+      }
+
+      final String gradePoints = marks['gradePoints']?.trim() ?? '';
+      final String letterGrade = marks['letterGrade']?.trim() ?? '';
+      if (gradePoints.isEmpty && letterGrade.isEmpty) {
+        updatedMarks.remove(course.id);
+      } else {
+        updatedMarks[course.id] = {
+          'gradePoints': gradePoints,
+          'letterGrade': letterGrade,
+        };
+      }
+    }
+
+    final Map<String, String> updatedSemesterSgpa =
+        Map<String, String>.from(_semesterSgpaBySemester);
+    final String sgpa = result.sgpa.trim();
+    if (sgpa.isEmpty) {
+      updatedSemesterSgpa.remove(_selectedEnrolledSemester);
+    } else {
+      updatedSemesterSgpa[_selectedEnrolledSemester] = sgpa;
+    }
+    final String updatedCgpa = result.cgpa.trim();
+
+    if (!widget.isStudent || widget.person is! StudentModel) {
+      setState(() {
+        _enrolledCourseMarks
+          ..clear()
+          ..addAll(updatedMarks);
+        _semesterSgpaBySemester
+          ..clear()
+          ..addAll(updatedSemesterSgpa);
+        _cgpa = updatedCgpa;
+      });
+      return;
+    }
+
+    final StudentModel student = widget.person as StudentModel;
+    final String? documentId = student.documentId?.trim();
+    if (documentId == null || documentId.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to save marks: student record not found.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _savingEnrolledCourseMarks = true);
+    try {
+      await _studentService.saveEnrolledCourseMarks(
+        documentId: documentId,
+        marksByCourseId: updatedMarks,
+        semesterSgpaBySemester: updatedSemesterSgpa,
+        cgpa: updatedCgpa,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _enrolledCourseMarks
+          ..clear()
+          ..addAll(updatedMarks);
+        _semesterSgpaBySemester
+          ..clear()
+          ..addAll(updatedSemesterSgpa);
+        _cgpa = updatedCgpa;
+        _savingEnrolledCourseMarks = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Marks saved successfully.')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _savingEnrolledCourseMarks = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to save marks: ${error.toString().replaceFirst('Exception: ', '')}',
+          ),
+        ),
+      );
+    }
   }
 
   Widget _buildEnrolledCoursesList(List<CourseModel> courses) {
@@ -1204,7 +1554,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
                         DataCell(
                           Center(
                             child: smcText(
-                              textToDisplay: '—',
+                              textToDisplay: _gradePointsForCourse(course),
                               textSize: 12,
                               colorOfText: const Color(0xFF2E3954),
                             ),
@@ -1213,7 +1563,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
                         DataCell(
                           Center(
                             child: smcText(
-                              textToDisplay: '—',
+                              textToDisplay: _letterGradeForCourse(course),
                               textSize: 12,
                               colorOfText: const Color(0xFF2E3954),
                             ),
@@ -1361,14 +1711,14 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
               Expanded(
                 child: _buildEnrolledCourseCardCompactField(
                   'Grade Points',
-                  '—',
+                  _gradePointsForCourse(course),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _buildEnrolledCourseCardCompactField(
                   'Letter Grade',
-                  '—',
+                  _letterGradeForCourse(course),
                 ),
               ),
             ],
@@ -1394,6 +1744,1145 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
         textToDisplay: 'No publications recorded yet.',
         textSize: 14,
         colorOfText: ColorConst.textSecondary,
+      ),
+    );
+  }
+}
+
+class _EditMarksDialogResult {
+  final Map<String, Map<String, String>> courseMarks;
+  final String sgpa;
+  final String cgpa;
+
+  const _EditMarksDialogResult({
+    required this.courseMarks,
+    required this.sgpa,
+    required this.cgpa,
+  });
+}
+
+class _EditMarksDialog extends StatefulWidget {
+  final List<CourseModel> courses;
+  final String semester;
+  final Map<String, Map<String, String>> initialMarks;
+  final String initialSgpa;
+  final String initialCgpa;
+
+  const _EditMarksDialog({
+    required this.courses,
+    required this.semester,
+    required this.initialMarks,
+    required this.initialSgpa,
+    required this.initialCgpa,
+  });
+
+  @override
+  State<_EditMarksDialog> createState() => _EditMarksDialogState();
+}
+
+class _EditMarksDialogState extends State<_EditMarksDialog> {
+  late final List<TextEditingController> _gradePointsControllers;
+  late final List<TextEditingController> _letterGradeControllers;
+  late final TextEditingController _sgpaController;
+  late final TextEditingController _cgpaController;
+
+  @override
+  void initState() {
+    super.initState();
+    _sgpaController = TextEditingController(text: widget.initialSgpa.trim());
+    _cgpaController = TextEditingController(text: widget.initialCgpa.trim());
+    _gradePointsControllers = widget.courses.map((course) {
+      final String stored =
+          widget.initialMarks[course.id]?['gradePoints']?.trim() ?? '';
+      return TextEditingController(text: stored);
+    }).toList();
+    _letterGradeControllers = widget.courses.map((course) {
+      final String stored =
+          widget.initialMarks[course.id]?['letterGrade']?.trim() ?? '';
+      return TextEditingController(text: stored);
+    }).toList();
+  }
+
+  @override
+  void dispose() {
+    _sgpaController.dispose();
+    _cgpaController.dispose();
+    for (final TextEditingController controller in _gradePointsControllers) {
+      controller.dispose();
+    }
+    for (final TextEditingController controller in _letterGradeControllers) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  InputDecoration _marksFieldDecoration() {
+    return InputDecoration(
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: ColorConst.primaryBlue),
+      ),
+    );
+  }
+
+  InputDecoration _gradePointsFieldDecoration() {
+    return _marksFieldDecoration().copyWith(
+      hintText: '1-10',
+      hintStyle: const TextStyle(
+        fontSize: 11,
+        color: Color(0xFF8A96B2),
+      ),
+    );
+  }
+
+  InputDecoration _gpaFieldDecoration() {
+    return _marksFieldDecoration().copyWith(
+      hintText: '0-10',
+      hintStyle: const TextStyle(
+        fontSize: 11,
+        color: Color(0xFF8A96B2),
+      ),
+    );
+  }
+
+  String? _validateGpa(String label, String value) {
+    final String trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+
+    final num? parsed = num.tryParse(trimmed);
+    if (parsed == null || parsed < 0 || parsed > 10) {
+      return '$label must be between 0 and 10.';
+    }
+    return null;
+  }
+
+  String? _validateGradePoints(String value) {
+    final String trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+
+    final num? parsed = num.tryParse(trimmed);
+    if (parsed == null || parsed < 1 || parsed > 10) {
+      return 'Grade Points must be between 1 and 10.';
+    }
+    return null;
+  }
+
+  String? _validateMarksBeforeSave() {
+    final String? sgpaError = _validateGpa('SGPA', _sgpaController.text);
+    if (sgpaError != null) {
+      return sgpaError;
+    }
+
+    final String? cgpaError = _validateGpa('CGPA', _cgpaController.text);
+    if (cgpaError != null) {
+      return cgpaError;
+    }
+
+    for (int i = 0; i < widget.courses.length; i++) {
+      final String? error =
+          _validateGradePoints(_gradePointsControllers[i].text);
+      if (error != null) {
+        final CourseModel course = widget.courses[i];
+        final String courseCode = course.courseCode.trim();
+        final String label =
+            courseCode.isEmpty ? 'Row ${i + 1}' : courseCode;
+        return '$label: $error';
+      }
+    }
+    return null;
+  }
+
+  void _handleSave() {
+    final String? error = _validateMarksBeforeSave();
+    if (error != null) {
+      showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const smcText(
+            textToDisplay: 'Validation Error',
+            textSize: 18,
+            textBoldness: 4,
+            colorOfText: ColorConst.textPrimary,
+          ),
+          content: smcText(
+            textToDisplay: error,
+            textSize: 14,
+            colorOfText: ColorConst.textSecondary,
+            maxLines: 4,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const smcText(
+                textToDisplay: 'OK',
+                textSize: 14,
+                textBoldness: 4,
+                colorOfText: ColorConst.primaryBlue,
+              ),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    _confirmSave();
+  }
+
+  Future<void> _confirmSave() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const smcText(
+          textToDisplay: 'Save Marks',
+          textSize: 18,
+          textBoldness: 4,
+          colorOfText: ColorConst.textPrimary,
+        ),
+        content: const smcText(
+          textToDisplay: 'Are you sure you want to save these marks?',
+          textSize: 14,
+          colorOfText: ColorConst.textSecondary,
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const smcText(
+              textToDisplay: 'Cancel',
+              textSize: 14,
+              textBoldness: 3,
+              colorOfText: ColorConst.textSecondary,
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const smcText(
+              textToDisplay: 'Save',
+              textSize: 14,
+              textBoldness: 4,
+              colorOfText: ColorConst.primaryBlue,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    Navigator.pop(
+      context,
+      _EditMarksDialogResult(
+        courseMarks: _collectMarks(),
+        sgpa: _sgpaController.text.trim(),
+        cgpa: _cgpaController.text.trim(),
+      ),
+    );
+  }
+
+  Future<void> _handleCancel() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const smcText(
+          textToDisplay: 'Discard Changes?',
+          textSize: 18,
+          textBoldness: 4,
+          colorOfText: ColorConst.textPrimary,
+        ),
+        content: const smcText(
+          textToDisplay:
+              'Are you sure you want to cancel? Unsaved changes will be lost.',
+          textSize: 14,
+          colorOfText: ColorConst.textSecondary,
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const smcText(
+              textToDisplay: 'No',
+              textSize: 14,
+              textBoldness: 3,
+              colorOfText: ColorConst.textSecondary,
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const smcText(
+              textToDisplay: 'Yes, Cancel',
+              textSize: 14,
+              textBoldness: 4,
+              colorOfText: ColorConst.primaryBlue,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      Navigator.pop(context);
+    }
+  }
+
+  Map<String, Map<String, String>> _collectMarks() {
+    final Map<String, Map<String, String>> marks = {};
+    for (int i = 0; i < widget.courses.length; i++) {
+      final CourseModel course = widget.courses[i];
+      marks[course.id] = {
+        'gradePoints': _gradePointsControllers[i].text.trim(),
+        'letterGrade': _letterGradeControllers[i].text.trim(),
+      };
+    }
+    return marks;
+  }
+
+  Widget _buildGpaFieldsRow() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const smcText(
+                textToDisplay: 'SGPA',
+                textSize: 12,
+                textBoldness: 4,
+                colorOfText: Color(0xFF5C6B8B),
+              ),
+              const SizedBox(height: 2),
+              const smcText(
+                textToDisplay: 'For this semester',
+                textSize: 10,
+                colorOfText: Color(0xFF8A96B2),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _sgpaController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: _gpaFieldDecoration(),
+                style: const TextStyle(fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const smcText(
+                textToDisplay: 'CGPA',
+                textSize: 12,
+                textBoldness: 4,
+                colorOfText: Color(0xFF5C6B8B),
+              ),
+              const SizedBox(height: 2),
+              const smcText(
+                textToDisplay: 'Cumulative GPA',
+                textSize: 10,
+                colorOfText: Color(0xFF8A96B2),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _cgpaController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: _gpaFieldDecoration(),
+                style: const TextStyle(fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double screenWidth = MediaQuery.sizeOf(context).width;
+    final double screenHeight = MediaQuery.sizeOf(context).height;
+    final double dialogWidth = screenWidth > 860 ? 820 : screenWidth - 24;
+    final double tableHeight = (48.0 + widget.courses.length * 54.0)
+        .clamp(102.0, screenHeight * 0.55)
+        .toDouble();
+    final bool showCreditsColumn = kIsWeb;
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: dialogWidth),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              smcText(
+                textToDisplay: 'Edit Marks — Semester ${widget.semester}',
+                textSize: 16,
+                textBoldness: 5,
+                colorOfText: ColorConst.textPrimary,
+                maxLines: 1,
+              ),
+              const SizedBox(height: 10),
+              _buildGpaFieldsRow(),
+              const SizedBox(height: 10),
+              if (!kIsWeb) ...[
+                const smcText(
+                  textToDisplay: '(Scroll right to enter the values)',
+                  textSize: 11,
+                  colorOfText: Color(0xFF8A96B2),
+                  maxLines: 1,
+                ),
+                const SizedBox(height: 6),
+              ],
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE3EAF8)),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: SizedBox(
+                    height: tableHeight,
+                    child: SingleChildScrollView(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: DataTable(
+                          showCheckboxColumn: false,
+                          headingRowHeight: 44,
+                          dataRowMinHeight: 50,
+                          dataRowMaxHeight: 54,
+                          horizontalMargin: 10,
+                          columnSpacing: 12,
+                          dividerThickness: 1,
+                          border: const TableBorder(
+                            horizontalInside:
+                                BorderSide(color: Color(0xFFE3EAF8)),
+                            verticalInside:
+                                BorderSide(color: Color(0xFFE3EAF8)),
+                            top: BorderSide(color: Color(0xFFE3EAF8)),
+                            bottom: BorderSide(color: Color(0xFFE3EAF8)),
+                            left: BorderSide(color: Color(0xFFE3EAF8)),
+                            right: BorderSide(color: Color(0xFFE3EAF8)),
+                          ),
+                          headingRowColor: WidgetStateProperty.all(
+                            const Color(0xFFF4F7FF),
+                          ),
+                          columns: [
+                            const DataColumn(
+                              label: smcText(
+                                textToDisplay: 'Course Code',
+                                textSize: 12,
+                                textBoldness: 4,
+                                colorOfText: Color(0xFF5C6B8B),
+                              ),
+                            ),
+                            const DataColumn(
+                              label: smcText(
+                                textToDisplay: 'Course Title',
+                                textSize: 12,
+                                textBoldness: 4,
+                                colorOfText: Color(0xFF5C6B8B),
+                              ),
+                            ),
+                            if (showCreditsColumn)
+                              const DataColumn(
+                                label: smcText(
+                                  textToDisplay: 'Credits',
+                                  textSize: 12,
+                                  textBoldness: 4,
+                                  colorOfText: Color(0xFF5C6B8B),
+                                ),
+                              ),
+                            const DataColumn(
+                              label: smcText(
+                                textToDisplay: 'Grade Points',
+                                textSize: 12,
+                                textBoldness: 4,
+                                colorOfText: Color(0xFF5C6B8B),
+                              ),
+                            ),
+                            const DataColumn(
+                              label: smcText(
+                                textToDisplay: 'Letter Grade',
+                                textSize: 12,
+                                textBoldness: 4,
+                                colorOfText: Color(0xFF5C6B8B),
+                              ),
+                            ),
+                          ],
+                          rows: List<DataRow>.generate(widget.courses.length,
+                              (index) {
+                            final CourseModel course = widget.courses[index];
+                            return DataRow(
+                              cells: [
+                                DataCell(
+                                  SizedBox(
+                                    width: 110,
+                                    child: smcText(
+                                      textToDisplay: course.courseCode
+                                              .trim()
+                                              .isEmpty
+                                          ? '—'
+                                          : course.courseCode.trim(),
+                                      textSize: 12,
+                                      textBoldness: 4,
+                                      colorOfText: const Color(0xFF2E3954),
+                                      maxLines: 1,
+                                    ),
+                                  ),
+                                ),
+                                DataCell(
+                                  SizedBox(
+                                    width: 220,
+                                    child: smcText(
+                                      textToDisplay: course.courseTitle
+                                              .trim()
+                                              .isEmpty
+                                          ? '—'
+                                          : course.courseTitle.trim(),
+                                      textSize: 12,
+                                      colorOfText: const Color(0xFF2E3954),
+                                      maxLines: 2,
+                                    ),
+                                  ),
+                                ),
+                                if (showCreditsColumn)
+                                  DataCell(
+                                    Center(
+                                      child: smcText(
+                                        textToDisplay: course.credits
+                                                .trim()
+                                                .isEmpty
+                                            ? '—'
+                                            : course.credits.trim(),
+                                        textSize: 12,
+                                        colorOfText: const Color(0xFF2E3954),
+                                      ),
+                                    ),
+                                  ),
+                                DataCell(
+                                  SizedBox(
+                                    width: 96,
+                                    child: TextField(
+                                      controller:
+                                          _gradePointsControllers[index],
+                                      decoration: _gradePointsFieldDecoration(),
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.allow(
+                                          RegExp(r'[0-9.]'),
+                                        ),
+                                      ],
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFF2E3954),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                DataCell(
+                                  SizedBox(
+                                    width: 96,
+                                    child: TextField(
+                                      controller:
+                                          _letterGradeControllers[index],
+                                      decoration: _marksFieldDecoration(),
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFF2E3954),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          }),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  OutlinedButton(
+                    onPressed: _handleCancel,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: ColorConst.textSecondary,
+                      side: const BorderSide(color: Color(0xFFD1D5DB)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 10,
+                      ),
+                      minimumSize: const Size(0, 40),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const smcText(
+                      textToDisplay: 'Cancel',
+                      textSize: 13,
+                      textBoldness: 4,
+                      colorOfText: ColorConst.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    onPressed: _handleSave,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: ColorConst.primaryBlue,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 10,
+                      ),
+                      minimumSize: const Size(0, 40),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const smcText(
+                      textToDisplay: 'Save',
+                      textSize: 13,
+                      textBoldness: 4,
+                      colorOfText: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StudentProfileEditDialog extends StatefulWidget {
+  final StudentModel student;
+
+  const _StudentProfileEditDialog({required this.student});
+
+  @override
+  State<_StudentProfileEditDialog> createState() =>
+      _StudentProfileEditDialogState();
+}
+
+class _StudentProfileEditDialogState extends State<_StudentProfileEditDialog> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  late final TextEditingController _fullNameController;
+  late final TextEditingController _batchController;
+  late final TextEditingController _dobController;
+  late final TextEditingController _aadhaarController;
+  late final TextEditingController _mobileController;
+  late final TextEditingController _emailController;
+  late final TextEditingController _permanentAddressController;
+  late final TextEditingController _correspondenceAddressController;
+  late final TextEditingController _fatherNameController;
+  late final TextEditingController _motherNameController;
+  late final TextEditingController _guardianNameController;
+  late final TextEditingController _emergencyNameController;
+  late final TextEditingController _emergencyRelationController;
+  late final TextEditingController _emergencyMobileController;
+
+  String? _gender;
+  String? _category;
+  String? _nationality;
+  String? _bloodGroup;
+  DateTime? _dateOfBirth;
+
+  static const List<String> _genderOptions = ['Male', 'Female', 'Other'];
+  static const List<String> _categoryOptions = ['Gen', 'OBC', 'SC', 'ST'];
+  static const List<String> _nationalityOptions = [
+    'Indian',
+    'NRI',
+    'Foreigner',
+  ];
+  static const List<String> _bloodGroupOptions = [
+    'A+',
+    'A-',
+    'B+',
+    'B-',
+    'O+',
+    'O-',
+    'AB+',
+    'AB-',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    final StudentModel student = widget.student;
+    _fullNameController = TextEditingController(text: student.fullName);
+    _batchController = TextEditingController(text: student.batch);
+    _aadhaarController = TextEditingController(text: student.aadhaarNumber);
+    _mobileController = TextEditingController(text: student.mobile);
+    _emailController = TextEditingController(text: student.email);
+    _permanentAddressController =
+        TextEditingController(text: student.permanentAddress);
+    _correspondenceAddressController =
+        TextEditingController(text: student.correspondenceAddress);
+    _fatherNameController = TextEditingController(text: student.fatherName);
+    _motherNameController = TextEditingController(text: student.motherName);
+    _guardianNameController = TextEditingController(text: student.guardianName);
+    _emergencyNameController =
+        TextEditingController(text: student.emergencyContactName);
+    _emergencyRelationController =
+        TextEditingController(text: student.emergencyContactRelation);
+    _emergencyMobileController =
+        TextEditingController(text: student.emergencyContactMobile);
+    _gender = student.gender.isEmpty ? null : student.gender;
+    _category = student.category.isEmpty ? null : student.category;
+    _nationality = student.nationality.isEmpty ? null : student.nationality;
+    _bloodGroup = student.bloodGroup.isEmpty ? null : student.bloodGroup;
+    if (student.dateOfBirth.isNotEmpty) {
+      try {
+        _dateOfBirth = DateTime.parse(student.dateOfBirth);
+      } catch (_) {}
+    }
+    _dobController = TextEditingController(text: _formatDob(_dateOfBirth));
+  }
+
+  @override
+  void dispose() {
+    _fullNameController.dispose();
+    _batchController.dispose();
+    _dobController.dispose();
+    _aadhaarController.dispose();
+    _mobileController.dispose();
+    _emailController.dispose();
+    _permanentAddressController.dispose();
+    _correspondenceAddressController.dispose();
+    _fatherNameController.dispose();
+    _motherNameController.dispose();
+    _guardianNameController.dispose();
+    _emergencyNameController.dispose();
+    _emergencyRelationController.dispose();
+    _emergencyMobileController.dispose();
+    super.dispose();
+  }
+
+  String _formatDob(DateTime? date) {
+    if (date == null) {
+      return '';
+    }
+    return '${date.day.toString().padLeft(2, '0')}/'
+        '${date.month.toString().padLeft(2, '0')}/'
+        '${date.year}';
+  }
+
+  InputDecoration _fieldDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(
+        fontSize: 12,
+        color: ColorConst.textSecondary,
+      ),
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: ColorConst.primaryBlue),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10, top: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: ColorConst.primaryBlue),
+          const SizedBox(width: 6),
+          smcText(
+            textToDisplay: title,
+            textSize: 12,
+            textBoldness: 4,
+            colorOfText: ColorConst.primaryBlue,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDropdown({
+    required String label,
+    required String? value,
+    required List<String> options,
+    required ValueChanged<String?> onChanged,
+    String? Function(String?)? validator,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: DropdownButtonFormField<String>(
+        value: options.contains(value) ? value : null,
+        decoration: _fieldDecoration(label),
+        items: options
+            .map(
+              (option) => DropdownMenuItem<String>(
+                value: option,
+                child: Text(option, style: const TextStyle(fontSize: 13)),
+              ),
+            )
+            .toList(),
+        onChanged: onChanged,
+        validator: validator,
+      ),
+    );
+  }
+
+  Future<void> _pickDateOfBirth() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _dateOfBirth ?? DateTime(2005),
+      firstDate: DateTime(1990),
+      lastDate: DateTime.now(),
+    );
+    if (picked == null) {
+      return;
+    }
+    setState(() {
+      _dateOfBirth = picked;
+      _dobController.text = _formatDob(picked);
+    });
+  }
+
+  StudentModel _buildUpdatedStudent() {
+    return widget.student.copyWith(
+      fullName: _fullNameController.text.trim(),
+      gender: _gender ?? '',
+      batch: _batchController.text.trim(),
+      dateOfBirth: _dateOfBirth?.toIso8601String().split('T').first ?? '',
+      aadhaarNumber: _aadhaarController.text.trim(),
+      category: _category ?? '',
+      nationality: _nationality ?? '',
+      bloodGroup: _bloodGroup ?? '',
+      mobile: _mobileController.text.trim(),
+      email: _emailController.text.trim().toLowerCase(),
+      permanentAddress: _permanentAddressController.text.trim(),
+      correspondenceAddress: _correspondenceAddressController.text.trim(),
+      fatherName: _fatherNameController.text.trim(),
+      motherName: _motherNameController.text.trim(),
+      guardianName: _guardianNameController.text.trim(),
+      emergencyContactName: _emergencyNameController.text.trim(),
+      emergencyContactRelation: _emergencyRelationController.text.trim(),
+      emergencyContactMobile: _emergencyMobileController.text.trim(),
+    );
+  }
+
+  void _handleSave() {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    Navigator.pop(context, _buildUpdatedStudent());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double screenHeight = MediaQuery.sizeOf(context).height;
+    final double dialogHeight = (screenHeight * 0.88).clamp(420.0, 760.0);
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 640),
+        child: SizedBox(
+          height: dialogHeight,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const smcText(
+                  textToDisplay: 'Edit Profile',
+                  textSize: 16,
+                  textBoldness: 5,
+                  colorOfText: ColorConst.textPrimary,
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: Form(
+                    key: _formKey,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildSectionTitle(
+                            'Basic Profile Information',
+                            Icons.person_outline_rounded,
+                          ),
+                          TextFormField(
+                            initialValue: widget.student.studentId,
+                            readOnly: true,
+                            decoration: _fieldDecoration('Student ID (USN)'),
+                          ),
+                          const SizedBox(height: 10),
+                          TextFormField(
+                            controller: _fullNameController,
+                            decoration: _fieldDecoration('Full Name *'),
+                            textCapitalization: TextCapitalization.words,
+                            validator: (value) =>
+                                (value == null || value.trim().isEmpty)
+                                    ? 'Full name is required'
+                                    : null,
+                          ),
+                          const SizedBox(height: 10),
+                          _buildDropdown(
+                            label: 'Gender *',
+                            value: _gender,
+                            options: _genderOptions,
+                            onChanged: (value) =>
+                                setState(() => _gender = value),
+                            validator: (value) =>
+                                (value == null || value.trim().isEmpty)
+                                    ? 'Please select gender'
+                                    : null,
+                          ),
+                          TextFormField(
+                            controller: _batchController,
+                            decoration: _fieldDecoration('Batch'),
+                          ),
+                          const SizedBox(height: 10),
+                          TextFormField(
+                            controller: _dobController,
+                            readOnly: true,
+                            decoration: _fieldDecoration('Date of Birth').copyWith(
+                              suffixIcon: const Icon(
+                                Icons.calendar_today_outlined,
+                                size: 16,
+                              ),
+                            ),
+                            onTap: _pickDateOfBirth,
+                          ),
+                          _buildSectionTitle(
+                            'Identity & Category',
+                            Icons.verified_user_outlined,
+                          ),
+                          TextFormField(
+                            controller: _aadhaarController,
+                            decoration: _fieldDecoration('Aadhaar / Govt ID'),
+                            keyboardType: TextInputType.number,
+                          ),
+                          const SizedBox(height: 10),
+                          _buildDropdown(
+                            label: 'Category *',
+                            value: _category,
+                            options: _categoryOptions,
+                            onChanged: (value) =>
+                                setState(() => _category = value),
+                            validator: (value) =>
+                                (value == null || value.trim().isEmpty)
+                                    ? 'Please select category'
+                                    : null,
+                          ),
+                          _buildDropdown(
+                            label: 'Nationality *',
+                            value: _nationality,
+                            options: _nationalityOptions,
+                            onChanged: (value) =>
+                                setState(() => _nationality = value),
+                            validator: (value) =>
+                                (value == null || value.trim().isEmpty)
+                                    ? 'Please select nationality'
+                                    : null,
+                          ),
+                          _buildDropdown(
+                            label: 'Blood Group *',
+                            value: _bloodGroup,
+                            options: _bloodGroupOptions,
+                            onChanged: (value) =>
+                                setState(() => _bloodGroup = value),
+                            validator: (value) =>
+                                (value == null || value.trim().isEmpty)
+                                    ? 'Please select blood group'
+                                    : null,
+                          ),
+                          _buildSectionTitle(
+                            'Contact Details',
+                            Icons.contact_phone_outlined,
+                          ),
+                          TextFormField(
+                            controller: _mobileController,
+                            decoration: _fieldDecoration('Mobile Number *'),
+                            keyboardType: TextInputType.phone,
+                            validator: (value) =>
+                                (value == null || value.trim().isEmpty)
+                                    ? 'Mobile number is required'
+                                    : null,
+                          ),
+                          const SizedBox(height: 10),
+                          TextFormField(
+                            controller: _emailController,
+                            decoration: _fieldDecoration('Email Address *'),
+                            keyboardType: TextInputType.emailAddress,
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Email is required';
+                              }
+                              final emailRegex = RegExp(
+                                r'^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$',
+                              );
+                              if (!emailRegex.hasMatch(value.trim())) {
+                                return 'Enter a valid email address';
+                              }
+                              return null;
+                            },
+                          ),
+                          _buildSectionTitle(
+                            'Family Details',
+                            Icons.family_restroom_outlined,
+                          ),
+                          TextFormField(
+                            controller: _fatherNameController,
+                            decoration: _fieldDecoration('Father Name'),
+                            textCapitalization: TextCapitalization.words,
+                          ),
+                          const SizedBox(height: 10),
+                          TextFormField(
+                            controller: _motherNameController,
+                            decoration: _fieldDecoration('Mother Name'),
+                            textCapitalization: TextCapitalization.words,
+                          ),
+                          const SizedBox(height: 10),
+                          TextFormField(
+                            controller: _guardianNameController,
+                            decoration: _fieldDecoration('Guardian Name'),
+                            textCapitalization: TextCapitalization.words,
+                          ),
+                          _buildSectionTitle('Address', Icons.home_outlined),
+                          TextFormField(
+                            controller: _permanentAddressController,
+                            decoration: _fieldDecoration('Permanent Address'),
+                            maxLines: 2,
+                          ),
+                          const SizedBox(height: 10),
+                          TextFormField(
+                            controller: _correspondenceAddressController,
+                            decoration:
+                                _fieldDecoration('Correspondence Address'),
+                            maxLines: 2,
+                          ),
+                          _buildSectionTitle(
+                            'Emergency Contact (Parent/Guardian)',
+                            Icons.emergency_outlined,
+                          ),
+                          TextFormField(
+                            controller: _emergencyNameController,
+                            decoration: _fieldDecoration('Contact Person Name'),
+                            textCapitalization: TextCapitalization.words,
+                          ),
+                          const SizedBox(height: 10),
+                          TextFormField(
+                            controller: _emergencyRelationController,
+                            decoration: _fieldDecoration('Relation'),
+                          ),
+                          const SizedBox(height: 10),
+                          TextFormField(
+                            controller: _emergencyMobileController,
+                            decoration: _fieldDecoration('Emergency Mobile'),
+                            keyboardType: TextInputType.phone,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: ColorConst.textSecondary,
+                        side: const BorderSide(color: Color(0xFFD1D5DB)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 10,
+                        ),
+                        minimumSize: const Size(0, 40),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const smcText(
+                        textToDisplay: 'Cancel',
+                        textSize: 13,
+                        textBoldness: 4,
+                        colorOfText: ColorConst.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    ElevatedButton(
+                      onPressed: _handleSave,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: ColorConst.primaryBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 10,
+                        ),
+                        minimumSize: const Size(0, 40),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const smcText(
+                        textToDisplay: 'Save',
+                        textSize: 13,
+                        textBoldness: 4,
+                        colorOfText: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

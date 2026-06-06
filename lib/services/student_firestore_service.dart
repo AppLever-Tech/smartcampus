@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:smartcampus/data/mock_master_data.dart';
 import 'package:smartcampus/data/org_field.dart';
 import 'package:smartcampus/data/student_model.dart';
 import 'package:smartcampus/services/firebase_auth_service.dart';
@@ -47,6 +48,64 @@ class StudentFirestoreService {
     }
 
     await _db.collection(_collection).add(persisted.toMap());
+  }
+
+  /// Creates or updates [smcStudentMaster] from [smcUserMaster] profile fields.
+  Future<void> syncFromUserMaster({
+    required UserMasterItem user,
+    required String studentId,
+    required String orgId,
+    required String deptId,
+  }) async {
+    final trimmedStudentId = studentId.trim().toUpperCase();
+    if (trimmedStudentId.isEmpty) {
+      throw ArgumentError('Student ID (USN) is required.');
+    }
+
+    final orgNorm = normalizeOrgId(
+      orgId.isNotEmpty ? orgId : user.orgId,
+    );
+    final deptNorm = normalizeDeptId(
+      deptId.isNotEmpty ? deptId : user.deptId,
+    );
+
+    final existingByUuid = await getStudentByUuid(user.uuid);
+    final existingByStudentId = orgNorm.isNotEmpty
+        ? await findStudent(orgId: orgNorm, studentId: trimmedStudentId)
+        : null;
+
+    final String? documentId =
+        existingByUuid?.documentId ?? existingByStudentId?.documentId;
+    final StudentModel student = StudentModel(
+      documentId: documentId,
+      studentId: trimmedStudentId,
+      fullName: user.displayName,
+      gender: existingByUuid?.gender ?? existingByStudentId?.gender ?? '',
+      dateOfBirth:
+          existingByUuid?.dateOfBirth ?? existingByStudentId?.dateOfBirth ?? '',
+      photographUrl: user.photoUrl.isNotEmpty
+          ? user.photoUrl
+          : (existingByUuid?.photographUrl ??
+              existingByStudentId?.photographUrl ??
+              ''),
+      uuid: StudentModel.normalizeUuid(user.uuid),
+      mobile: user.mobile.isNotEmpty ? user.mobile : user.uuid,
+      email: user.email.isNotEmpty
+          ? user.email
+          : (existingByUuid?.email ?? existingByStudentId?.email ?? ''),
+      orgId: orgNorm,
+      deptId: deptNorm,
+      createdOn: existingByUuid?.createdOn ??
+          existingByStudentId?.createdOn ??
+          DateTime.now().toIso8601String(),
+    );
+
+    if (documentId != null && documentId.isNotEmpty) {
+      await updateStudent(documentId: documentId, updated: student);
+      return;
+    }
+
+    await createStudent(student);
   }
 
   // ── Read ───────────────────────────────────────────────────────
@@ -163,6 +222,47 @@ class StudentFirestoreService {
       return null;
     }
     return byUuid;
+  }
+
+  Future<StudentModel?> getStudentByDocumentId(String documentId) async {
+    final trimmed = documentId.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+
+    final doc = await _db.collection(_collection).doc(trimmed).get();
+    if (!doc.exists || doc.data() == null) {
+      return null;
+    }
+
+    return StudentModel.fromMap(doc.data()!, documentId: doc.id);
+  }
+
+  Future<void> saveEnrolledCourseMarks({
+    required String documentId,
+    required Map<String, Map<String, String>> marksByCourseId,
+    required Map<String, String> semesterSgpaBySemester,
+    required String cgpa,
+  }) async {
+    final trimmed = documentId.trim();
+    if (trimmed.isEmpty) {
+      throw Exception('Student record is missing a document ID.');
+    }
+
+    final Map<String, dynamic> payload = {
+      'enrolled_course_marks':
+          StudentModel.writeEnrolledCourseMarks(marksByCourseId),
+      'semester_sgpa': StudentModel.writeSemesterSgpa(semesterSgpaBySemester),
+    };
+    final String trimmedCgpa = cgpa.trim();
+    if (trimmedCgpa.isNotEmpty) {
+      payload['cgpa'] = trimmedCgpa;
+    }
+
+    await _db.collection(_collection).doc(trimmed).set(
+      payload,
+      SetOptions(merge: true),
+    );
   }
 
   // ── Delete ─────────────────────────────────────────────────────

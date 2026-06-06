@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:smartcampus/data/faculty_model.dart';
+import 'package:smartcampus/data/mock_master_data.dart';
 import 'package:smartcampus/data/org_field.dart';
 import 'package:smartcampus/services/firebase_auth_service.dart';
 
@@ -39,6 +40,79 @@ class FacultyFirestoreService {
     await _db.collection(_collection).add(
           faculty.copyWith(orgId: orgId, deptId: deptId).toMap(),
         );
+  }
+
+  /// Creates or updates [smcFacultyMaster] from [smcUserMaster] profile fields.
+  Future<void> syncFromUserMaster({
+    required UserMasterItem user,
+    required String facultyId,
+    required String orgId,
+    required String deptId,
+  }) async {
+    final authService = FirebaseAuthService();
+    final normalizedMobile = authService.normalizeUuidForCompare(
+      user.mobile.isNotEmpty ? user.mobile : user.uuid,
+    );
+    if (normalizedMobile.isEmpty) {
+      throw ArgumentError(
+        'A valid mobile number is required to create a faculty profile.',
+      );
+    }
+
+    final trimmedFacultyId = facultyId.trim().toUpperCase();
+    if (trimmedFacultyId.isEmpty) {
+      throw ArgumentError('Faculty ID is required.');
+    }
+
+    final orgNorm = normalizeOrgId(
+      orgId.isNotEmpty ? orgId : user.orgId,
+    );
+    final deptNorm = normalizeDeptId(
+      deptId.isNotEmpty ? deptId : user.deptId,
+    );
+
+    final existingByMobile = await getFacultyByMobile(user.uuid);
+    FacultyModel? existingByFacultyId;
+    if (orgNorm.isNotEmpty) {
+      for (final faculty in await listFacultyForOrg(orgNorm)) {
+        if (faculty.facultyId.toUpperCase() == trimmedFacultyId) {
+          existingByFacultyId = faculty;
+          break;
+        }
+      }
+    }
+
+    final String? documentId =
+        existingByMobile?.documentId ?? existingByFacultyId?.documentId;
+    final FacultyModel faculty = FacultyModel(
+      documentId: documentId,
+      facultyId: trimmedFacultyId,
+      fullName: user.displayName,
+      gender: existingByMobile?.gender ?? existingByFacultyId?.gender ?? '',
+      dateOfBirth:
+          existingByMobile?.dateOfBirth ?? existingByFacultyId?.dateOfBirth ?? '',
+      photographUrl: user.photoUrl.isNotEmpty
+          ? user.photoUrl
+          : (existingByMobile?.photographUrl ??
+              existingByFacultyId?.photographUrl ??
+              ''),
+      mobile: normalizedMobile,
+      email: user.email.isNotEmpty
+          ? user.email
+          : (existingByMobile?.email ?? existingByFacultyId?.email ?? ''),
+      orgId: orgNorm,
+      deptId: deptNorm,
+      createdAt: existingByMobile?.createdAt ??
+          existingByFacultyId?.createdAt ??
+          DateTime.now().toIso8601String(),
+    );
+
+    if (documentId != null && documentId.isNotEmpty) {
+      await updateFaculty(documentId: documentId, updated: faculty);
+      return;
+    }
+
+    await createFaculty(faculty);
   }
 
   // ── Read ───────────────────────────────────────────────────────

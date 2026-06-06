@@ -4,11 +4,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:smartcampus/const/color_const.dart';
 import 'package:smartcampus/data/faculty_model.dart';
+import 'package:smartcampus/data/mock_master_data.dart';
 import 'package:smartcampus/data/org_field.dart';
 import 'package:smartcampus/data/user_org_scope.dart';
 import 'package:smartcampus/models/course_model.dart';
 import 'package:smartcampus/screens/auth/landing_page.dart';
-import 'package:smartcampus/screens/shared/course_detail_page.dart';
+import 'package:smartcampus/screens/faculty/faculty_dashboard_mobile_layout.dart';
+import 'package:smartcampus/screens/faculty/faculty_profile_not_found_page.dart';
 import 'package:smartcampus/screens/shared/person_detail_page.dart';
 import 'package:smartcampus/services/course_firestore_service.dart';
 import 'package:smartcampus/services/faculty_firestore_service.dart';
@@ -43,7 +45,6 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
   final CourseFirestoreService courseService = CourseFirestoreService();
   final UserMasterFirestoreService userMasterService =
       UserMasterFirestoreService();
-  final TextEditingController courseSearchController = TextEditingController();
 
   UserOrgScope? _orgScope;
   StreamSubscription<List<CourseModel>>? _courseSubscription;
@@ -55,15 +56,12 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
       _orgScope?.deptId ?? OrgField.normalize(widget.deptId);
 
   bool loading = true;
-  bool coursesLoaded = false;
   int selectedMenuIndex = 0;
   bool sidebarExpanded = false;
-  bool courseDetailMaximized = false;
-  double courseListPanelRatio = 0.55;
 
   FacultyModel? facultyProfile;
   List<CourseModel> allCourses = [];
-  CourseModel? selectedCourseDetail;
+  List<DepartmentMasterItem> _departments = const [];
   String organizationDisplayName = '';
   String departmentDisplayName = '';
 
@@ -77,20 +75,64 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
     );
   }
 
-  List<CourseModel> get filteredAssignedCourses {
-    final query = courseSearchController.text.trim().toLowerCase();
-    final courses = assignedCourses;
-    if (query.isEmpty) {
-      return courses;
-    }
-    return courses.where((course) {
-      return course.courseCode.toLowerCase().contains(query) ||
-          course.courseTitle.toLowerCase().contains(query) ||
-          course.semester.toLowerCase().contains(query) ||
-          course.batch.toLowerCase().contains(query) ||
-          course.courseType.toLowerCase().contains(query);
-    }).toList();
+  String _resolveOrgId({
+    UserOrgScope? scope,
+    FacultyModel? faculty,
+  }) {
+    return _firstNonEmpty([
+      scope?.orgId ?? _orgScope?.orgId ?? '',
+      faculty?.orgId ?? facultyProfile?.orgId ?? '',
+      widget.faculty?.orgId ?? '',
+      widget.orgId,
+    ]);
   }
+
+  String _firstNonEmpty(Iterable<String> values) {
+    for (final value in values) {
+      final normalized = OrgField.normalize(value);
+      if (normalized.isNotEmpty) {
+        return normalized;
+      }
+    }
+    return '';
+  }
+
+  String _departmentLabelFromOrgDepartments() {
+    if (_departments.isEmpty) {
+      return '';
+    }
+    if (_departments.length == 1) {
+      final dept = _departments.first;
+      return dept.deptName.isNotEmpty ? dept.deptName : dept.deptId;
+    }
+
+    final names = _departments
+        .map((dept) => dept.deptName.isNotEmpty ? dept.deptName : dept.deptId)
+        .where((name) => name.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    return names.join(', ');
+  }
+
+  String _resolveDepartmentLabel() {
+    if (departmentDisplayName.trim().isNotEmpty) {
+      return departmentDisplayName.trim();
+    }
+    return _departmentLabelFromOrgDepartments();
+  }
+
+  void _syncDepartmentDisplayName() {
+    if (departmentDisplayName.trim().isNotEmpty) {
+      return;
+    }
+    final label = _resolveDepartmentLabel();
+    if (label.isNotEmpty) {
+      departmentDisplayName = label;
+    }
+  }
+
+  String get _dashboardDepartmentLabel => _resolveDepartmentLabel();
 
   void _bindScopedCourseListener() {
     _courseSubscription?.cancel();
@@ -106,14 +148,7 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
       }
       setState(() {
         allCourses = courses;
-        coursesLoaded = true;
-        if (selectedCourseDetail != null) {
-          final Iterable<CourseModel> match =
-              courses.where((c) => c.id == selectedCourseDetail!.id);
-          if (match.isNotEmpty) {
-            selectedCourseDetail = match.first;
-          }
-        }
+        _syncDepartmentDisplayName();
       });
     });
   }
@@ -126,7 +161,6 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
 
   @override
   void dispose() {
-    courseSearchController.dispose();
     _courseSubscription?.cancel();
     super.dispose();
   }
@@ -134,43 +168,42 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
   Future<void> refresh() async {
     setState(() => loading = true);
     try {
-      final scope = await userMasterService.resolveOrgScopeForSignedInUser() ??
+      final rawScope = await userMasterService.resolveOrgScopeForSignedInUser() ??
           UserOrgScope(
             orgId: OrgField.normalize(widget.orgId),
             deptId: OrgField.normalize(widget.deptId),
           );
-      _orgScope = scope;
-      _bindScopedCourseListener();
 
       final resolvedFaculty = await facultyService.resolveFacultyForUser(
-        orgId: scope.orgId,
-        deptId: scope.deptId,
+        orgId: _resolveOrgId(scope: rawScope, faculty: widget.faculty),
+        deptId: '',
         displayName: widget.displayName,
         uuid: widget.uuid,
         prefetched: widget.faculty,
       );
+
+      final String orgId = _resolveOrgId(
+        scope: rawScope,
+        faculty: resolvedFaculty,
+      );
+      final scope = UserOrgScope(orgId: orgId, deptId: '');
+      _orgScope = scope;
+      _bindScopedCourseListener();
+
       final org =
           await roleService.authService.getOrganizationById(scope.orgId);
-      String deptName = scope.deptId;
-      if (scope.deptId.isNotEmpty) {
-        final departments =
-            await roleService.loadDepartmentsForOrg(scope.orgId);
-        for (final dept in departments) {
-          if (dept.deptId.toUpperCase() == scope.deptId) {
-            deptName = dept.deptName.isNotEmpty ? dept.deptName : scope.deptId;
-            break;
-          }
-        }
-      }
+      final departments = await roleService.loadDepartmentsForOrg(scope.orgId);
       if (!mounted) {
         return;
       }
       setState(() {
         facultyProfile = resolvedFaculty;
+        _departments = departments;
         organizationDisplayName = (org?.orgName ?? '').trim().isEmpty
             ? scope.orgId
             : org!.orgName;
-        departmentDisplayName = deptName;
+        departmentDisplayName = '';
+        _syncDepartmentDisplayName();
         loading = false;
       });
     } catch (_) {
@@ -182,6 +215,48 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
   }
 
   Future<void> onLogout() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const smcText(
+          textToDisplay: 'Logout',
+          textSize: 18,
+          textBoldness: 4,
+          colorOfText: ColorConst.textPrimary,
+        ),
+        content: const smcText(
+          textToDisplay: 'Are you sure you want to logout?',
+          textSize: 14,
+          colorOfText: ColorConst.textSecondary,
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const smcText(
+              textToDisplay: 'No',
+              textSize: 14,
+              textBoldness: 3,
+              colorOfText: ColorConst.textSecondary,
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const smcText(
+              textToDisplay: 'Yes',
+              textSize: 14,
+              textBoldness: 4,
+              colorOfText: ColorConst.primaryBlue,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
     await FirebaseAuth.instance.signOut();
     if (!mounted) {
       return;
@@ -192,24 +267,36 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
     );
   }
 
-  void closeCourseDetail() {
-    setState(() {
-      selectedCourseDetail = null;
-      courseDetailMaximized = false;
-    });
-  }
+  static const double _mobileLayoutBreakpoint = 768;
 
-  void openCourseDetail(CourseModel course) {
-    setState(() {
-      selectedCourseDetail = course;
-      courseDetailMaximized = false;
-    });
-  }
+  bool _isMobileLayout(BuildContext context) =>
+      MediaQuery.sizeOf(context).width < _mobileLayoutBreakpoint;
 
   @override
   Widget build(BuildContext context) {
-    final String welcomeName =
-        facultyProfile?.fullName ?? widget.displayName;
+    if (loading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFF6F7FB),
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (facultyProfile == null) {
+      return FacultyProfileNotFoundPage(onLogout: onLogout);
+    }
+
+    final faculty = facultyProfile!;
+
+    if (_isMobileLayout(context)) {
+      return FacultyDashboardMobileLayout(
+        selectedIndex: selectedMenuIndex,
+        onIndexChanged: (index) => setState(() => selectedMenuIndex = index),
+        onLogout: onLogout,
+        faculty: faculty,
+        displayName: widget.displayName,
+        dashboardContent: _buildDashboardView(),
+        profileContent: _buildProfileView(),
+      );
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
@@ -220,9 +307,7 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _buildSelectedView(welcomeName),
+                child: _buildSelectedView(),
               ),
             ),
           ],
@@ -231,89 +316,154 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
     );
   }
 
-  Widget _buildSelectedView(String welcomeName) {
-    switch (selectedMenuIndex) {
-      case 1:
-        return _buildMyCoursesView();
-      case 2:
-        return _buildProfileView();
-      default:
-        return _buildDashboardView(welcomeName);
+  Widget _buildSelectedView() {
+    if (selectedMenuIndex == 1) {
+      return _buildProfileView();
     }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildDashboardView(),
+      ],
+    );
   }
 
-  Widget _buildDashboardView(String welcomeName) {
+  Widget _buildDashboardView() {
     final courses = assignedCourses;
     final totalCredits = courses.fold<int>(
       0,
       (sum, course) => sum + (int.tryParse(course.credits) ?? 0),
     );
+    final String welcomeName =
+        (facultyProfile?.fullName ?? '').trim().isNotEmpty
+            ? facultyProfile!.fullName
+            : widget.displayName;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        smcText(
-          textToDisplay: 'Welcome, $welcomeName',
-          textSize: 20,
-          textBoldness: 5,
-          colorOfText: ColorConst.textPrimary,
-        ),
-        const SizedBox(height: 6),
-        smcText(
-          textToDisplay: organizationDisplayName,
-          textSize: 14,
-          colorOfText: ColorConst.textSecondary,
-        ),
-        if (departmentDisplayName.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          smcText(
-            textToDisplay: departmentDisplayName,
-            textSize: 13,
-            colorOfText: ColorConst.textSecondary,
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!_isMobileLayout(context)) ...[
+            smcText(
+              textToDisplay: 'Welcome, $welcomeName',
+              textSize: 20,
+              textBoldness: 5,
+              colorOfText: ColorConst.textPrimary,
+            ),
+            if (_dashboardDepartmentLabel.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              smcText(
+                textToDisplay: _dashboardDepartmentLabel,
+                textSize: 13,
+                colorOfText: ColorConst.textSecondary,
+              ),
+            ],
+          ] else if (_dashboardDepartmentLabel.isNotEmpty)
+            smcText(
+              textToDisplay: _dashboardDepartmentLabel,
+              textSize: 13,
+              colorOfText: ColorConst.textSecondary,
+            ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              const smcText(
+                textToDisplay: 'Faculty Overview',
+                textSize: 16,
+                textBoldness: 5,
+                colorOfText: ColorConst.textPrimary,
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Container(
+                  width: 1,
+                  height: 18,
+                  color: const Color(0xFFD8E2F4),
+                ),
+              ),
+              const smcText(
+                textToDisplay: 'ID: ',
+                textSize: 14,
+                colorOfText: ColorConst.textSecondary,
+              ),
+              Flexible(
+                child: smcText(
+                  textToDisplay:
+                      (facultyProfile?.facultyId ?? '').trim().isEmpty
+                          ? '—'
+                          : facultyProfile!.facultyId,
+                  textSize: 14,
+                  textBoldness: 5,
+                  colorOfText: ColorConst.textPrimary,
+                  maxLines: 1,
+                ),
+              ),
+            ],
           ),
-        ],
-        const SizedBox(height: 20),
-        const smcText(
-          textToDisplay: 'Faculty Overview',
-          textSize: 16,
-          textBoldness: 5,
-          colorOfText: ColorConst.textPrimary,
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: _buildStatCard(
-                title: 'Assigned Courses',
-                count: courses.length.toString(),
-                icon: Icons.menu_book_rounded,
-                color: ColorConst.primaryBlue,
-              ),
+          const SizedBox(height: 16),
+          if (_isMobileLayout(context)) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    title: 'Assigned\nCourses',
+                    count: courses.length.toString(),
+                    icon: Icons.menu_book_rounded,
+                    color: ColorConst.primaryBlue,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildStatCard(
+                    title: 'Total\nCredits',
+                    count: totalCredits.toString(),
+                    icon: Icons.star_outline_rounded,
+                    color: Colors.green,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _buildStatCard(
-                title: 'Total Credits',
-                count: totalCredits.toString(),
-                icon: Icons.star_outline_rounded,
-                color: Colors.green,
-              ),
+          ] else
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    title: 'Assigned\nCourses',
+                    count: courses.length.toString(),
+                    icon: Icons.menu_book_rounded,
+                    color: ColorConst.primaryBlue,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildStatCard(
+                    title: 'Total\nCredits',
+                    count: totalCredits.toString(),
+                    icon: Icons.star_outline_rounded,
+                    color: Colors.green,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildStatCard(
+                    title: 'Organization',
+                    count: organizationDisplayName,
+                    icon: Icons.apartment_rounded,
+                    color: Colors.orange,
+                    compactValue: true,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _buildStatCard(
-                title: 'Faculty ID',
-                count: facultyProfile?.facultyId ?? '—',
-                icon: Icons.badge_outlined,
-                color: Colors.orange,
-                compactValue: true,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
-        Expanded(
-          child: Container(
+          const SizedBox(height: 24),
+          const smcText(
+            textToDisplay: 'Events & Announcements',
+            textSize: 16,
+            textBoldness: 5,
+            colorOfText: ColorConst.textPrimary,
+          ),
+          const SizedBox(height: 16),
+          Container(
             width: double.infinity,
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -321,297 +471,22 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: const Color(0xFFE3EAF8)),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const smcText(
-                  textToDisplay: 'Recent Assigned Courses',
-                  textSize: 16,
-                  textBoldness: 5,
-                  colorOfText: ColorConst.textPrimary,
-                ),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: courses.isEmpty
-                      ? const Center(
-                          child: smcText(
-                            textToDisplay:
-                                'No courses assigned yet. Check My Courses for updates.',
-                            textSize: 14,
-                            colorOfText: ColorConst.textSecondary,
-                            maxLines: 2,
-                          ),
-                        )
-                      : ListView.separated(
-                          itemCount: courses.length.clamp(0, 5),
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 10),
-                          itemBuilder: (context, index) {
-                            final course = courses[index];
-                            return _buildCourseListTile(course);
-                          },
-                        ),
-                ),
-              ],
+            child: const smcText(
+              textToDisplay:
+                  'No events & announcements currently available',
+              textSize: 14,
+              colorOfText: ColorConst.textSecondary,
+              maxLines: 3,
+              textAlign: TextAlign.center,
             ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMyCoursesView() {
-    if (!coursesLoaded) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (selectedCourseDetail == null) {
-      return _buildCourseListPanel();
-    }
-
-    if (courseDetailMaximized) {
-      return _buildCourseDetailPanel(maximized: true);
-    }
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const double dividerWidth = 10;
-        const double minListWidth = 360;
-        const double minDetailWidth = 320;
-        final double availableWidth =
-            (constraints.maxWidth - dividerWidth).clamp(0, double.infinity);
-
-        if (availableWidth <= minListWidth + minDetailWidth) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(flex: 5, child: _buildCourseListPanel()),
-              _buildCoursePanelDivider(constraints.maxWidth),
-              Expanded(
-                flex: 4,
-                child: _buildCourseDetailPanel(maximized: false),
-              ),
-            ],
-          );
-        }
-
-        final double listWidth = (availableWidth * courseListPanelRatio)
-            .clamp(minListWidth, availableWidth - minDetailWidth);
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(width: listWidth, child: _buildCourseListPanel()),
-            _buildCoursePanelDivider(constraints.maxWidth),
-            Expanded(child: _buildCourseDetailPanel(maximized: false)),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildCourseListPanel() {
-    final courses = filteredAssignedCourses;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE3EAF8)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: smcText(
-                    textToDisplay: 'My Courses',
-                    textSize: 16,
-                    textBoldness: 5,
-                    colorOfText: ColorConst.textPrimary,
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEFF4FF),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: smcText(
-                    textToDisplay: '${assignedCourses.length}',
-                    textSize: 12,
-                    textBoldness: 4,
-                    colorOfText: ColorConst.primaryBlue,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: TextField(
-              controller: courseSearchController,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                hintText: 'Search courses...',
-                prefixIcon: const Icon(
-                  Icons.search_rounded,
-                  size: 20,
-                  color: Color(0xFF8A96B2),
-                ),
-                filled: true,
-                fillColor: const Color(0xFFF8FAFF),
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: ColorConst.primaryBlue),
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: courses.isEmpty
-                ? const Center(
-                    child: smcText(
-                      textToDisplay: 'No assigned courses found.',
-                      textSize: 14,
-                      colorOfText: ColorConst.textSecondary,
-                    ),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    itemCount: courses.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      final course = courses[index];
-                      final bool selected =
-                          selectedCourseDetail?.id == course.id;
-                      return Material(
-                        color: selected
-                            ? const Color(0xFFEAF0FF)
-                            : const Color(0xFFF8FAFF),
-                        borderRadius: BorderRadius.circular(12),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () => openCourseDetail(course),
-                          child: Padding(
-                            padding: const EdgeInsets.all(14),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                smcText(
-                                  textToDisplay: course.courseTitle,
-                                  textSize: 14,
-                                  textBoldness: 4,
-                                  colorOfText: ColorConst.textPrimary,
-                                  maxLines: 2,
-                                ),
-                                const SizedBox(height: 6),
-                                smcText(
-                                  textToDisplay:
-                                      '${course.courseCode} • Sem ${course.semester} • ${course.batch}',
-                                  textSize: 12,
-                                  colorOfText: ColorConst.textSecondary,
-                                  maxLines: 1,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildCourseDetailPanel({required bool maximized}) {
-    final faculty = facultyProfile;
-    return CourseDetailPage(
-      key: ValueKey<String>(selectedCourseDetail!.id),
-      course: selectedCourseDetail!,
-      assignedFaculty: faculty != null ? [faculty] : const [],
-      enrolledStudents: const [],
-      embedded: true,
-      embeddedMaximized: maximized,
-      readOnly: true,
-      onClose: closeCourseDetail,
-      onMaximize: maximized
-          ? null
-          : () => setState(() => courseDetailMaximized = true),
-      onBackFromMaximized: maximized
-          ? () => setState(() => courseDetailMaximized = false)
-          : null,
-    );
-  }
-
-  Widget _buildCoursePanelDivider(double totalWidth) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.resizeColumn,
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onHorizontalDragUpdate: (details) {
-          setState(() {
-            courseListPanelRatio += details.delta.dx / totalWidth;
-            courseListPanelRatio = courseListPanelRatio.clamp(0.3, 0.7);
-          });
-        },
-        child: SizedBox(
-          width: 10,
-          child: Center(
-            child: Container(
-              width: 4,
-              decoration: BoxDecoration(
-                color: const Color(0xFFD8E2F4),
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildProfileView() {
-    final faculty = facultyProfile;
-    if (faculty == null) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const smcText(
-              textToDisplay: 'Faculty profile not found.',
-              textSize: 16,
-              textBoldness: 4,
-              colorOfText: ColorConst.textPrimary,
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: refresh,
-              child: const smcText(
-                textToDisplay: 'Retry',
-                textSize: 14,
-                colorOfText: Colors.white,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
+    final faculty = facultyProfile!;
 
     return PersonDetailPage(
       key: ValueKey<String>(
@@ -623,69 +498,8 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
       isStudent: false,
       embedded: true,
       embeddedMaximized: true,
-    );
-  }
-
-  Widget _buildCourseListTile(CourseModel course) {
-    return Material(
-      color: const Color(0xFFF8FAFF),
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () {
-          setState(() {
-            selectedMenuIndex = 1;
-            openCourseDetail(course);
-          });
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEAF0FF),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.menu_book_rounded,
-                  color: ColorConst.primaryBlue,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    smcText(
-                      textToDisplay: course.courseTitle,
-                      textSize: 14,
-                      textBoldness: 4,
-                      colorOfText: ColorConst.textPrimary,
-                      maxLines: 1,
-                    ),
-                    const SizedBox(height: 4),
-                    smcText(
-                      textToDisplay:
-                          '${course.courseCode} • ${course.credits} credits',
-                      textSize: 12,
-                      colorOfText: ColorConst.textSecondary,
-                      maxLines: 1,
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: ColorConst.textSecondary,
-              ),
-            ],
-          ),
-        ),
-      ),
+      showLeadingAction: false,
+      showEmbeddedHeader: !_isMobileLayout(context),
     );
   }
 
@@ -723,6 +537,7 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
                   textToDisplay: title,
                   textSize: 13,
                   colorOfText: ColorConst.textSecondary,
+                  maxLines: 2,
                 ),
                 const SizedBox(height: 4),
                 smcText(
@@ -785,8 +600,8 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           smcText(
-                            textToDisplay: facultyProfile?.fullName ??
-                                widget.displayName,
+                            textToDisplay:
+                                'Welcome, ${(facultyProfile?.fullName ?? '').trim().isNotEmpty ? facultyProfile!.fullName : widget.displayName}',
                             textSize: 14,
                             textBoldness: 5,
                             colorOfText: ColorConst.textPrimary,
@@ -824,31 +639,14 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
               title: 'Dashboard',
               icon: Icons.dashboard_outlined,
               isSelected: selectedMenuIndex == 0,
-              onTap: () => setState(() {
-                selectedMenuIndex = 0;
-                selectedCourseDetail = null;
-                courseDetailMaximized = false;
-              }),
-            ),
-            const SizedBox(height: 8),
-            _menuTile(
-              title: 'My Courses',
-              icon: Icons.menu_book_outlined,
-              isSelected: selectedMenuIndex == 1,
-              onTap: () => setState(() {
-                selectedMenuIndex = 1;
-              }),
+              onTap: () => setState(() => selectedMenuIndex = 0),
             ),
             const SizedBox(height: 8),
             _menuTile(
               title: 'Profile',
               icon: Icons.person_outline_rounded,
-              isSelected: selectedMenuIndex == 2,
-              onTap: () => setState(() {
-                selectedMenuIndex = 2;
-                selectedCourseDetail = null;
-                courseDetailMaximized = false;
-              }),
+              isSelected: selectedMenuIndex == 1,
+              onTap: () => setState(() => selectedMenuIndex = 1),
             ),
             const Spacer(),
             _menuTile(
