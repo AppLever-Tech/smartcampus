@@ -101,24 +101,26 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
     );
 
     if (widget.embedded) {
-      return DecoratedBox(
-        decoration: BoxDecoration(
-          color: const Color(0xFFF6F7FB),
-          borderRadius: widget.embeddedMaximized
-              ? BorderRadius.zero
-              : BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE3EAF8)),
-        ),
-        child: ClipRRect(
-          borderRadius: widget.embeddedMaximized
-              ? BorderRadius.zero
-              : BorderRadius.circular(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (widget.showEmbeddedHeader) _buildEmbeddedHeader(),
-              Expanded(child: body),
-            ],
+      return SizedBox.expand(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: const Color(0xFFF6F7FB),
+            borderRadius: widget.embeddedMaximized
+                ? BorderRadius.zero
+                : BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE3EAF8)),
+          ),
+          child: ClipRRect(
+            borderRadius: widget.embeddedMaximized
+                ? BorderRadius.zero
+                : BorderRadius.circular(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (widget.showEmbeddedHeader) _buildEmbeddedHeader(),
+                Expanded(child: body),
+              ],
+            ),
           ),
         ),
       );
@@ -374,54 +376,18 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+          _buildProfilePhotographLayout(
+            photoUrl: photoUrl,
+            profileSection: _buildDetailsSection(
+              title: 'Basic Profile Information',
+              icon: Icons.person_outline_rounded,
               children: [
-                Expanded(
-                  flex: 3,
-                  child: _buildDetailsSection(
-                    title: 'Basic Profile Information',
-                    icon: Icons.person_outline_rounded,
-                    children: [
-                      _buildDetailRow('Faculty ID', f.facultyId),
-                      _buildDetailRow('Full Name', f.fullName),
-                      _buildDetailRow('Gender', f.gender),
-                      _buildDetailRow(
-                        'Date of Birth',
-                        _formatDisplayDate(f.dateOfBirth),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  flex: 2,
-                  child: _buildDetailsSection(
-                    title: 'Photograph',
-                    icon: Icons.photo_camera_outlined,
-                    stretchContent: true,
-                    children: [
-                      photoUrl.isNotEmpty
-                          ? Center(
-                              child: FittedBox(
-                                fit: BoxFit.contain,
-                                child: _buildPhotographPreview(
-                                  photoUrl,
-                                  width: 130,
-                                  height: 195,
-                                ),
-                              ),
-                            )
-                          : const Center(
-                              child: Icon(
-                                Icons.image_not_supported_outlined,
-                                size: 40,
-                                color: ColorConst.textSecondary,
-                              ),
-                            ),
-                    ],
-                  ),
+                _buildDetailRow('Faculty ID', f.facultyId),
+                _buildDetailRow('Full Name', f.fullName),
+                _buildDetailRow('Gender', f.gender),
+                _buildDetailRow(
+                  'Date of Birth',
+                  _formatDisplayDate(f.dateOfBirth),
                 ),
               ],
             ),
@@ -477,97 +443,61 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: _buildDetailsSection(
-                    title: 'Basic Profile Information',
-                    icon: Icons.person_outline_rounded,
-                    headerTrailing: widget.onEditStudent == null
-                        ? null
-                        : OutlinedButton.icon(
-                            onPressed: widget.onEditStudent,
-                            icon: const Icon(
-                              Icons.edit_outlined,
-                              size: 14,
-                              color: ColorConst.primaryBlue,
-                            ),
-                            label: const smcText(
-                              textToDisplay: 'Edit',
-                              textSize: 11,
-                              textBoldness: 4,
-                              colorOfText: ColorConst.primaryBlue,
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: ColorConst.primaryBlue,
-                              side: const BorderSide(color: ColorConst.primaryBlue),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 8,
-                              ),
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                          ),
-                    children: [
-                      _buildDetailRow('Student ID (USN)', s.studentId),
-                      _buildDetailRow('Full Name', s.fullName),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: _buildDetailField('Gender', s.gender),
-                            ),
-                            const SizedBox(width: 24),
-                            Expanded(
-                              child: _buildDetailField('Batch', s.batch),
-                            ),
-                          ],
+          _buildProfilePhotographLayout(
+            photoUrl: photoUrl,
+            profileSection: _buildDetailsSection(
+              title: 'Basic Profile Information',
+              icon: Icons.person_outline_rounded,
+              headerTrailing: widget.onEditStudent == null
+                  ? null
+                  : OutlinedButton.icon(
+                      onPressed: widget.onEditStudent,
+                      icon: const Icon(
+                        Icons.edit_outlined,
+                        size: 14,
+                        color: ColorConst.primaryBlue,
+                      ),
+                      label: const smcText(
+                        textToDisplay: 'Edit',
+                        textSize: 11,
+                        textBoldness: 4,
+                        colorOfText: ColorConst.primaryBlue,
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: ColorConst.primaryBlue,
+                        side: const BorderSide(color: ColorConst.primaryBlue),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      _buildDetailRow(
-                        'Date of Birth',
-                        _formatDisplayDate(s.dateOfBirth),
+                    ),
+              children: [
+                _buildDetailRow('Student ID (USN)', s.studentId),
+                _buildDetailRow('Full Name', s.fullName),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _buildDetailField('Gender', s.gender),
+                      ),
+                      const SizedBox(width: 24),
+                      Expanded(
+                        child: _buildDetailField('Batch', s.batch),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  flex: 2,
-                  child: _buildDetailsSection(
-                    title: 'Photograph',
-                    icon: Icons.photo_camera_outlined,
-                    stretchContent: true,
-                    children: [
-                      photoUrl.isNotEmpty
-                          ? Center(
-                              child: FittedBox(
-                                fit: BoxFit.contain,
-                                child: _buildPhotographPreview(
-                                  photoUrl,
-                                  width: 130,
-                                  height: 195,
-                                ),
-                              ),
-                            )
-                          : const Center(
-                              child: Icon(
-                                Icons.image_not_supported_outlined,
-                                size: 40,
-                                color: ColorConst.textSecondary,
-                              ),
-                            ),
-                    ],
-                  ),
+                _buildDetailRow(
+                  'Date of Birth',
+                  _formatDisplayDate(s.dateOfBirth),
                 ),
               ],
             ),
@@ -637,12 +567,28 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
           _sectionHeader(title, icon, trailing: headerTrailing),
           if (stretchContent)
             Expanded(
-              child: children.length == 1
-                  ? children.first
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: children,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return ClipRect(
+                    child: Align(
+                      alignment: Alignment.center,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: constraints.maxHeight,
+                          maxWidth: constraints.maxWidth,
+                        ),
+                        child: children.length == 1
+                            ? children.first
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: children,
+                              ),
+                      ),
                     ),
+                  );
+                },
+              ),
             )
           else
             ...children,
@@ -669,6 +615,119 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
           if (trailing != null) trailing,
         ],
       ),
+    );
+  }
+
+  Widget _buildProfilePhotographLayout({
+    required Widget profileSection,
+    required String photoUrl,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bool stackVertically = constraints.maxWidth < 640;
+        final bool boundedHeight = constraints.hasBoundedHeight;
+        final bool useStretchPhotograph = boundedHeight && !stackVertically;
+        final Widget photographSection = _buildPhotographDetailsSection(
+          photoUrl,
+          stretch: useStretchPhotograph,
+        );
+
+        if (stackVertically) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              profileSection,
+              const SizedBox(height: 16),
+              photographSection,
+            ],
+          );
+        }
+
+        if (!boundedHeight) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 3, child: profileSection),
+              const SizedBox(width: 16),
+              Expanded(flex: 2, child: photographSection),
+            ],
+          );
+        }
+
+        return IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(flex: 3, child: profileSection),
+              const SizedBox(width: 16),
+              Expanded(flex: 2, child: photographSection),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPhotographDetailsSection(
+    String photoUrl, {
+    bool stretch = true,
+  }) {
+    return _buildDetailsSection(
+      title: 'Photograph',
+      icon: Icons.photo_camera_outlined,
+      stretchContent: stretch,
+      children: [
+        _buildPhotographSectionContent(photoUrl),
+      ],
+    );
+  }
+
+  Widget _buildPhotographSectionContent(String photoUrl) {
+    if (photoUrl.isEmpty) {
+      return const Center(
+        child: Icon(
+          Icons.image_not_supported_outlined,
+          size: 40,
+          color: ColorConst.textSecondary,
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const double maxPhotoWidth = 130;
+        const double maxPhotoHeight = 195;
+        const double aspectRatio = maxPhotoWidth / maxPhotoHeight;
+
+        final double maxW = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : maxPhotoWidth;
+        final double maxH = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : maxPhotoHeight;
+
+        double height = maxPhotoHeight;
+        if (height > maxH) {
+          height = maxH;
+        }
+        double width = height * aspectRatio;
+        if (width > maxW) {
+          width = maxW;
+          height = width / aspectRatio;
+        }
+
+        if (width <= 0 || height <= 0) {
+          return const SizedBox.shrink();
+        }
+
+        return Center(
+          child: _buildPhotographPreview(
+            photoUrl,
+            width: width,
+            height: height,
+          ),
+        );
+      },
     );
   }
 
@@ -801,64 +860,68 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
             )
             .toList();
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-              child: Row(
-                children: [
-                  const smcText(
-                    textToDisplay: 'Semester',
-                    textSize: 13,
-                    textBoldness: 4,
-                    colorOfText: ColorConst.textSecondary,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          for (int i = 0;
-                              i < _enrolledSemesterOptions.length;
-                              i++) ...[
-                            if (i > 0) const SizedBox(width: 8),
-                            _buildSemesterFilterChip(
-                              semester: _enrolledSemesterOptions[i],
-                              enrolledCourses: enrolledCourses,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: semesterCourses.isEmpty
-                  ? Center(
-                      child: smcText(
-                        textToDisplay:
-                            'No courses enrolled in Semester $_selectedEnrolledSemester.',
-                        textSize: 14,
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final bool useTable = constraints.maxWidth >= 600;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                  child: Row(
+                    children: [
+                      const smcText(
+                        textToDisplay: 'Semester',
+                        textSize: 13,
+                        textBoldness: 4,
                         colorOfText: ColorConst.textSecondary,
-                        textAlign: TextAlign.center,
-                        maxLines: 3,
                       ),
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                      itemCount: semesterCourses.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 10),
-                      itemBuilder: (context, index) {
-                        return _buildEnrolledCourseTile(semesterCourses[index]);
-                      },
-                    ),
-            ),
-          ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              for (int i = 0;
+                                  i < _enrolledSemesterOptions.length;
+                                  i++) ...[
+                                if (i > 0) const SizedBox(width: 8),
+                                _buildSemesterFilterChip(
+                                  semester: _enrolledSemesterOptions[i],
+                                  enrolledCourses: enrolledCourses,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: semesterCourses.isEmpty
+                      ? Center(
+                          child: smcText(
+                            textToDisplay:
+                                'No courses enrolled in Semester $_selectedEnrolledSemester.',
+                            textSize: 14,
+                            colorOfText: ColorConst.textSecondary,
+                            textAlign: TextAlign.center,
+                            maxLines: 3,
+                          ),
+                        )
+                      : useTable
+                          ? _buildEnrolledCoursesTable(
+                              semesterCourses,
+                              constraints.maxWidth,
+                            )
+                          : _buildEnrolledCoursesList(semesterCourses),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -933,7 +996,327 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
     );
   }
 
-  Widget _buildEnrolledCourseTile(CourseModel course) {
+  String _enrolledCourseCellText(String value) {
+    final String trimmed = value.trim();
+    return trimmed.isEmpty ? '—' : trimmed;
+  }
+
+  Widget _buildEnrolledCoursesList(List<CourseModel> courses) {
+    return ListView.builder(
+      key: ValueKey<String>(
+        'enrolled-courses-$_selectedEnrolledSemester-${courses.length}',
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+      itemCount: courses.length,
+      itemBuilder: (context, index) {
+        return Padding(
+          padding: EdgeInsets.only(bottom: index < courses.length - 1 ? 10 : 0),
+          child: _buildEnrolledCourseTile(
+            courses[index],
+            serialNo: index + 1,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEnrolledCoursesTable(
+    List<CourseModel> courses,
+    double tableWidth,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE3EAF8)),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: SingleChildScrollView(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: tableWidth - 40),
+                child: DataTable(
+                  showCheckboxColumn: false,
+                  headingRowHeight: 50,
+                  dataRowMinHeight: 52,
+                  dataRowMaxHeight: 58,
+                  horizontalMargin: 0,
+                  columnSpacing: 0,
+                  dividerThickness: 1,
+                  border: const TableBorder(
+                    horizontalInside: BorderSide(color: Color(0xFFE3EAF8)),
+                    verticalInside: BorderSide(color: Color(0xFFE3EAF8)),
+                    top: BorderSide(color: Color(0xFFE3EAF8)),
+                    bottom: BorderSide(color: Color(0xFFE3EAF8)),
+                    left: BorderSide(color: Color(0xFFE3EAF8)),
+                    right: BorderSide(color: Color(0xFFE3EAF8)),
+                  ),
+                  headingRowColor: MaterialStateProperty.all(
+                    const Color(0xFFF4F7FF),
+                  ),
+                  columns: const [
+                    DataColumn(
+                      label: SizedBox(
+                        width: 50,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'S.No',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 120,
+                        child: Padding(
+                          padding: EdgeInsets.only(left: 8),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: smcText(
+                              textToDisplay: 'Course Code',
+                              textSize: 12,
+                              textBoldness: 4,
+                              colorOfText: Color(0xFF5C6B8B),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 260,
+                        child: Padding(
+                          padding: EdgeInsets.only(left: 8),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: smcText(
+                              textToDisplay: 'Course Title',
+                              textSize: 12,
+                              textBoldness: 4,
+                              colorOfText: Color(0xFF5C6B8B),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 80,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Credits',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 100,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Grade Points',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 100,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Letter Grade',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  rows: courses.asMap().entries.map((entry) {
+                    final int index = entry.key;
+                    final CourseModel course = entry.value;
+                    return DataRow(
+                      cells: [
+                        DataCell(
+                          Center(
+                            child: smcText(
+                              textToDisplay: '${index + 1}',
+                              textSize: 12,
+                              colorOfText: const Color(0xFF2E3954),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: smcText(
+                                textToDisplay:
+                                    _enrolledCourseCellText(course.courseCode),
+                                textSize: 12,
+                                textBoldness: 4,
+                                colorOfText: const Color(0xFF2E3954),
+                                maxLines: 1,
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: smcText(
+                                textToDisplay:
+                                    _enrolledCourseCellText(course.courseTitle),
+                                textSize: 12,
+                                colorOfText: const Color(0xFF2E3954),
+                                maxLines: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Center(
+                            child: smcText(
+                              textToDisplay:
+                                  _enrolledCourseCellText(course.credits),
+                              textSize: 12,
+                              colorOfText: const Color(0xFF2E3954),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Center(
+                            child: smcText(
+                              textToDisplay: '—',
+                              textSize: 12,
+                              colorOfText: const Color(0xFF2E3954),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Center(
+                            child: smcText(
+                              textToDisplay: '—',
+                              textSize: 12,
+                              colorOfText: const Color(0xFF2E3954),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEnrolledCourseCardField(
+    String label,
+    String value, {
+    bool withBottomPadding = true,
+    bool expandValue = true,
+  }) {
+    final Widget valueWidget = smcText(
+      textToDisplay: value.trim().isEmpty ? '—' : value.trim(),
+      textSize: 13,
+      textBoldness: 3,
+      colorOfText: ColorConst.textPrimary,
+      maxLines: 3,
+    );
+
+    final Widget content = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        smcText(
+          textToDisplay: label,
+          textSize: 12,
+          textBoldness: 4,
+          colorOfText: ColorConst.textSecondary,
+          maxLines: 1,
+        ),
+        const SizedBox(width: 8),
+        if (expandValue) Expanded(child: valueWidget) else valueWidget,
+      ],
+    );
+
+    if (!withBottomPadding) {
+      return content;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: content,
+    );
+  }
+
+  Widget _buildEnrolledCourseCardCompactField(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        smcText(
+          textToDisplay: label,
+          textSize: 11,
+          textBoldness: 4,
+          colorOfText: ColorConst.textSecondary,
+          maxLines: 2,
+        ),
+        const SizedBox(height: 4),
+        smcText(
+          textToDisplay: value.trim().isEmpty ? '—' : value.trim(),
+          textSize: 13,
+          textBoldness: 3,
+          colorOfText: ColorConst.textPrimary,
+          maxLines: 1,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEnrolledCourseSerialBadge(int serialNo) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF0FF),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFF1967D2)),
+      ),
+      child: smcText(
+        textToDisplay: serialNo.toString(),
+        textSize: 13,
+        textBoldness: 4,
+        colorOfText: ColorConst.primaryBlue,
+        maxLines: 1,
+      ),
+    );
+  }
+
+  Widget _buildEnrolledCourseTile(
+    CourseModel course, {
+    required int serialNo,
+  }) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -941,55 +1324,54 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFE3EAF8)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEAF0FF),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.menu_book_rounded,
-              color: ColorConst.primaryBlue,
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                smcText(
-                  textToDisplay: course.courseCode.trim().isEmpty
-                      ? '—'
-                      : course.courseCode,
-                  textSize: 14,
-                  textBoldness: 4,
-                  colorOfText: ColorConst.textPrimary,
-                  maxLines: 1,
-                ),
-                if (course.courseTitle.trim().isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  smcText(
-                    textToDisplay: course.courseTitle,
-                    textSize: 13,
-                    textBoldness: 3,
-                    colorOfText: ColorConst.textPrimary,
-                    maxLines: 2,
+                _buildEnrolledCourseSerialBadge(serialNo),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildEnrolledCourseCardField(
+                    'Course Code',
+                    _enrolledCourseCellText(course.courseCode),
+                    withBottomPadding: false,
                   ),
-                ],
-                const SizedBox(height: 4),
-                smcText(
-                  textToDisplay:
-                      '${course.credits} credits • ${course.batch}',
-                  textSize: 12,
-                  colorOfText: ColorConst.textSecondary,
-                  maxLines: 2,
                 ),
               ],
             ),
+          ),
+          _buildEnrolledCourseCardField(
+            'Course Title',
+            _enrolledCourseCellText(course.courseTitle),
+          ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _buildEnrolledCourseCardCompactField(
+                  'Credits',
+                  _enrolledCourseCellText(course.credits),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildEnrolledCourseCardCompactField(
+                  'Grade Points',
+                  '—',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildEnrolledCourseCardCompactField(
+                  'Letter Grade',
+                  '—',
+                ),
+              ),
+            ],
           ),
         ],
       ),
