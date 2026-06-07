@@ -31,6 +31,7 @@ import 'package:smartcampus/widgets/course_list_table.dart';
 import 'package:smartcampus/services/user_master_firestore_service.dart';
 import 'package:smartcampus/services/settings_firestore_service.dart';
 import 'package:smartcampus/screens/dept_admin/dept_user_management_view.dart';
+import 'package:smartcampus/screens/dept_admin/time_table/dept_time_table_view.dart';
 
 class DeptAdminDashboardPage extends StatefulWidget {
   final String orgId;
@@ -60,7 +61,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       UserMasterFirestoreService();
 
   bool loading = true;
-  int selectedMenuIndex = 0; // 0: Dashboard, 1: Students, 2: Faculties, 3: Courses, 4: Users, 5: Settings
+  int selectedMenuIndex = 0; // 0: Dashboard, 1: Students, 2: Faculties, 3: Courses, 4: Users, 5: Time Table, 6: Settings
   int selectedSettingsFilter = 0; // 0: Course Types, 1: Batches, 2: Schemes
   List<DepartmentMasterItem> departments = [];
   List<FacultyModel> facultyList = [];
@@ -3168,12 +3169,25 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                     ),
                     const SizedBox(height: 8),
                     _menuTile(
-                      title: 'Settings',
-                      icon: Icons.settings_outlined,
+                      title: 'Time Table',
+                      icon: Icons.calendar_month_outlined,
                       isSelected: selectedMenuIndex == 5,
                       sidebarExpanded: sidebarExpanded,
                       onTap: () => setState(() {
                         selectedMenuIndex = 5;
+                        selectedStudentDetail = null;
+                        selectedFacultyDetail = null;
+                        selectedCourseDetail = null;
+                      }),
+                    ),
+                    const SizedBox(height: 8),
+                    _menuTile(
+                      title: 'Settings',
+                      icon: Icons.settings_outlined,
+                      isSelected: selectedMenuIndex == 6,
+                      sidebarExpanded: sidebarExpanded,
+                      onTap: () => setState(() {
+                        selectedMenuIndex = 6;
                         selectedStudentDetail = null;
                         selectedFacultyDetail = null;
                         selectedCourseDetail = null;
@@ -3233,6 +3247,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       case 4:
         return _buildUserManagementView();
       case 5:
+        return _buildTimeTableView();
+      case 6:
         return _buildSettingsView();
 
       default:
@@ -4072,6 +4088,13 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       orgId: scopedOrgId,
       deptId: scopedDeptId,
       onUsersChanged: refresh,
+    );
+  }
+
+  Widget _buildTimeTableView() {
+    return DeptTimeTableView(
+      orgId: scopedOrgId,
+      deptId: scopedDeptId,
     );
   }
 
