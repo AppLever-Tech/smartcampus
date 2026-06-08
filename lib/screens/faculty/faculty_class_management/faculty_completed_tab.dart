@@ -72,9 +72,7 @@ class FacultyCompletedTab extends StatelessWidget {
                 ),
                 batch: record.batch,
                 section: record.section,
-                footer: record.semester.trim().isNotEmpty
-                    ? 'Semester ${record.semester.trim()}'
-                    : null,
+                semester: record.semester,
                 icon: Icons.check_circle_outline_rounded,
               ),
               const SizedBox(height: 8),

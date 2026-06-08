@@ -78,26 +78,35 @@ class FacultyClassDateUtils {
     return dayUidToName[dayUid.trim()] ?? '';
   }
 
-  static String formatSectionLabel(DateTime date, DateTime referenceDate) {
+  static String formatSectionLabel(
+    DateTime date,
+    DateTime referenceDate, {
+    int? count,
+  }) {
+    late final String label;
     if (isSameDay(date, referenceDate)) {
-      return 'Today';
-    }
-    if (isSameDay(date, referenceDate.add(const Duration(days: 1)))) {
-      return 'Tomorrow';
+      label = 'Today';
+    } else if (isSameDay(date, referenceDate.add(const Duration(days: 1)))) {
+      label = 'Tomorrow';
+    } else {
+      const weekdayLabels = [
+        'Mon',
+        'Tue',
+        'Wed',
+        'Thu',
+        'Fri',
+        'Sat',
+        'Sun',
+      ];
+      final weekday = weekdayLabels[date.weekday - 1];
+      final month = _monthNames[date.month - 1];
+      label = '$weekday, ${date.day} $month';
     }
 
-    const weekdayLabels = [
-      'Mon',
-      'Tue',
-      'Wed',
-      'Thu',
-      'Fri',
-      'Sat',
-      'Sun',
-    ];
-    final weekday = weekdayLabels[date.weekday - 1];
-    final month = _monthNames[date.month - 1];
-    return '$weekday, ${date.day} $month';
+    if (count != null) {
+      return '$label ($count)';
+    }
+    return label;
   }
 
   static String formatCompletedDate(DateTime date) {

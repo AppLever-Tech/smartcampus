@@ -48,7 +48,11 @@ class FacultyUpcomingTab extends StatelessWidget {
         for (final date in windowDates)
           if (grouped.containsKey(date)) ...[
             smcText(
-              textToDisplay: FacultyClassDateUtils.formatSectionLabel(date, today),
+              textToDisplay: FacultyClassDateUtils.formatSectionLabel(
+                date,
+                today,
+                count: grouped[date]!.length,
+              ),
               textSize: 15,
               textBoldness: 5,
               colorOfText: ColorConst.textPrimary,
@@ -74,7 +78,7 @@ class FacultyUpcomingTab extends StatelessWidget {
                   ),
                   batch: assignedClass.batch,
                   section: assignedClass.section,
-                  footer: assignedClass.timeTableLabel,
+                  semester: assignedClass.semester,
                 );
               },
             ),

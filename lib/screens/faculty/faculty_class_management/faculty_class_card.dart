@@ -11,8 +11,12 @@ class FacultyClassCard extends StatelessWidget {
   final String? timing;
   final String? batch;
   final String? section;
-  final String? footer;
+  final String? semester;
   final IconData icon;
+  final VoidCallback? onStudentsTap;
+  final VoidCallback? onNotesTap;
+  final VoidCallback? onSyllabusTap;
+  final VoidCallback? onMoreTap;
 
   const FacultyClassCard({
     super.key,
@@ -22,8 +26,12 @@ class FacultyClassCard extends StatelessWidget {
     this.timing,
     this.batch,
     this.section,
-    this.footer,
+    this.semester,
     this.icon = Icons.menu_book_rounded,
+    this.onStudentsTap,
+    this.onNotesTap,
+    this.onSyllabusTap,
+    this.onMoreTap,
   });
 
   static String? resolveTimingLabel({
@@ -67,11 +75,11 @@ class FacultyClassCard extends StatelessWidget {
   }
 
   bool get _hasDetailLine =>
-      (courseCode?.trim().isNotEmpty ?? false) ||
       (dayName?.trim().isNotEmpty ?? false) ||
       (timing?.trim().isNotEmpty ?? false) ||
       (batch?.trim().isNotEmpty ?? false) ||
-      (section?.trim().isNotEmpty ?? false);
+      (section?.trim().isNotEmpty ?? false) ||
+      (semester?.trim().isNotEmpty ?? false);
 
   @override
   Widget build(BuildContext context) {
@@ -101,26 +109,13 @@ class FacultyClassCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                smcText(
-                  textToDisplay: title,
-                  textSize: 15,
-                  textBoldness: 5,
-                  colorOfText: ColorConst.textPrimary,
-                  maxLines: 2,
-                ),
+                _buildTitleLine(),
                 if (_hasDetailLine) ...[
                   const SizedBox(height: 4),
                   _buildDetailLine(),
                 ],
-                if (footer != null && footer!.trim().isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  smcText(
-                    textToDisplay: footer!,
-                    textSize: 12,
-                    colorOfText: ColorConst.textSecondary,
-                    maxLines: 2,
-                  ),
-                ],
+                const SizedBox(height: 4),
+                _buildFooterRow(),
               ],
             ),
           ),
@@ -129,8 +124,50 @@ class FacultyClassCard extends StatelessWidget {
     );
   }
 
+  Widget _buildTitleLine() {
+    const titleSize = 15.0;
+    const titleColor = ColorConst.textPrimary;
+    final name = title.trim();
+    final code = courseCode?.trim() ?? '';
+
+    if (name.isNotEmpty && code.isNotEmpty) {
+      return Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: name,
+              style: GoogleFonts.poppins(
+                fontSize: titleSize,
+                fontWeight: FontWeight.w800,
+                color: titleColor,
+              ),
+            ),
+            TextSpan(
+              text: ' ($code)',
+              style: GoogleFonts.poppins(
+                fontSize: titleSize,
+                fontWeight: FontWeight.w400,
+                color: titleColor,
+              ),
+            ),
+          ],
+        ),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+
+    return smcText(
+      textToDisplay: name.isNotEmpty ? name : code,
+      textSize: titleSize,
+      textBoldness: 5,
+      colorOfText: titleColor,
+      maxLines: 2,
+    );
+  }
+
   Widget _buildDetailLine() {
-    const detailSize = 13.0;
+    const detailSize = 12.0;
     const detailColor = ColorConst.textSecondary;
     final normalStyle = GoogleFonts.poppins(
       fontSize: detailSize,
@@ -167,20 +204,91 @@ class FacultyClassCard extends StatelessWidget {
       hasContent = true;
     }
 
-    addPart(courseCode, bold: false);
-    addPart(dayName, bold: false);
+    addPart(dayName, bold: true);
     addPart(timing, bold: true);
-    if (batch?.trim().isNotEmpty ?? false) {
-      addPart('Batch ${batch!.trim()}', bold: false);
+    addPart(batch, bold: false);
+    if (semester?.trim().isNotEmpty ?? false) {
+      addPart('Sem: ${semester!.trim()}', bold: false);
     }
-    if (section?.trim().isNotEmpty ?? false) {
-      addPart('Sec ${section!.trim()}', bold: false);
-    }
+    addPart(section, bold: false);
 
     return Text.rich(
       TextSpan(children: spans),
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  Widget _buildFooterRow() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _buildFooterAction(
+            icon: Icons.people_outline_rounded,
+            label: 'Students',
+            onTap: onStudentsTap,
+          ),
+          const SizedBox(width: 6),
+          _buildFooterAction(
+            icon: Icons.sticky_note_2_outlined,
+            label: 'Notes',
+            onTap: onNotesTap,
+          ),
+          const SizedBox(width: 6),
+          _buildFooterAction(
+            icon: Icons.description_outlined,
+            label: 'Syllabus',
+            onTap: onSyllabusTap,
+          ),
+          const SizedBox(width: 6),
+          _buildFooterAction(
+            icon: Icons.more_horiz_rounded,
+            label: 'More',
+            onTap: onMoreTap,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFooterAction({
+    required IconData icon,
+    required String label,
+    VoidCallback? onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFE3EAF8)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 14,
+                color: ColorConst.textSecondary,
+              ),
+              const SizedBox(width: 4),
+              smcText(
+                textToDisplay: label,
+                textSize: 11,
+                textBoldness: 4,
+                colorOfText: ColorConst.textSecondary,
+                maxLines: 1,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
