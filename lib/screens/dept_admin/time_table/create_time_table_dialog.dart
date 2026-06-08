@@ -17,8 +17,10 @@ class CreateTimeTableDialog {
     TimeTableSection? selectedSection;
     String? selectedBatch;
     String? selectedScheme;
+    String? selectedSemester;
     bool saving = false;
     final formKey = GlobalKey<FormState>();
+    const semesterOptions = ['I', 'II', 'III', 'IV'];
 
     await showDialog<void>(
       context: context,
@@ -79,8 +81,9 @@ class CreateTimeTableDialog {
                   content: smcText(
                     textToDisplay:
                         'Are you sure you want to create a time table for '
-                        'Section ${selectedSection!.sectionName}, '
-                        'Batch $selectedBatch, Scheme $selectedScheme?',
+                        'Scheme $selectedScheme, Batch $selectedBatch, '
+                        'Semester $selectedSemester, '
+                        'Section ${selectedSection!.sectionName}?',
                     textSize: 14,
                     colorOfText: ColorConst.textSecondary,
                     maxLines: 5,
@@ -114,6 +117,7 @@ class CreateTimeTableDialog {
                   sectionUid: selectedSection!.sectionUid,
                   batch: selectedBatch!,
                   scheme: selectedScheme!,
+                  semester: selectedSemester!,
                 );
                 if (context.mounted) {
                   Navigator.pop(context);
@@ -210,6 +214,45 @@ class CreateTimeTableDialog {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 buildDropdown(
+                                  label: 'Scheme',
+                                  value: selectedScheme,
+                                  options: schemeNames,
+                                  onChanged: (value) {
+                                    setDialogState(() => selectedScheme = value);
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: buildDropdown(
+                                        label: 'Batch',
+                                        value: selectedBatch,
+                                        options: batchNames,
+                                        onChanged: (value) {
+                                          setDialogState(
+                                            () => selectedBatch = value,
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: buildDropdown(
+                                        label: 'Semester',
+                                        value: selectedSemester,
+                                        options: semesterOptions,
+                                        onChanged: (value) {
+                                          setDialogState(
+                                            () => selectedSemester = value,
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                buildDropdown(
                                   label: 'Section',
                                   value: selectedSection?.sectionName,
                                   options: sectionNames,
@@ -219,24 +262,6 @@ class CreateTimeTableDialog {
                                         (section) => section.sectionName == value,
                                       );
                                     });
-                                  },
-                                ),
-                                const SizedBox(height: 16),
-                                buildDropdown(
-                                  label: 'Batch',
-                                  value: selectedBatch,
-                                  options: batchNames,
-                                  onChanged: (value) {
-                                    setDialogState(() => selectedBatch = value);
-                                  },
-                                ),
-                                const SizedBox(height: 16),
-                                buildDropdown(
-                                  label: 'Scheme',
-                                  value: selectedScheme,
-                                  options: schemeNames,
-                                  onChanged: (value) {
-                                    setDialogState(() => selectedScheme = value);
                                   },
                                 ),
                               ],

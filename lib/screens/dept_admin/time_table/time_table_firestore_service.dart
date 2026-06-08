@@ -35,6 +35,10 @@ class TimeTableFirestoreService {
         if (schemeCompare != 0) {
           return schemeCompare;
         }
+        final semesterCompare = a.semester.compareTo(b.semester);
+        if (semesterCompare != 0) {
+          return semesterCompare;
+        }
         return a.section.compareTo(b.section);
       });
       return records;
@@ -47,6 +51,7 @@ class TimeTableFirestoreService {
     required String sectionUid,
     required String batch,
     required String scheme,
+    required String semester,
   }) async {
     final record = TimeTableRecord(
       id: '',
@@ -56,6 +61,7 @@ class TimeTableFirestoreService {
       sectionUid: sectionUid,
       batch: batch,
       scheme: scheme,
+      semester: semester,
     );
     await _firestore.collection(collection).add(record.toMap());
   }

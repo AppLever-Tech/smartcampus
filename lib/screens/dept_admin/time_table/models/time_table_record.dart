@@ -9,6 +9,7 @@ class TimeTableRecord {
   final String sectionUid;
   final String batch;
   final String scheme;
+  final String semester;
 
   const TimeTableRecord({
     required this.id,
@@ -18,6 +19,7 @@ class TimeTableRecord {
     required this.sectionUid,
     required this.batch,
     required this.scheme,
+    this.semester = '',
   });
 
   factory TimeTableRecord.fromFirestore(
@@ -32,7 +34,17 @@ class TimeTableRecord {
       sectionUid: (data['section_uid'] ?? '').toString(),
       batch: (data['batch'] ?? '').toString(),
       scheme: (data['scheme'] ?? '').toString(),
+      semester: (data['semester'] ?? '').toString(),
     );
+  }
+
+  String get displayLabel {
+    return [
+      scheme,
+      batch,
+      if (semester.trim().isNotEmpty) 'Sem: $semester',
+      section,
+    ].where((value) => value.trim().isNotEmpty).join(' - ');
   }
 
   Map<String, dynamic> toMap() {
@@ -43,6 +55,7 @@ class TimeTableRecord {
       'section_uid': sectionUid,
       'batch': batch,
       'scheme': scheme,
+      'semester': semester,
       'created_at': FieldValue.serverTimestamp(),
     };
   }

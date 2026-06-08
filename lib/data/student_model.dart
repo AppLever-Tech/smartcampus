@@ -10,6 +10,7 @@ class StudentModel {
   final String dateOfBirth;     // ISO-8601 date string "YYYY-MM-DD"
   final String photographUrl;   // Firestore Storage download URL
   final String batch;           // e.g. '2023-25'
+  final String currentSemester; // e.g. 'III'
 
   // ── India-Specific Compliance / Identity ──────────────────────
   final String aadhaarNumber;
@@ -49,6 +50,8 @@ class StudentModel {
   /// Latest cumulative CGPA across all semesters.
   final String cgpa;
 
+  static const List<String> semesterOptions = ['I', 'II', 'III', 'IV'];
+
   const StudentModel({
     this.documentId,
     required this.studentId,
@@ -57,6 +60,7 @@ class StudentModel {
     required this.dateOfBirth,
     this.photographUrl = '',
     this.batch = '',
+    this.currentSemester = '',
     this.aadhaarNumber = '',
     this.category = 'Gen',
     this.nationality = 'Indian',
@@ -180,6 +184,7 @@ class StudentModel {
           .toString()
           .trim(),
       batch: (data['batch'] ?? '').toString().trim(),
+      currentSemester: (data['current_semester'] ?? '').toString().trim(),
       aadhaarNumber: (data['aadhaar_number'] ?? '').toString().trim(),
       category: (data['category'] ?? 'Gen').toString().trim(),
       nationality: (data['nationality'] ?? 'Indian').toString().trim(),
@@ -352,6 +357,7 @@ class StudentModel {
     String? dateOfBirth,
     String? photographUrl,
     String? batch,
+    String? currentSemester,
     String? aadhaarNumber,
     String? category,
     String? nationality,
@@ -383,6 +389,7 @@ class StudentModel {
       dateOfBirth: dateOfBirth ?? this.dateOfBirth,
       photographUrl: photographUrl ?? this.photographUrl,
       batch: batch ?? this.batch,
+      currentSemester: currentSemester ?? this.currentSemester,
       aadhaarNumber: aadhaarNumber ?? this.aadhaarNumber,
       category: category ?? this.category,
       nationality: nationality ?? this.nationality,
@@ -418,6 +425,7 @@ class StudentModel {
       'date_of_birth': dateOfBirth,
       'photograph_url': photographUrl,
       'batch': batch,
+      'current_semester': currentSemester,
       'aadhaar_number': aadhaarNumber,
       'category': category,
       'nationality': nationality,

@@ -578,6 +578,21 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
                     ],
                   ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _buildDetailField(
+                          'Current Semester',
+                          s.currentSemester,
+                        ),
+                      ),
+                      const Spacer(flex: 1),
+                    ],
+                  ),
+                ),
                 _buildDetailRow(
                   'Date of Birth',
                   _formatDisplayDate(s.dateOfBirth),
@@ -3716,6 +3731,7 @@ class _StudentProfileEditDialogState extends State<_StudentProfileEditDialog> {
   String? _category;
   String? _nationality;
   String? _bloodGroup;
+  String? _currentSemester;
   DateTime? _dateOfBirth;
 
   static const List<String> _genderOptions = ['Male', 'Female', 'Other'];
@@ -3762,6 +3778,9 @@ class _StudentProfileEditDialogState extends State<_StudentProfileEditDialog> {
     _category = student.category.isEmpty ? null : student.category;
     _nationality = student.nationality.isEmpty ? null : student.nationality;
     _bloodGroup = student.bloodGroup.isEmpty ? null : student.bloodGroup;
+    _currentSemester = student.currentSemester.isEmpty
+        ? null
+        : student.currentSemester;
     if (student.dateOfBirth.isNotEmpty) {
       try {
         _dateOfBirth = DateTime.parse(student.dateOfBirth);
@@ -3889,6 +3908,7 @@ class _StudentProfileEditDialogState extends State<_StudentProfileEditDialog> {
       fullName: _fullNameController.text.trim(),
       gender: _gender ?? '',
       batch: _batchController.text.trim(),
+      currentSemester: _currentSemester ?? '',
       dateOfBirth: _dateOfBirth?.toIso8601String().split('T').first ?? '',
       aadhaarNumber: _aadhaarController.text.trim(),
       category: _category ?? '',
@@ -3979,6 +3999,14 @@ class _StudentProfileEditDialogState extends State<_StudentProfileEditDialog> {
                           TextFormField(
                             controller: _batchController,
                             decoration: _fieldDecoration('Batch'),
+                          ),
+                          const SizedBox(height: 10),
+                          _buildDropdown(
+                            label: 'Current Semester',
+                            value: _currentSemester,
+                            options: StudentModel.semesterOptions,
+                            onChanged: (value) =>
+                                setState(() => _currentSemester = value),
                           ),
                           const SizedBox(height: 10),
                           TextFormField(

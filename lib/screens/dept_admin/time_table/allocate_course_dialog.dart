@@ -25,6 +25,7 @@ class AllocateCourseDialog {
     CourseModel? selectedCourse;
     bool saving = false;
     bool loading = true;
+    String searchQuery = '';
     List<CourseModel> courses = const [];
     List<FacultyModel> facultyList = const [];
     String? loadError;
@@ -52,6 +53,11 @@ class AllocateCourseDialog {
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            final filteredCourses = _filterCourses(
+              courses: courses,
+              searchQuery: searchQuery,
+            );
+
             Future<void> allocate() async {
               if (selectedCourse == null) {
                 ScaffoldMessenger.of(dialogContext).showSnackBar(
@@ -158,10 +164,49 @@ class AllocateCourseDialog {
                                 maxLines: 3,
                               )
                             : SizedBox(
-                                height: 320,
+                                height: 360,
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
+                                    TextField(
+                                      onChanged: saving
+                                          ? null
+                                          : (value) => setDialogState(
+                                                () => searchQuery = value,
+                                              ),
+                                      decoration: InputDecoration(
+                                        hintText: 'Search courses...',
+                                        prefixIcon: const Icon(
+                                          Icons.search_rounded,
+                                          size: 20,
+                                          color: Color(0xFF8A96B2),
+                                        ),
+                                        filled: true,
+                                        fillColor: Colors.white,
+                                        border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          borderSide: const BorderSide(
+                                            color: Color(0xFFE2E8F5),
+                                          ),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          borderSide: const BorderSide(
+                                            color: Color(0xFFE2E8F5),
+                                          ),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          borderSide: const BorderSide(
+                                            color: ColorConst.primaryBlue,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
                                     Container(
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 12,
@@ -199,12 +244,27 @@ class AllocateCourseDialog {
                                     ),
                                     const SizedBox(height: 8),
                                     Expanded(
-                                      child: ListView.separated(
-                                        itemCount: courses.length,
+                                      child: filteredCourses.isEmpty
+                                          ? Center(
+                                              child: smcText(
+                                                textToDisplay: searchQuery
+                                                        .trim()
+                                                        .isEmpty
+                                                    ? 'No courses found for this organisation.'
+                                                    : 'No courses match your search.',
+                                                textSize: 14,
+                                                colorOfText:
+                                                    ColorConst.textSecondary,
+                                                maxLines: 3,
+                                                textAlign: TextAlign.center,
+                                              ),
+                                            )
+                                          : ListView.separated(
+                                        itemCount: filteredCourses.length,
                                         separatorBuilder: (context, index) =>
                                             const Divider(height: 1),
                                         itemBuilder: (context, index) {
-                                          final course = courses[index];
+                                          final course = filteredCourses[index];
                                           final isSelected =
                                               selectedCourse?.id == course.id;
                                           return RadioListTile<CourseModel>(
@@ -289,6 +349,25 @@ class AllocateCourseDialog {
         );
       },
     );
+  }
+
+  static List<CourseModel> _filterCourses({
+    required List<CourseModel> courses,
+    required String searchQuery,
+  }) {
+    final searchTerm = searchQuery.trim().toLowerCase();
+    if (searchTerm.isEmpty) {
+      return courses;
+    }
+
+    return courses
+        .where(
+          (course) =>
+              '${course.courseCode} ${course.courseTitle} ${course.batch} ${course.semester} ${course.faculty} ${course.courseType}'
+                  .toLowerCase()
+                  .contains(searchTerm),
+        )
+        .toList();
   }
 
   static ({String name, String uid}) _resolveFaculty({

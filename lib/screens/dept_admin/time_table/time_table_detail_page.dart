@@ -30,10 +30,11 @@ class _TimeTableDetailPageState extends State<TimeTableDetailPage> {
   static const Color _borderColor = Color(0xFFE3EAF8);
   static const Color _headerColor = Color(0xFFF4F7FF);
   static const double _dayColumnWidth = 120;
+  static const double _timeBlockColumnWidth = 108 * 1.3;
   static const double _rowHeight = 72;
 
   String get _title =>
-      '${widget.timeTable.section} • ${widget.timeTable.batch} • ${widget.timeTable.scheme}';
+      widget.timeTable.displayLabel;
 
   void _toggleTranspose() {
     setState(() => isTransposed = !isTransposed);
@@ -274,7 +275,7 @@ class _TimeTableDetailPageState extends State<TimeTableDetailPage> {
       columnWidths: {
         0: const FixedColumnWidth(_dayColumnWidth),
         for (int index = 0; index < timeSlots.length; index++)
-          index + 1: const IntrinsicColumnWidth(),
+          index + 1: const FixedColumnWidth(_timeBlockColumnWidth),
       },
       children: [
         TableRow(
@@ -313,7 +314,7 @@ class _TimeTableDetailPageState extends State<TimeTableDetailPage> {
       columnWidths: {
         0: const IntrinsicColumnWidth(),
         for (int index = 0; index < days.length; index++)
-          index + 1: const FixedColumnWidth(_dayColumnWidth),
+          index + 1: const FixedColumnWidth(_timeBlockColumnWidth),
       },
       children: [
         TableRow(
@@ -369,32 +370,33 @@ class _TimeTableDetailPageState extends State<TimeTableDetailPage> {
   }
 
   Widget _timeSlotHeaderCell(TimeTableTimeSlot slot) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          smcText(
-            textToDisplay: slot.timeslotName,
-            textSize: 12,
-            textBoldness: 5,
-            colorOfText: const Color(0xFF5C6B8B),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.visible,
-          ),
-          const SizedBox(height: 2),
-          smcText(
-            textToDisplay:
-                '${slot.timeslotStartTime} - ${slot.timeslotEndTime}',
-            textSize: 10,
-            colorOfText: ColorConst.textSecondary,
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.visible,
-          ),
-        ],
+    return SizedBox(
+      width: _timeBlockColumnWidth,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            smcText(
+              textToDisplay: slot.timeslotName,
+              textSize: 11,
+              textBoldness: 5,
+              colorOfText: const Color(0xFF5C6B8B),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+            ),
+            const SizedBox(height: 2),
+            smcText(
+              textToDisplay:
+                  '${slot.timeslotStartTime} - ${slot.timeslotEndTime}',
+              textSize: 9,
+              colorOfText: ColorConst.textSecondary,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -453,33 +455,37 @@ class _TimeTableDetailPageState extends State<TimeTableDetailPage> {
         block != null &&
         (block.courseId.isNotEmpty || block.courseName.isNotEmpty);
 
-    return Container(
-      constraints: const BoxConstraints(minHeight: _rowHeight),
-      color: const Color(0xFFFCFDFF),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (hasAllocation) ...[
-            smcText(
-              textToDisplay: block.courseId,
-              textSize: 12,
-              textBoldness: 5,
-              colorOfText: ColorConst.primaryBlue,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-            ),
-            const SizedBox(height: 4),
-            smcText(
-              textToDisplay: block.courseName,
-              textSize: 11,
-              colorOfText: ColorConst.textPrimary,
-              textAlign: TextAlign.center,
-              maxLines: 3,
-            ),
-          ] else if (!isEditEnabled)
+    return SizedBox(
+      width: _timeBlockColumnWidth,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: _rowHeight),
+        color: const Color(0xFFFCFDFF),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (hasAllocation) ...[
+              smcText(
+                textToDisplay: block.courseName,
+                textSize: 11,
+                textBoldness: 5,
+                colorOfText: ColorConst.textPrimary,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+              ),
+              if (block.courseId.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                smcText(
+                  textToDisplay: block.courseId,
+                  textSize: 10,
+                  colorOfText: ColorConst.primaryBlue,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                ),
+              ],
+            ] else if (!isEditEnabled)
             smcText(
               textToDisplay: '-',
               textSize: 12,
@@ -511,6 +517,7 @@ class _TimeTableDetailPageState extends State<TimeTableDetailPage> {
             ),
           ],
         ],
+        ),
       ),
     );
   }

@@ -74,6 +74,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   int totalCourses = 0;
   String organizationDisplayName = '';
   bool canEditOrDelete = false;
+  String adminPhotoUrl = '';
   UserOrgScope? _orgScope;
   StreamSubscription<List<CourseModel>>? _courseSubscription;
 
@@ -349,24 +350,26 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       );
 
       bool allowed = false;
+      UserMasterItem? signedInUser;
       if (currentUser != null) {
+        signedInUser = await userMasterService.getSignedInUserMaster();
         final currentDept =
             depts.where((d) => d.deptId == scope!.deptId).firstOrNull;
         if (currentDept != null && currentDept.createdBy == currentUser.uid) {
           allowed = true;
         } else {
-          final userMaster = await userMasterService.getSignedInUserMaster();
-          allowed = userMaster != null &&
-              userMaster.normalizedUserRole == 'DEPT_ADMIN' &&
-              userMaster.isApproved &&
-              userMaster.orgId == scope.orgId &&
-              userMaster.deptId == scope.deptId;
+          allowed = signedInUser != null &&
+              signedInUser.normalizedUserRole == 'DEPT_ADMIN' &&
+              signedInUser.isApproved &&
+              signedInUser.orgId == scope.orgId &&
+              signedInUser.deptId == scope.deptId;
         }
       }
 
       if (!mounted) return;
       setState(() {
         canEditOrDelete = allowed;
+        adminPhotoUrl = signedInUser?.photoUrl ?? '';
         departments = depts;
         facultyList = faculty;
         studentList = students;
@@ -1517,6 +1520,11 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         !studentBatchOptions.contains(selectedStudentBatch)) {
       selectedStudentBatch = null;
     }
+    String? selectedCurrentSemester = studentToEdit?.currentSemester;
+    if (selectedCurrentSemester != null &&
+        !StudentModel.semesterOptions.contains(selectedCurrentSemester)) {
+      selectedCurrentSemester = null;
+    }
     DateTime? selectedDob;
     if (studentToEdit?.dateOfBirth != null && studentToEdit!.dateOfBirth.isNotEmpty) {
       try {
@@ -1689,6 +1697,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                 dateOfBirth: selectedDob?.toIso8601String().split('T')[0] ?? '',
                 photographUrl: photographUrl ?? '',
                 batch: selectedStudentBatch ?? '',
+                currentSemester: selectedCurrentSemester ?? '',
                 aadhaarNumber: aadhaarCtrl.text.trim(),
                 category: selectedCategory ?? '',
                 nationality: selectedNationality ?? '',
@@ -1917,28 +1926,58 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                             : null,
                       ),
                       const SizedBox(height: 8),
-                      DropdownButtonFormField<String>(
-                        value: selectedStudentBatch,
-                        decoration: _fieldDecor('Batch *'),
-                        items: studentBatchOptions
-                            .map(
-                              (batch) => DropdownMenuItem(
-                                value: batch,
-                                child: Text(
-                                  batch,
-                                  style: const TextStyle(fontSize: 13),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: isViewOnly
-                            ? null
-                            : (v) => setModalState(
-                                  () => selectedStudentBatch = v,
-                                ),
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Please select batch'
-                            : null,
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: selectedStudentBatch,
+                              decoration: _fieldDecor('Batch *'),
+                              items: studentBatchOptions
+                                  .map(
+                                    (batch) => DropdownMenuItem(
+                                      value: batch,
+                                      child: Text(
+                                        batch,
+                                        style: const TextStyle(fontSize: 13),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: isViewOnly
+                                  ? null
+                                  : (v) => setModalState(
+                                        () => selectedStudentBatch = v,
+                                      ),
+                              validator: (v) => (v == null || v.trim().isEmpty)
+                                  ? 'Please select batch'
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: selectedCurrentSemester,
+                              decoration: _fieldDecor('Current Semester'),
+                              items: StudentModel.semesterOptions
+                                  .map(
+                                    (semester) => DropdownMenuItem(
+                                      value: semester,
+                                      child: Text(
+                                        semester,
+                                        style: const TextStyle(fontSize: 13),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: isViewOnly
+                                  ? null
+                                  : (v) => setModalState(
+                                        () => selectedCurrentSemester = v,
+                                      ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 8),
                       GestureDetector(
@@ -3179,6 +3218,20 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
 
 
+  Widget _buildSidebarProfileAvatar({required double radius}) {
+    final String name = widget.adminName;
+    final String initial = name.trim().isEmpty
+        ? 'A'
+        : name.trim().substring(0, 1).toUpperCase();
+    final String photoUrl = normalizeProfilePhotoUrl(adminPhotoUrl);
+
+    return ProfilePhotoAvatar(
+      photoUrl: photoUrl,
+      fallbackInitial: initial,
+      radius: radius,
+    );
+  }
+
   // ── Build ─────────────────────────────────────────────────────
 
   @override
@@ -3208,13 +3261,28 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         padding: const EdgeInsets.only(left: 4, bottom: 12),
                         child: Row(
                           children: [
-                            const Expanded(
-                              child: smcText(
-                                textToDisplay: 'Department Admin',
-                                textSize: 18,
-                                textBoldness: 5,
-                                colorOfText: ColorConst.textPrimary,
-                                maxLines: 1,
+                            _buildSidebarProfileAvatar(radius: 22),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  smcText(
+                                    textToDisplay: widget.adminName.trim().isEmpty
+                                        ? 'Department Admin'
+                                        : widget.adminName,
+                                    textSize: 14,
+                                    textBoldness: 5,
+                                    colorOfText: ColorConst.textPrimary,
+                                    maxLines: 1,
+                                  ),
+                                  const smcText(
+                                    textToDisplay: 'Department Admin',
+                                    textSize: 12,
+                                    colorOfText: ColorConst.textSecondary,
+                                    maxLines: 1,
+                                  ),
+                                ],
                               ),
                             ),
                             IconButton(
@@ -3226,13 +3294,15 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                           ],
                         ),
                       )
-                    else
+                    else ...[
+                      _buildSidebarProfileAvatar(radius: 24),
                       IconButton(
                         icon: const Icon(Icons.chevron_right_rounded),
                         tooltip: 'Expand menu',
                         color: ColorConst.primaryBlue,
                         onPressed: () => setState(() => sidebarExpanded = true),
                       ),
+                    ],
                     const SizedBox(height: 8),
                     _menuTile(
                       title: 'Dashboard',
