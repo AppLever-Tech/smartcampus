@@ -13,6 +13,8 @@ import 'package:smartcampus/models/achievement_model.dart';
 import 'package:smartcampus/services/achievement_firestore_service.dart';
 import 'package:smartcampus/models/publication_model.dart';
 import 'package:smartcampus/services/publication_firestore_service.dart';
+import 'package:smartcampus/models/academic_record_model.dart';
+import 'package:smartcampus/services/academic_firestore_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -60,6 +62,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
   final StudentFirestoreService _studentService = StudentFirestoreService();
   final AchievementFirestoreService _achievementService = AchievementFirestoreService();
   final PublicationFirestoreService _publicationService = PublicationFirestoreService();
+  final AcademicFirestoreService _academicService = AcademicFirestoreService();
   Stream<List<CourseModel>>? _enrolledCoursesStream;
   final Map<String, Map<String, String>> _enrolledCourseMarks = {};
   final Map<String, String> _semesterSgpaBySemester = {};
@@ -321,6 +324,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
       return const [
         'Basic Details',
         'Enrolled Courses',
+        'Academics',
         'Achievements',
         'Publications',
       ];
@@ -328,6 +332,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
     return const [
       'Basic Details',
       'Assigned Courses',
+      'Academics',
       'Achievements',
       'Publications',
     ];
@@ -376,6 +381,8 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
         return _buildCoursesOpted();
       case 'Assigned Courses':
         return _buildAssignedCourses();
+      case 'Academics':
+        return _buildAcademics();
       case 'Achievements':
         return _buildAchievements();
       case 'Publications':
@@ -1751,6 +1758,528 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
     );
   }
 
+  Widget _buildAcademics() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const smcText(
+                textToDisplay: 'Academic Records',
+                textSize: 16,
+                textBoldness: 5,
+                colorOfText: ColorConst.textPrimary,
+              ),
+              ElevatedButton.icon(
+                onPressed: () => _openAcademicDialog(),
+                icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+                label: const smcText(
+                  textToDisplay: 'Add Academic Record',
+                  textSize: 13,
+                  textBoldness: 4,
+                  colorOfText: Colors.white,
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ColorConst.primaryBlue,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<List<AcademicRecordModel>>(
+            stream: _academicService.getAcademicRecordsForPerson(_uuid),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+
+              final records = snapshot.data ?? [];
+
+              if (records.isEmpty) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(40),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.school_outlined, size: 64, color: Colors.grey.shade300),
+                        const SizedBox(height: 16),
+                        const smcText(
+                          textToDisplay: "No academic records recorded yet. Click Add Academic Record to add the student's accomplishments.",
+                          textSize: 14,
+                          colorOfText: ColorConst.textSecondary,
+                          textAlign: TextAlign.center,
+                          maxLines: 3,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  return _buildAcademicTable(records, constraints.maxWidth);
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAcademicTable(List<AcademicRecordModel> records, double tableWidth) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE3EAF8)),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: SingleChildScrollView(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: tableWidth - 40),
+                child: DataTable(
+                  showCheckboxColumn: false,
+                  headingRowHeight: 50,
+                  dataRowMinHeight: 52,
+                  dataRowMaxHeight: 58,
+                  horizontalMargin: 0,
+                  columnSpacing: 0,
+                  dividerThickness: 1,
+                  border: const TableBorder(
+                    horizontalInside: BorderSide(color: Color(0xFFE3EAF8)),
+                    verticalInside: BorderSide(color: Color(0xFFE3EAF8)),
+                    top: BorderSide(color: Color(0xFFE3EAF8)),
+                    bottom: BorderSide(color: Color(0xFFE3EAF8)),
+                    left: BorderSide(color: Color(0xFFE3EAF8)),
+                    right: BorderSide(color: Color(0xFFE3EAF8)),
+                  ),
+                  headingRowColor: MaterialStateProperty.all(const Color(0xFFF4F7FF)),
+                  columns: const [
+                    DataColumn(
+                      label: SizedBox(
+                        width: 50,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'S.No',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 250,
+                        child: Padding(
+                          padding: EdgeInsets.only(left: 12),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: smcText(
+                              textToDisplay: 'Record Type',
+                              textSize: 12,
+                              textBoldness: 4,
+                              colorOfText: Color(0xFF5C6B8B),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const DataColumn(
+                      label: SizedBox(
+                        width: 100,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Document',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: const SizedBox(
+                        width: 120,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Actions',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  rows: records.asMap().entries.map((entry) {
+                    final int index = entry.key;
+                    final r = entry.value;
+                    return DataRow(
+                      cells: [
+                        DataCell(
+                          Center(
+                            child: smcText(
+                              textToDisplay: '${index + 1}',
+                              textSize: 12,
+                              colorOfText: const Color(0xFF2E3954),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Padding(
+                            padding: const EdgeInsets.only(left: 12),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: smcText(
+                                textToDisplay: r.recordType,
+                                textSize: 12,
+                                colorOfText: const Color(0xFF2E3954),
+                                maxLines: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Center(
+                            child: r.fileUrl != null
+                                ? InkWell(
+                                    onTap: () => _viewAcademicRecord(r),
+                                    child: Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: const Color(0xFFE3EAF8)),
+                                        color: const Color(0xFFF8FAFF),
+                                      ),
+                                      clipBehavior: Clip.antiAlias,
+                                      child: r.fileName?.toLowerCase().endsWith('.pdf') ?? false
+                                          ? const Icon(Icons.picture_as_pdf_rounded, color: Colors.redAccent, size: 20)
+                                          : Image.network(
+                                              r.fileUrl!,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, size: 20, color: Colors.grey),
+                                            ),
+                                    ),
+                                  )
+                                : const smcText(textToDisplay: '—', textSize: 12, colorOfText: Colors.grey),
+                          ),
+                        ),
+                        DataCell(
+                          Center(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.green),
+                                  onPressed: () => _openAcademicDialog(record: r),
+                                  tooltip: 'Edit',
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
+                                  onPressed: () => _deleteAcademicRecord(r),
+                                  tooltip: 'Delete',
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openAcademicDialog({AcademicRecordModel? record}) async {
+    final bool isEdit = record != null;
+    final formKey = GlobalKey<FormState>();
+    String? selectedRecordType = record?.recordType;
+    final descCtrl = TextEditingController(text: record?.description ?? '');
+    Uint8List? selectedFileBytes;
+    String? selectedFileName = record?.fileName;
+    String? existingUrl = record?.fileUrl;
+    bool saving = false;
+
+    final List<String> recordTypes = [
+      '10th Mark Sheet',
+      '12th Mark Sheet',
+      'UG Consolidated Mark Sheet',
+      'PG Degree - Sem 1: Mark Sheet',
+      'PG Degree - Sem 2: Mark Sheet',
+      'PG Degree - Sem 3: Mark Sheet',
+      'PG Degree - Sem 4: Mark Sheet',
+    ];
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 500),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: formKey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          smcText(
+                            textToDisplay: '${isEdit ? 'Edit' : 'Add'} Academic Record',
+                            textSize: 18,
+                            textBoldness: 5,
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded),
+                            onPressed: () => Navigator.pop(ctx),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      DropdownButtonFormField<String>(
+                        value: selectedRecordType,
+                        decoration: _dialogFieldDecor('Record Type *'),
+                        items: recordTypes
+                            .map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13))))
+                            .toList(),
+                        onChanged: (v) => setModalState(() => selectedRecordType = v),
+                        validator: (v) => v == null ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: descCtrl,
+                        maxLines: 2,
+                        decoration: _dialogFieldDecor('Description (Optional)', hint: 'Add any additional notes'),
+                      ),
+                      const SizedBox(height: 20),
+                      const smcText(textToDisplay: 'Document (PDF/JPG/PNG) *', textSize: 13, textBoldness: 4),
+                      const SizedBox(height: 8),
+                      InkWell(
+                        onTap: () async {
+                          final result = await FilePicker.platform.pickFiles(
+                            type: FileType.custom,
+                            allowedExtensions: ['pdf', 'jpg', 'png', 'jpeg'],
+                            withData: true,
+                          );
+                          if (result != null) {
+                            setModalState(() {
+                              selectedFileBytes = result.files.first.bytes;
+                              selectedFileName = result.files.first.name;
+                            });
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(10),
+                            color: const Color(0xFFF9FAFD),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.upload_file_rounded, color: ColorConst.primaryBlue, size: 20),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  selectedFileName ?? 'Tap to upload document',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: selectedFileName != null ? ColorConst.textPrimary : Colors.grey,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (selectedFileName != null)
+                                IconButton(
+                                  icon: const Icon(Icons.close, size: 18),
+                                  onPressed: () => setModalState(() {
+                                    selectedFileBytes = null;
+                                    selectedFileName = null;
+                                    existingUrl = null;
+                                  }),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: saving ? null : () async {
+                            if (!formKey.currentState!.validate()) return;
+                            if (selectedFileName == null && existingUrl == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please upload a document')));
+                              return;
+                            }
+                            
+                            setModalState(() => saving = true);
+                            try {
+                              String? finalUrl = existingUrl;
+                              if (selectedFileBytes != null) {
+                                finalUrl = await _academicService.uploadAcademicFile(
+                                  _uuid,
+                                  selectedFileName!,
+                                  selectedFileBytes!,
+                                );
+                              }
+
+                              final r = AcademicRecordModel(
+                                id: record?.id,
+                                uuid: _uuid,
+                                recordType: selectedRecordType!,
+                                description: descCtrl.text.trim(),
+                                fileUrl: finalUrl,
+                                fileName: selectedFileName,
+                                createdOn: record?.createdOn ?? DateTime.now(),
+                              );
+
+                              if (isEdit) {
+                                await _academicService.updateAcademicRecord(record!.id!, r);
+                              } else {
+                                await _academicService.addAcademicRecord(r);
+                              }
+                              if (ctx.mounted) Navigator.pop(ctx);
+                            } catch (e) {
+                              setModalState(() => saving = false);
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: ColorConst.primaryBlue,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          child: saving
+                              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : smcText(textToDisplay: isEdit ? 'Save Changes' : 'Add Record', textSize: 14, colorOfText: Colors.white, textBoldness: 5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _viewAcademicRecord(AcademicRecordModel r) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: smcText(textToDisplay: r.recordType, textSize: 18, textBoldness: 5),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (r.description != null && r.description!.isNotEmpty) ...[
+              const smcText(textToDisplay: 'Description:', textSize: 13, textBoldness: 4),
+              const SizedBox(height: 4),
+              smcText(textToDisplay: r.description!, textSize: 13, maxLines: 5),
+              const SizedBox(height: 16),
+            ],
+            const smcText(textToDisplay: 'Document Preview:', textSize: 13, textBoldness: 4),
+            const SizedBox(height: 8),
+            if (r.fileName?.toLowerCase().endsWith('.pdf') ?? false)
+              OutlinedButton.icon(
+                onPressed: () async {
+                  if (await canLaunchUrl(Uri.parse(r.fileUrl!))) {
+                    await launchUrl(Uri.parse(r.fileUrl!));
+                  }
+                },
+                icon: const Icon(Icons.picture_as_pdf_rounded, size: 18),
+                label: const Text('Open PDF Document'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: ColorConst.primaryBlue,
+                  side: const BorderSide(color: ColorConst.primaryBlue),
+                ),
+              )
+            else if (r.fileUrl != null)
+              GestureDetector(
+                onTap: () async {
+                  if (await canLaunchUrl(Uri.parse(r.fileUrl!))) {
+                    await launchUrl(Uri.parse(r.fileUrl!));
+                  }
+                },
+                child: Container(
+                  height: 200,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: ColorConst.borderSoft),
+                    color: const Color(0xFFF7F9FF),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Image.network(
+                    r.fileUrl!,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined)),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  void _deleteAcademicRecord(AcademicRecordModel r) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Academic Record'),
+        content: Text('Are you sure you want to delete "${r.recordType}"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _academicService.deleteAcademicRecord(r.id!, r.fileUrl);
+    }
+  }
+
   Widget _buildAchievements() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2208,7 +2737,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
                         decoration: _dialogFieldDecor('Description', hint: 'Briefly describe the achievement'),
                       ),
                       const SizedBox(height: 20),
-                      const smcText(textToDisplay: 'Certificate (PDF/JPG/PNG)', textSize: 13, textBoldness: 4),
+                      const smcText(textToDisplay: 'Certificate (PDF/JPG/PNG) *', textSize: 13, textBoldness: 4),
                       const SizedBox(height: 8),
                       InkWell(
                         onTap: () async {
@@ -2266,6 +2795,10 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
                         child: ElevatedButton(
                           onPressed: saving ? null : () async {
                             if (!formKey.currentState!.validate()) return;
+                            if (selectedFileName == null && existingUrl == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please upload a certificate')));
+                              return;
+                            }
                             setModalState(() => saving = true);
                             try {
                               String? finalUrl = existingUrl;
@@ -2878,7 +3411,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
                         decoration: _dialogFieldDecor('Abstract', hint: 'Brief summary of the publication'),
                       ),
                       const SizedBox(height: 20),
-                      const smcText(textToDisplay: 'Full Paper (PDF Only)', textSize: 13, textBoldness: 4),
+                      const smcText(textToDisplay: 'Full Paper (PDF Only) *', textSize: 13, textBoldness: 4),
                       const SizedBox(height: 8),
                       InkWell(
                         onTap: () async {
@@ -2936,6 +3469,10 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
                         child: ElevatedButton(
                           onPressed: saving ? null : () async {
                             if (!formKey.currentState!.validate()) return;
+                            if (selectedFileName == null && existingUrl == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please upload the full paper PDF')));
+                              return;
+                            }
                             setModalState(() => saving = true);
                             try {
                               String? finalUrl = existingUrl;
