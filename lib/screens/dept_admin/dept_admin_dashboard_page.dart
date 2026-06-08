@@ -3482,6 +3482,18 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     return counts;
   }
 
+  Map<String, int> get facultyGenderCount {
+    final Map<String, int> counts = {};
+
+    for (final faculty in facultyList) {
+      final gender =
+          faculty.gender.trim().isEmpty ? 'Unknown' : faculty.gender.trim();
+      counts[gender] = (counts[gender] ?? 0) + 1;
+    }
+
+    return counts;
+  }
+
   Widget _buildDashboardView() {
     final DepartmentMasterItem? dept = currentDepartment;
     return Column(
@@ -3555,13 +3567,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
             Expanded(
               flex: 1,
               child: SizedBox(
-                height: 100,
-                child: _buildStatCard(
-                  title: 'Total Faculty',
-                  count: facultyList.length.toString(),
-                  icon: Icons.people_alt_rounded,
-                  color: Colors.green,
-                ),
+                height: 220,
+                child: _buildFacultyStatCard(),
               ),
             ),
               const SizedBox(width:16),
@@ -3684,6 +3691,65 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
             Expanded(
               child: _buildStudentVerticalChart(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFacultyStatCard() {
+    return Container(
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFFE3EAF8),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.people_alt_rounded,
+                    color: Colors.green,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Total Faculty',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                    Text(
+                      facultyList.length.toString(),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: _buildFacultyVerticalChart(),
             ),
           ],
         ),
@@ -3820,6 +3886,80 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
               entry.key,
               style: const TextStyle(
                 fontSize: 10,
+              ),
+            ),
+          ],
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildFacultyVerticalChart() {
+    final data = facultyGenderCount.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+
+    if (data.isEmpty) {
+      return const Center(
+        child: Text(
+          'No Faculty',
+          style: TextStyle(fontSize: 12),
+        ),
+      );
+    }
+
+    final maxValue = data.map((e) => e.value).reduce((a, b) => a > b ? a : b);
+
+    Color barColorForGender(String gender) {
+      switch (gender) {
+        case 'Male':
+          return const Color(0xFF3B82F6);
+        case 'Female':
+          return const Color(0xFFEC4899);
+        case 'Other':
+          return const Color(0xFFF59E0B);
+        case 'Prefer not to say':
+          return const Color(0xFF94A3B8);
+        default:
+          return Colors.green;
+      }
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: data.map((entry) {
+        final height = maxValue == 0 ? 0.0 : (entry.value / maxValue) * 45;
+
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Text(
+              entry.value.toString(),
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Container(
+              width: 26,
+              height: height,
+              decoration: BoxDecoration(
+                color: barColorForGender(entry.key),
+                borderRadius: BorderRadius.circular(6),
+              ),
+            ),
+            const SizedBox(height: 6),
+            SizedBox(
+              width: 52,
+              child: Text(
+                entry.key,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 10,
+                ),
               ),
             ),
           ],

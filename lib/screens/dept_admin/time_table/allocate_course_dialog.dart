@@ -12,6 +12,11 @@ import 'package:smartcampus/services/faculty_firestore_service.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 
 class AllocateCourseDialog {
+  static const List<String> _breakCourseLabels = [
+    'TEA BREAK',
+    'LUNCH BREAK',
+  ];
+
   static Future<void> show({
     required BuildContext context,
     required TimeTableRecord timeTable,
@@ -35,9 +40,17 @@ class AllocateCourseDialog {
         courseService.getCoursesForOrg(orgId: timeTable.orgId).first,
         facultyService.listFacultyForOrg(timeTable.orgId),
       ]);
-      courses = results[0] as List<CourseModel>;
+      courses = _filterCoursesBySemester(
+        courses: results[0] as List<CourseModel>,
+        semester: timeTable.semester,
+      );
       facultyList = results[1] as List<FacultyModel>;
-      courses.sort((a, b) => a.courseCode.compareTo(b.courseCode));
+      courses.sort(
+        (a, b) => a.courseTitle
+            .toLowerCase()
+            .compareTo(b.courseTitle.toLowerCase()),
+      );
+      courses = _withBreakCoursesAtEnd(courses);
     } catch (_) {
       loadError = 'Failed to load courses.';
     } finally {
@@ -157,8 +170,10 @@ class AllocateCourseDialog {
                             colorOfText: ColorConst.textSecondary,
                           )
                         : courses.isEmpty
-                            ? const smcText(
-                                textToDisplay: 'No courses found for this organisation.',
+                            ? smcText(
+                                textToDisplay: timeTable.semester.trim().isEmpty
+                                    ? 'No courses found for this organisation.'
+                                    : 'No courses found for Semester ${timeTable.semester.trim()}.',
                                 textSize: 14,
                                 colorOfText: ColorConst.textSecondary,
                                 maxLines: 3,
@@ -250,7 +265,11 @@ class AllocateCourseDialog {
                                                 textToDisplay: searchQuery
                                                         .trim()
                                                         .isEmpty
-                                                    ? 'No courses found for this organisation.'
+                                                    ? (timeTable.semester
+                                                            .trim()
+                                                            .isEmpty
+                                                        ? 'No courses found for this organisation.'
+                                                        : 'No courses found for Semester ${timeTable.semester.trim()}.')
                                                     : 'No courses match your search.',
                                                 textSize: 14,
                                                 colorOfText:
@@ -351,23 +370,72 @@ class AllocateCourseDialog {
     );
   }
 
-  static List<CourseModel> _filterCourses({
+  static bool _isBreakCourse(CourseModel course) {
+    final title = course.courseTitle.trim().toUpperCase();
+    final code = course.courseCode.trim().toUpperCase();
+    return _breakCourseLabels.contains(title) ||
+        _breakCourseLabels.contains(code);
+  }
+
+  static CourseModel _buildBreakCourse(String label) {
+    return CourseModel(
+      id: '__${label.toLowerCase().replaceAll(' ', '_')}__',
+      courseTitle: label,
+      courseCode: label,
+      batch: '',
+      semester: '',
+      faculty: '',
+      credits: '',
+      courseType: '',
+      syllabus: '',
+    );
+  }
+
+  static List<CourseModel> _breakCourseOptions() {
+    return _breakCourseLabels.map(_buildBreakCourse).toList();
+  }
+
+  static List<CourseModel> _withBreakCoursesAtEnd(List<CourseModel> courses) {
+    final regularCourses = courses.where((course) => !_isBreakCourse(course)).toList();
+    return [...regularCourses, ..._breakCourseOptions()];
+  }
+
+  static List<CourseModel> _filterCoursesBySemester({
     required List<CourseModel> courses,
-    required String searchQuery,
+    required String semester,
   }) {
-    final searchTerm = searchQuery.trim().toLowerCase();
-    if (searchTerm.isEmpty) {
+    final timeTableSemester = semester.trim();
+    if (timeTableSemester.isEmpty) {
       return courses;
     }
 
     return courses
-        .where(
-          (course) =>
-              '${course.courseCode} ${course.courseTitle} ${course.batch} ${course.semester} ${course.faculty} ${course.courseType}'
-                  .toLowerCase()
-                  .contains(searchTerm),
-        )
+        .where((course) => course.semester.trim() == timeTableSemester)
         .toList();
+  }
+
+  static List<CourseModel> _filterCourses({
+    required List<CourseModel> courses,
+    required String searchQuery,
+  }) {
+    final breakCourses = courses.where(_isBreakCourse).toList();
+    final regularCourses = courses.where((course) => !_isBreakCourse(course)).toList();
+    final searchTerm = searchQuery.trim().toLowerCase();
+
+    bool matchesSearch(CourseModel course) {
+      if (searchTerm.isEmpty) {
+        return true;
+      }
+      return '${course.courseCode} ${course.courseTitle} ${course.batch} ${course.semester} ${course.faculty} ${course.courseType}'
+          .toLowerCase()
+          .contains(searchTerm);
+    }
+
+    final filteredRegular =
+        regularCourses.where(matchesSearch).toList();
+    final filteredBreaks = breakCourses.where(matchesSearch).toList();
+
+    return [...filteredRegular, ...filteredBreaks];
   }
 
   static ({String name, String uid}) _resolveFaculty({

@@ -31,7 +31,12 @@ class _TimeTableDetailPageState extends State<TimeTableDetailPage> {
   static const Color _headerColor = Color(0xFFF4F7FF);
   static const double _dayColumnWidth = 120;
   static const double _timeBlockColumnWidth = 108 * 1.3;
-  static const double _rowHeight = 72;
+  static const double _rowHeight = 88;
+  static const Color _breakCellColor = Color(0xFFE8ECF2);
+  static const Set<String> _breakCourseLabels = {
+    'TEA BREAK',
+    'LUNCH BREAK',
+  };
 
   String get _title =>
       widget.timeTable.displayLabel;
@@ -290,7 +295,7 @@ class _TimeTableDetailPageState extends State<TimeTableDetailPage> {
             children: [
               _dayCell(day),
               ...timeSlots.map(
-                (slot) => _scheduleCell(
+                (slot) => _scheduleTableCell(
                   day: day,
                   timeSlot: slot,
                   block: blockMap['${day.dayUid}|${slot.timeslotUid}'],
@@ -329,7 +334,7 @@ class _TimeTableDetailPageState extends State<TimeTableDetailPage> {
             children: [
               _timeSlotRowCell(slot),
               ...days.map(
-                (day) => _scheduleCell(
+                (day) => _scheduleTableCell(
                   day: day,
                   timeSlot: slot,
                   block: blockMap['${day.dayUid}|${slot.timeslotUid}'],
@@ -446,6 +451,40 @@ class _TimeTableDetailPageState extends State<TimeTableDetailPage> {
     );
   }
 
+  Widget _scheduleTableCell({
+    required TimeTableDay day,
+    required TimeTableTimeSlot timeSlot,
+    TimeBlockRecord? block,
+  }) {
+    return TableCell(
+      verticalAlignment: TableCellVerticalAlignment.fill,
+      child: _scheduleCell(
+        day: day,
+        timeSlot: timeSlot,
+        block: block,
+      ),
+    );
+  }
+
+  String _facultyDisplayLabel(TimeBlockRecord block) {
+    final facultyName = block.facultyName.trim();
+    return facultyName.isEmpty ? 'Unassigned' : facultyName;
+  }
+
+  bool _isBreakAllocation(TimeBlockRecord? block) {
+    if (block == null) {
+      return false;
+    }
+
+    for (final value in [block.courseName, block.courseId]) {
+      final normalized = value.trim().toUpperCase();
+      if (_breakCourseLabels.contains(normalized)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   Widget _scheduleCell({
     required TimeTableDay day,
     required TimeTableTimeSlot timeSlot,
@@ -454,71 +493,119 @@ class _TimeTableDetailPageState extends State<TimeTableDetailPage> {
     final bool hasAllocation =
         block != null &&
         (block.courseId.isNotEmpty || block.courseName.isNotEmpty);
+    final bool isBreakCell = _isBreakAllocation(block);
 
-    return SizedBox(
-      width: _timeBlockColumnWidth,
-      child: Container(
-        constraints: const BoxConstraints(minHeight: _rowHeight),
-        color: const Color(0xFFFCFDFF),
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (hasAllocation) ...[
-              smcText(
-                textToDisplay: block.courseName,
-                textSize: 11,
-                textBoldness: 5,
-                colorOfText: ColorConst.textPrimary,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-              ),
-              if (block.courseId.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                smcText(
-                  textToDisplay: block.courseId,
-                  textSize: 10,
-                  colorOfText: ColorConst.primaryBlue,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                ),
-              ],
-            ] else if (!isEditEnabled)
-            smcText(
-              textToDisplay: '-',
-              textSize: 12,
-              colorOfText: ColorConst.textSecondary,
-            ),
-          if (isEditEnabled) ...[
-            if (hasAllocation) const SizedBox(height: 6),
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: hasAllocation
-                  ? TimeTableSettingsListActions(
-                      onEdit: () =>
-                          _openAllocateCourse(day: day, timeSlot: timeSlot),
-                      onDelete: () => _confirmDeleteAllocation(block),
-                    )
-                  : IconButton(
-                      onPressed: () =>
-                          _openAllocateCourse(day: day, timeSlot: timeSlot),
-                      icon: const Icon(
-                        Icons.edit_outlined,
-                        size: 18,
-                        color: ColorConst.primaryBlue,
-                      ),
-                      padding: EdgeInsets.zero,
-                      constraints:
-                          const BoxConstraints(minWidth: 32, minHeight: 32),
-                      tooltip: 'Allocate course',
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cellHeight = constraints.maxHeight.isFinite &&
+                constraints.maxHeight >= _rowHeight
+            ? constraints.maxHeight
+            : _rowHeight;
+
+        final double bottomInset = isEditEnabled ? 30 : 6;
+
+        return SizedBox(
+          width: _timeBlockColumnWidth,
+          height: cellHeight,
+          child: ColoredBox(
+            color: isBreakCell ? _breakCellColor : const Color(0xFFFCFDFF),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(6, 6, 6, bottomInset),
+                    child: Center(
+                      child: hasAllocation
+                          ? Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                smcText(
+                                  textToDisplay: block.courseName,
+                                  textSize: 11,
+                                  textBoldness: 5,
+                                  colorOfText: ColorConst.textPrimary,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 2,
+                                ),
+                                if (block.courseId.isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  smcText(
+                                    textToDisplay: block.courseId,
+                                    textSize: 10,
+                                    colorOfText: ColorConst.primaryBlue,
+                                    textAlign: TextAlign.center,
+                                    maxLines: 1,
+                                  ),
+                                ],
+                                if (!isBreakCell) ...[
+                                  const SizedBox(height: 2),
+                                  smcText(
+                                    textToDisplay: _facultyDisplayLabel(block),
+                                    textSize: 9,
+                                    textBoldness:
+                                        block.facultyName.trim().isEmpty
+                                            ? 3
+                                            : 5,
+                                    colorOfText:
+                                        block.facultyName.trim().isEmpty
+                                            ? ColorConst.textSecondary
+                                            : ColorConst.textPrimary,
+                                    textAlign: TextAlign.center,
+                                    maxLines: 1,
+                                  ),
+                                ],
+                              ],
+                            )
+                          : isEditEnabled
+                              ? const SizedBox.shrink()
+                              : smcText(
+                                  textToDisplay: '-',
+                                  textSize: 12,
+                                  colorOfText: ColorConst.textSecondary,
+                                ),
                     ),
+                  ),
+                ),
+                if (isEditEnabled)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Center(
+                      child: hasAllocation
+                          ? TimeTableSettingsListActions(
+                              onEdit: () => _openAllocateCourse(
+                                day: day,
+                                timeSlot: timeSlot,
+                              ),
+                              onDelete: () => _confirmDeleteAllocation(block),
+                            )
+                          : IconButton(
+                              onPressed: () => _openAllocateCourse(
+                                day: day,
+                                timeSlot: timeSlot,
+                              ),
+                              icon: const Icon(
+                                Icons.edit_outlined,
+                                size: 18,
+                                color: ColorConst.primaryBlue,
+                              ),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 32,
+                                minHeight: 32,
+                              ),
+                              tooltip: 'Allocate course',
+                            ),
+                    ),
+                  ),
+              ],
             ),
-          ],
-        ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
