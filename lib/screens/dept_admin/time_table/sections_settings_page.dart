@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:smartcampus/const/color_const.dart';
+import 'package:smartcampus/screens/dept_admin/time_table/create_section_dialog.dart';
+import 'package:smartcampus/screens/dept_admin/time_table/time_table_delete_confirm_dialog.dart';
 import 'package:smartcampus/screens/dept_admin/time_table/time_table_settings_firestore_service.dart';
+import 'package:smartcampus/screens/dept_admin/time_table/time_table_settings_list_actions.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 
 class SectionsSettingsPage extends StatelessWidget {
@@ -80,6 +83,56 @@ class SectionsSettingsPage extends StatelessWidget {
                         ),
                       ],
                     ),
+                  ),
+                  TimeTableSettingsListActions(
+                    onEdit: () {
+                      CreateSectionDialog.show(
+                        context: context,
+                        orgId: orgId,
+                        service: settingsService,
+                        sectionToEdit: section,
+                      );
+                    },
+                    onDelete: () async {
+                      final confirmed = await TimeTableDeleteConfirmDialog.show(
+                        context: context,
+                        title: 'Delete Section',
+                        message:
+                            'Are you sure you want to delete "${section.sectionName}"?',
+                      );
+                      if (!confirmed || !context.mounted) {
+                        return;
+                      }
+                      try {
+                        await settingsService.deleteSection(
+                          orgId: orgId,
+                          sectionUid: section.sectionUid,
+                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: smcText(
+                                textToDisplay: 'Section deleted.',
+                                textSize: 14,
+                                colorOfText: Colors.white,
+                              ),
+                            ),
+                          );
+                        }
+                      } catch (_) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: smcText(
+                                textToDisplay: 'Failed to delete section.',
+                                textSize: 14,
+                                colorOfText: Colors.white,
+                              ),
+                            ),
+                          );
+                        }
+                      }
+                    },
                   ),
                 ],
               ),

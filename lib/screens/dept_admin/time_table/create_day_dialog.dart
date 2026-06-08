@@ -11,10 +11,16 @@ class CreateDayDialog {
     required BuildContext context,
     required String orgId,
     required TimeTableSettingsFirestoreService service,
+    TimeTableDay? dayToEdit,
   }) async {
     final formKey = GlobalKey<FormState>();
-    final orderController = TextEditingController();
-    final nameController = TextEditingController();
+    final isEditing = dayToEdit != null;
+    final orderController = TextEditingController(
+      text: isEditing ? '${dayToEdit.dayOrder}' : '',
+    );
+    final nameController = TextEditingController(
+      text: isEditing ? dayToEdit.dayName : '',
+    );
     bool saving = false;
 
     await showDialog<void>(
@@ -29,20 +35,22 @@ class CreateDayDialog {
 
               setDialogState(() => saving = true);
               try {
-                await service.addDay(
-                  orgId: orgId,
-                  day: TimeTableDay(
-                    dayOrder: int.parse(orderController.text.trim()),
-                    dayName: nameController.text.trim(),
-                    dayUid: generateTimeTableUid(),
-                  ),
+                final day = TimeTableDay(
+                  dayOrder: int.parse(orderController.text.trim()),
+                  dayName: nameController.text.trim(),
+                  dayUid: isEditing ? dayToEdit.dayUid : generateTimeTableUid(),
                 );
+                if (isEditing) {
+                  await service.updateDay(orgId: orgId, day: day);
+                } else {
+                  await service.addDay(orgId: orgId, day: day);
+                }
                 if (context.mounted) {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(dialogContext).showSnackBar(
                     SnackBar(
                       content: smcText(
-                        textToDisplay: 'Day created.',
+                        textToDisplay: isEditing ? 'Day updated.' : 'Day created.',
                         textSize: 14,
                         colorOfText: Colors.white,
                       ),
@@ -55,7 +63,8 @@ class CreateDayDialog {
                   ScaffoldMessenger.of(dialogContext).showSnackBar(
                     SnackBar(
                       content: smcText(
-                        textToDisplay: 'Failed to create day.',
+                        textToDisplay:
+                            isEditing ? 'Failed to update day.' : 'Failed to create day.',
                         textSize: 14,
                         colorOfText: Colors.white,
                       ),
@@ -69,8 +78,8 @@ class CreateDayDialog {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),
-              title: const smcText(
-                textToDisplay: 'Create Day',
+              title: smcText(
+                textToDisplay: isEditing ? 'Edit Day' : 'Create Day',
                 textSize: 18,
                 textBoldness: 5,
               ),

@@ -10,9 +10,13 @@ class CreateSectionDialog {
     required BuildContext context,
     required String orgId,
     required TimeTableSettingsFirestoreService service,
+    TimeTableSection? sectionToEdit,
   }) async {
     final formKey = GlobalKey<FormState>();
-    final nameController = TextEditingController();
+    final isEditing = sectionToEdit != null;
+    final nameController = TextEditingController(
+      text: isEditing ? sectionToEdit.sectionName : '',
+    );
     bool saving = false;
 
     await showDialog<void>(
@@ -27,19 +31,24 @@ class CreateSectionDialog {
 
               setDialogState(() => saving = true);
               try {
-                await service.addSection(
-                  orgId: orgId,
-                  section: TimeTableSection(
-                    sectionName: nameController.text.trim(),
-                    sectionUid: generateTimeTableUid(),
-                  ),
+                final section = TimeTableSection(
+                  sectionName: nameController.text.trim(),
+                  sectionUid: isEditing
+                      ? sectionToEdit.sectionUid
+                      : generateTimeTableUid(),
                 );
+                if (isEditing) {
+                  await service.updateSection(orgId: orgId, section: section);
+                } else {
+                  await service.addSection(orgId: orgId, section: section);
+                }
                 if (context.mounted) {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(dialogContext).showSnackBar(
                     SnackBar(
                       content: smcText(
-                        textToDisplay: 'Section created.',
+                        textToDisplay:
+                            isEditing ? 'Section updated.' : 'Section created.',
                         textSize: 14,
                         colorOfText: Colors.white,
                       ),
@@ -52,7 +61,9 @@ class CreateSectionDialog {
                   ScaffoldMessenger.of(dialogContext).showSnackBar(
                     SnackBar(
                       content: smcText(
-                        textToDisplay: 'Failed to create section.',
+                        textToDisplay: isEditing
+                            ? 'Failed to update section.'
+                            : 'Failed to create section.',
                         textSize: 14,
                         colorOfText: Colors.white,
                       ),
@@ -66,8 +77,8 @@ class CreateSectionDialog {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),
-              title: const smcText(
-                textToDisplay: 'Create Section',
+              title: smcText(
+                textToDisplay: isEditing ? 'Edit Section' : 'Create Section',
                 textSize: 18,
                 textBoldness: 5,
               ),

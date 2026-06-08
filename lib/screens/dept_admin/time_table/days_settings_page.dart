@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:smartcampus/const/color_const.dart';
+import 'package:smartcampus/screens/dept_admin/time_table/create_day_dialog.dart';
+import 'package:smartcampus/screens/dept_admin/time_table/time_table_delete_confirm_dialog.dart';
 import 'package:smartcampus/screens/dept_admin/time_table/time_table_settings_firestore_service.dart';
+import 'package:smartcampus/screens/dept_admin/time_table/time_table_settings_list_actions.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 
 class DaysSettingsPage extends StatelessWidget {
@@ -83,6 +86,56 @@ class DaysSettingsPage extends StatelessWidget {
                         ],
                       ],
                     ),
+                  ),
+                  TimeTableSettingsListActions(
+                    onEdit: () {
+                      CreateDayDialog.show(
+                        context: context,
+                        orgId: orgId,
+                        service: settingsService,
+                        dayToEdit: day,
+                      );
+                    },
+                    onDelete: () async {
+                      final confirmed = await TimeTableDeleteConfirmDialog.show(
+                        context: context,
+                        title: 'Delete Day',
+                        message:
+                            'Are you sure you want to delete "${day.dayName}"?',
+                      );
+                      if (!confirmed || !context.mounted) {
+                        return;
+                      }
+                      try {
+                        await settingsService.deleteDay(
+                          orgId: orgId,
+                          dayUid: day.dayUid,
+                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: smcText(
+                                textToDisplay: 'Day deleted.',
+                                textSize: 14,
+                                colorOfText: Colors.white,
+                              ),
+                            ),
+                          );
+                        }
+                      } catch (_) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: smcText(
+                                textToDisplay: 'Failed to delete day.',
+                                textSize: 14,
+                                colorOfText: Colors.white,
+                              ),
+                            ),
+                          );
+                        }
+                      }
+                    },
                   ),
                 ],
               ),

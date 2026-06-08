@@ -13,16 +13,37 @@ class CreateTimeSlotDialog {
     return '$hour:$minute';
   }
 
+  static TimeOfDay? _parseTime(String time) {
+    final parts = time.split(':');
+    if (parts.length != 2) {
+      return null;
+    }
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) {
+      return null;
+    }
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
   static Future<void> show({
     required BuildContext context,
     required String orgId,
     required TimeTableSettingsFirestoreService service,
+    TimeTableTimeSlot? timeSlotToEdit,
   }) async {
     final formKey = GlobalKey<FormState>();
-    final orderController = TextEditingController();
-    final nameController = TextEditingController();
-    TimeOfDay? startTime;
-    TimeOfDay? endTime;
+    final isEditing = timeSlotToEdit != null;
+    final orderController = TextEditingController(
+      text: isEditing ? '${timeSlotToEdit.timeslotOrder}' : '',
+    );
+    final nameController = TextEditingController(
+      text: isEditing ? timeSlotToEdit.timeslotName : '',
+    );
+    TimeOfDay? startTime =
+        isEditing ? _parseTime(timeSlotToEdit.timeslotStartTime) : null;
+    TimeOfDay? endTime =
+        isEditing ? _parseTime(timeSlotToEdit.timeslotEndTime) : null;
     bool saving = false;
 
     await showDialog<void>(
@@ -69,22 +90,34 @@ class CreateTimeSlotDialog {
 
               setDialogState(() => saving = true);
               try {
-                await service.addTimeSlot(
-                  orgId: orgId,
-                  timeSlot: TimeTableTimeSlot(
-                    timeslotOrder: int.parse(orderController.text.trim()),
-                    timeslotName: nameController.text.trim(),
-                    timeslotStartTime: _formatTime(startTime!),
-                    timeslotEndTime: _formatTime(endTime!),
-                    timeslotUid: generateTimeTableUid(),
-                  ),
+                final timeSlot = TimeTableTimeSlot(
+                  timeslotOrder: int.parse(orderController.text.trim()),
+                  timeslotName: nameController.text.trim(),
+                  timeslotStartTime: _formatTime(startTime!),
+                  timeslotEndTime: _formatTime(endTime!),
+                  timeslotUid: isEditing
+                      ? timeSlotToEdit.timeslotUid
+                      : generateTimeTableUid(),
                 );
+                if (isEditing) {
+                  await service.updateTimeSlot(
+                    orgId: orgId,
+                    timeSlot: timeSlot,
+                  );
+                } else {
+                  await service.addTimeSlot(
+                    orgId: orgId,
+                    timeSlot: timeSlot,
+                  );
+                }
                 if (context.mounted) {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(dialogContext).showSnackBar(
                     SnackBar(
                       content: smcText(
-                        textToDisplay: 'Time slot created.',
+                        textToDisplay: isEditing
+                            ? 'Time slot updated.'
+                            : 'Time slot created.',
                         textSize: 14,
                         colorOfText: Colors.white,
                       ),
@@ -97,7 +130,9 @@ class CreateTimeSlotDialog {
                   ScaffoldMessenger.of(dialogContext).showSnackBar(
                     SnackBar(
                       content: smcText(
-                        textToDisplay: 'Failed to create time slot.',
+                        textToDisplay: isEditing
+                            ? 'Failed to update time slot.'
+                            : 'Failed to create time slot.',
                         textSize: 14,
                         colorOfText: Colors.white,
                       ),
@@ -111,8 +146,8 @@ class CreateTimeSlotDialog {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),
-              title: const smcText(
-                textToDisplay: 'Create Time Slot',
+              title: smcText(
+                textToDisplay: isEditing ? 'Edit Time Slot' : 'Create Time Slot',
                 textSize: 18,
                 textBoldness: 5,
               ),

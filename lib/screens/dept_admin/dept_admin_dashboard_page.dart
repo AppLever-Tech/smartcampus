@@ -448,26 +448,56 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       );
     }
   }
-  Future<void> openCreateCourse() async {
+  String _courseTypeDropdownLabel(SettingsItem courseType) {
+    final code = courseType.code?.trim() ?? '';
+    if (code.isNotEmpty) {
+      return '$code - ${courseType.name}';
+    }
+    return courseType.name;
+  }
+
+  Future<void> openCreateCourse({CourseModel? courseToEdit}) async {
+    final bool isEditing = courseToEdit != null;
     final formKey = GlobalKey<FormState>();
     final schemeOptions = schemes.map((s) => s.name).toList();
     const semesterOptions = ['I', 'II', 'III', 'IV'];
-    final courseTypeOptions = courseTypes.map((ct) => ct.name).toList();
 
-    String? selectedScheme;
-    String? selectedSemester;
-    String? selectedCourseType;
-    final courseCodeCtrl = TextEditingController();
-    final courseTitleCtrl = TextEditingController();
-    final creditsCtrl = TextEditingController();
-    final lectureHrsCtrl = TextEditingController(text: '0');
-    final tutorialHrsCtrl = TextEditingController(text: '0');
-    final practicalHrsCtrl = TextEditingController(text: '0');
-    final othersHrsCtrl = TextEditingController(text: '0');
-    final cieMarksCtrl = TextEditingController(text: '0');
-    final seeExamDurationCtrl = TextEditingController();
-    final seeTheoryMarksCtrl = TextEditingController(text: '0');
-    final seeLabMarksCtrl = TextEditingController(text: '0');
+    String? selectedScheme = isEditing ? courseToEdit.batch : null;
+    String? selectedSemester = isEditing ? courseToEdit.semester : null;
+    String? selectedCourseType = isEditing ? courseToEdit.courseType : null;
+    final courseCodeCtrl = TextEditingController(
+      text: isEditing ? courseToEdit.courseCode : '',
+    );
+    final courseTitleCtrl = TextEditingController(
+      text: isEditing ? courseToEdit.courseTitle : '',
+    );
+    final creditsCtrl = TextEditingController(
+      text: isEditing ? courseToEdit.credits : '',
+    );
+    final lectureHrsCtrl = TextEditingController(
+      text: isEditing ? '${courseToEdit.lectureHrs}' : '0',
+    );
+    final tutorialHrsCtrl = TextEditingController(
+      text: isEditing ? '${courseToEdit.tutorialHrs}' : '0',
+    );
+    final practicalHrsCtrl = TextEditingController(
+      text: isEditing ? '${courseToEdit.practicalHrs}' : '0',
+    );
+    final othersHrsCtrl = TextEditingController(
+      text: isEditing ? '${courseToEdit.othersHrs}' : '0',
+    );
+    final cieMarksCtrl = TextEditingController(
+      text: isEditing ? '${courseToEdit.cieMarks}' : '0',
+    );
+    final seeExamDurationCtrl = TextEditingController(
+      text: isEditing ? courseToEdit.seeExamDuration : '',
+    );
+    final seeTheoryMarksCtrl = TextEditingController(
+      text: isEditing ? '${courseToEdit.seeTheoryMarks}' : '0',
+    );
+    final seeLabMarksCtrl = TextEditingController(
+      text: isEditing ? '${courseToEdit.seeLabMarks}' : '0',
+    );
     bool saving = false;
     int currentStep = 0;
     const int totalSteps = 2;
@@ -811,14 +841,16 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                           ),
                           const SizedBox(height: 8),
                           DropdownButtonFormField<String>(
-                            value: selectedCourseType,
+                            value: courseTypes.any((ct) => ct.name == selectedCourseType)
+                                ? selectedCourseType
+                                : null,
                             decoration: fieldDecor('Course Type *'),
-                            items: courseTypeOptions
+                            items: courseTypes
                                 .map(
-                                  (t) => DropdownMenuItem(
-                                    value: t,
+                                  (courseType) => DropdownMenuItem(
+                                    value: courseType.name,
                                     child: Text(
-                                      t,
+                                      _courseTypeDropdownLabel(courseType),
                                       style: const TextStyle(fontSize: 13),
                                     ),
                                   ),
@@ -939,15 +971,16 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                   final bool? confirm = await showDialog<bool>(
                     context: ctx,
                     builder: (dialogCtx) => AlertDialog(
-                      title: const smcText(
-                        textToDisplay: 'Create Course',
+                      title: smcText(
+                        textToDisplay: isEditing ? 'Edit Course' : 'Create Course',
                         textSize: 18,
                         textBoldness: 4,
                         colorOfText: ColorConst.textPrimary,
                       ),
-                      content: const smcText(
-                        textToDisplay:
-                            'Are you sure you want to save this course?',
+                      content: smcText(
+                        textToDisplay: isEditing
+                            ? 'Are you sure you want to update this course?'
+                            : 'Are you sure you want to save this course?',
                         textSize: 14,
                         colorOfText: ColorConst.textSecondary,
                         maxLines: 3,
@@ -979,16 +1012,30 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                   setModalState(() => saving = true);
 
                   final course = CourseModel(
-                    id: '',
-                    orgId: scopedOrgId,
+                    id: isEditing ? courseToEdit.id : '',
+                    orgId: isEditing
+                        ? (courseToEdit.orgId.isNotEmpty
+                            ? courseToEdit.orgId
+                            : scopedOrgId)
+                        : scopedOrgId,
                     batch: selectedScheme ?? '',
                     semester: selectedSemester ?? '',
                     courseTitle: courseTitleCtrl.text.trim(),
-                    faculty: '',
+                    faculty: isEditing ? courseToEdit.faculty : '',
                     courseCode: courseCodeCtrl.text.trim().toUpperCase(),
                     credits: creditsCtrl.text.trim(),
                     courseType: selectedCourseType ?? '',
-                    syllabus: '',
+                    syllabus: isEditing ? courseToEdit.syllabus : '',
+                    syllabusPdfUrl:
+                        isEditing ? courseToEdit.syllabusPdfUrl : '',
+                    syllabusPdfName:
+                        isEditing ? courseToEdit.syllabusPdfName : '',
+                    enrolledStudentIds: isEditing
+                        ? courseToEdit.enrolledStudentIds
+                        : const [],
+                    assignedFacultyIds: isEditing
+                        ? courseToEdit.assignedFacultyIds
+                        : const [],
                     lectureHrs: parseNumericField(lectureHrsCtrl.text),
                     tutorialHrs: parseNumericField(tutorialHrsCtrl.text),
                     practicalHrs: parseNumericField(practicalHrsCtrl.text),
@@ -1001,19 +1048,31 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                   );
 
                   try {
-                    await courseService.addCourse(course);
+                    if (isEditing) {
+                      await courseService.updateCourseFields(
+                        courseToEdit.id,
+                        course.toMap(),
+                      );
+                    } else {
+                      await courseService.addCourse(course);
+                    }
                     if (!ctx.mounted) return;
                     Navigator.pop(ctx);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         backgroundColor: Colors.green.shade600,
-                        content: const smcText(
-                          textToDisplay: 'Course added successfully.',
+                        content: smcText(
+                          textToDisplay: isEditing
+                              ? 'Course updated successfully.'
+                              : 'Course added successfully.',
                           textSize: 14,
                           colorOfText: Colors.white,
                         ),
                       ),
                     );
+                    if (isEditing && selectedCourseDetail?.id == courseToEdit.id) {
+                      _onCourseDetailUpdated(course);
+                    }
                   } catch (e) {
                     if (!ctx.mounted) return;
                     setModalState(() => saving = false);
@@ -1050,8 +1109,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const smcText(
-                                    textToDisplay: 'Create Course',
+                                  smcText(
+                                    textToDisplay: isEditing ? 'Edit Course' : 'Create Course',
                                     textSize: 18,
                                     textBoldness: 5,
                                     colorOfText: ColorConst.textPrimary,
@@ -1115,7 +1174,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                       )
                                     : smcText(
                                         textToDisplay: currentStep == totalSteps - 1
-                                            ? 'Create'
+                                            ? (isEditing ? 'Save' : 'Create')
                                             : 'Next',
                                         textSize: 15,
                                         colorOfText: Colors.white,
@@ -1134,6 +1193,77 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         );
       },
     );
+  }
+
+  Future<void> openEditCourse(CourseModel course) {
+    return openCreateCourse(courseToEdit: course);
+  }
+
+  Future<void> _deleteCourseWithConfirmation(CourseModel course) async {
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const smcText(
+          textToDisplay: 'Delete Course',
+          textSize: 18,
+          textBoldness: 5,
+        ),
+        content: smcText(
+          textToDisplay:
+              'Are you sure you want to delete ${course.courseCode} - ${course.courseTitle}?',
+          textSize: 14,
+          colorOfText: ColorConst.textSecondary,
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) {
+      return;
+    }
+
+    try {
+      await courseService.deleteCourse(course.id);
+      if (_isSelectedCourse(course)) {
+        closeCourseDetail();
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.green.shade600,
+          content: const smcText(
+            textToDisplay: 'Course deleted successfully.',
+            textSize: 14,
+            colorOfText: Colors.white,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red.shade600,
+          content: smcText(
+            textToDisplay: 'Error: $e',
+            textSize: 13,
+            colorOfText: Colors.white,
+            maxLines: 3,
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> onImportCourses() async {
@@ -3288,13 +3418,28 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Expanded(
-              child: smcText(
-                textToDisplay: 'Department Overview',
-                textSize: 16,
-                textBoldness: 5,
-                colorOfText: ColorConst.textPrimary,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const smcText(
+                    textToDisplay: 'Department Overview',
+                    textSize: 16,
+                    textBoldness: 5,
+                    colorOfText: ColorConst.textPrimary,
+                  ),
+                  if (dept != null && dept.deptName.trim().isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    smcText(
+                      textToDisplay: dept.deptName.trim(),
+                      textSize: 14,
+                      textBoldness: 5,
+                      colorOfText: ColorConst.textPrimary,
+                    ),
+                  ],
+                ],
               ),
             ),
             TextButton.icon(
@@ -5568,21 +5713,25 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       ),
                     ),
                     items: [
-                      'All Course Types',
-                      ...courseTypes.map((ct) => ct.name)
-                    ]
-                        .toSet()
-                        .map(
-                          (type) => DropdownMenuItem(
-                            value: type,
-                            child: Text(
-                              type,
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                            ),
+                      const DropdownMenuItem(
+                        value: 'All Course Types',
+                        child: Text(
+                          'All Course Types',
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      ),
+                      ...courseTypes.map(
+                        (courseType) => DropdownMenuItem(
+                          value: courseType.name,
+                          child: Text(
+                            _courseTypeDropdownLabel(courseType),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
                           ),
-                        )
-                        .toList(),
+                        ),
+                      ),
+                    ],
                     onChanged: (v) {
                       if (v != null) {
                         setState(() {
@@ -5680,6 +5829,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                             startIndex: startIndex,
                             selectedCourseId: selectedCourseDetail?.id,
                             onCourseTap: openCourseDetail,
+                            onEditCourse: openEditCourse,
+                            onDeleteCourse: _deleteCourseWithConfirmation,
+                            courseTypes: courseTypes,
                             horizontalScrollController:
                                 courseTableHorizontalScrollController,
                             verticalScrollController:

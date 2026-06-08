@@ -125,7 +125,6 @@ class _DeptTimeTableViewState extends State<DeptTimeTableView> {
       default:
         return ViewTimeTablesPage(
           orgId: widget.orgId,
-          deptId: widget.deptId,
         );
     }
   }

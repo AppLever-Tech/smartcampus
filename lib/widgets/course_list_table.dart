@@ -1,6 +1,8 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:smartcampus/const/color_const.dart';
 import 'package:smartcampus/models/course_model.dart';
+import 'package:smartcampus/services/settings_firestore_service.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 
 class CourseListTable extends StatefulWidget {
@@ -9,7 +11,10 @@ class CourseListTable extends StatefulWidget {
   final int startIndex;
   final String? selectedCourseId;
   final ValueChanged<CourseModel>? onCourseTap;
+  final ValueChanged<CourseModel>? onEditCourse;
+  final ValueChanged<CourseModel>? onDeleteCourse;
   final bool showTotalsRow;
+  final List<SettingsItem> courseTypes;
   final ScrollController? horizontalScrollController;
   final ScrollController? verticalScrollController;
 
@@ -20,7 +25,10 @@ class CourseListTable extends StatefulWidget {
     this.startIndex = 0,
     this.selectedCourseId,
     this.onCourseTap,
+    this.onEditCourse,
+    this.onDeleteCourse,
     this.showTotalsRow = true,
+    this.courseTypes = const [],
     this.horizontalScrollController,
     this.verticalScrollController,
   });
@@ -41,6 +49,22 @@ class _CourseListTableState extends State<CourseListTable> {
       widget.verticalScrollController ??
       (_ownedVerticalController ??= ScrollController());
 
+  String _courseTypeLabel(String courseTypeName) {
+    for (final courseType in widget.courseTypes) {
+      if (courseType.name == courseTypeName) {
+        final code = courseType.code?.trim() ?? '';
+        if (code.isNotEmpty) {
+          return '$code - ${courseType.name}';
+        }
+        return courseType.name;
+      }
+    }
+    return courseTypeName;
+  }
+
+  bool get _showActions =>
+      widget.onEditCourse != null || widget.onDeleteCourse != null;
+
   @override
   void dispose() {
     _ownedHorizontalController?.dispose();
@@ -53,11 +77,11 @@ class _CourseListTableState extends State<CourseListTable> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final double tableWidth = constraints.maxWidth;
-        const List<double> minColumnWidths = [
+        const List<double> baseMinColumnWidths = [
           52,
           76,
           76,
-          108,
+          180,
           128,
           220,
           68,
@@ -70,6 +94,10 @@ class _CourseListTableState extends State<CourseListTable> {
           112,
           108,
           92,
+        ];
+        final List<double> minColumnWidths = [
+          ...baseMinColumnWidths,
+          if (_showActions) 88,
         ];
         final double minTableWidth =
             minColumnWidths.fold(0.0, (a, b) => a + b);
@@ -226,6 +254,51 @@ class _CourseListTableState extends State<CourseListTable> {
             );
           }
 
+          Widget actionsDataCell({
+            required CourseModel course,
+            Color? backgroundColor,
+          }) {
+            return dataCell(
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (widget.onEditCourse != null)
+                    IconButton(
+                      onPressed: () => widget.onEditCourse!(course),
+                      icon: const Icon(
+                        Icons.edit_outlined,
+                        size: 18,
+                        color: ColorConst.primaryBlue,
+                      ),
+                      tooltip: 'Edit',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
+                      ),
+                    ),
+                  if (widget.onDeleteCourse != null)
+                    IconButton(
+                      onPressed: () => widget.onDeleteCourse!(course),
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        size: 18,
+                        color: Colors.red,
+                      ),
+                      tooltip: 'Delete',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
+                      ),
+                    ),
+                ],
+              ),
+              backgroundColor: backgroundColor,
+            );
+          }
+
           const BorderSide headerBorderSide = BorderSide(
             color: borderColor,
             width: 1,
@@ -306,31 +379,49 @@ class _CourseListTableState extends State<CourseListTable> {
                     ),
                   ),
                 ),
+                if (_showActions)
+                  Container(
+                    width: colWidths[16],
+                    height: groupHeaderHeight,
+                    decoration: const BoxDecoration(
+                      color: headerColor,
+                      border: Border(
+                        top: headerBorderSide,
+                        right: headerBorderSide,
+                        bottom: headerBorderSide,
+                      ),
+                    ),
+                  ),
               ],
             );
+          }
+
+          final List<Widget> headerCells = [
+            headerLabel('S.No'),
+            headerLabel('Scheme'),
+            headerLabel('Semester'),
+            headerLabel('Course Type'),
+            headerLabel('Course Code', alignment: Alignment.centerLeft),
+            headerLabel('Course Title', alignment: Alignment.centerLeft),
+            headerLabel('Credits'),
+            headerLabel('Lecture'),
+            headerLabel('Tutorial'),
+            headerLabel('Practical'),
+            headerLabel('Others'),
+            headerLabel('CIE Marks', maxLines: 2),
+            headerLabel('SEE Exam Duration', maxLines: 2),
+            headerLabel('SEE Theory Marks', maxLines: 2),
+            headerLabel('SEE Lab Marks', maxLines: 2),
+            headerLabel('Total Marks', maxLines: 2),
+          ];
+          if (_showActions) {
+            headerCells.add(headerLabel('Actions'));
           }
 
           final List<TableRow> tableRows = [
             TableRow(
               decoration: const BoxDecoration(color: headerColor),
-              children: [
-                headerLabel('S.No'),
-                headerLabel('Scheme'),
-                headerLabel('Semester'),
-                headerLabel('Course Type'),
-                headerLabel('Course Code', alignment: Alignment.centerLeft),
-                headerLabel('Course Title', alignment: Alignment.centerLeft),
-                headerLabel('Credits'),
-                headerLabel('Lecture'),
-                headerLabel('Tutorial'),
-                headerLabel('Practical'),
-                headerLabel('Others'),
-                headerLabel('CIE Marks', maxLines: 2),
-                headerLabel('SEE Exam Duration', maxLines: 2),
-                headerLabel('SEE Theory Marks', maxLines: 2),
-                headerLabel('SEE Lab Marks', maxLines: 2),
-                headerLabel('Total Marks', maxLines: 2),
-              ],
+              children: headerCells,
             ),
             ...widget.courses.asMap().entries.map((entry) {
               final int index = entry.key;
@@ -343,147 +434,157 @@ class _CourseListTableState extends State<CourseListTable> {
                   isSelected ? const Color(0xFFE8F0FE) : Colors.white;
               void handleTap() => widget.onCourseTap?.call(course);
 
-              return TableRow(
-                children: [
-                  dataCell(
-                    smcText(
-                      textToDisplay: '$serialNo',
-                      textSize: 12,
-                      colorOfText: const Color(0xFF2E3954),
-                    ),
-                    backgroundColor: rowColor,
-                    onTap: widget.onCourseTap == null ? null : handleTap,
+              final rowCells = <Widget>[
+                dataCell(
+                  smcText(
+                    textToDisplay: '$serialNo',
+                    textSize: 12,
+                    colorOfText: const Color(0xFF2E3954),
                   ),
-                  dataCell(
-                    smcText(
-                      textToDisplay: cellText(course.batch),
-                      textSize: 12,
-                      colorOfText: const Color(0xFF2E3954),
-                      maxLines: 1,
-                    ),
-                    backgroundColor: rowColor,
-                    onTap: widget.onCourseTap == null ? null : handleTap,
+                  backgroundColor: rowColor,
+                  onTap: widget.onCourseTap == null ? null : handleTap,
+                ),
+                dataCell(
+                  smcText(
+                    textToDisplay: cellText(course.batch),
+                    textSize: 12,
+                    colorOfText: const Color(0xFF2E3954),
+                    maxLines: 1,
                   ),
-                  dataCell(
-                    smcText(
-                      textToDisplay: cellText(course.semester),
-                      textSize: 12,
-                      colorOfText: const Color(0xFF2E3954),
-                      maxLines: 1,
-                    ),
-                    backgroundColor: rowColor,
-                    onTap: widget.onCourseTap == null ? null : handleTap,
+                  backgroundColor: rowColor,
+                  onTap: widget.onCourseTap == null ? null : handleTap,
+                ),
+                dataCell(
+                  smcText(
+                    textToDisplay: cellText(course.semester),
+                    textSize: 12,
+                    colorOfText: const Color(0xFF2E3954),
+                    maxLines: 1,
                   ),
-                  dataCell(
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
+                  backgroundColor: rowColor,
+                  onTap: widget.onCourseTap == null ? null : handleTap,
+                ),
+                dataCell(
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF4FF),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: smcText(
+                      textToDisplay: cellText(
+                        _courseTypeLabel(course.courseType),
                       ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEFF4FF),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: smcText(
-                        textToDisplay: cellText(course.courseType),
-                        textSize: 11,
-                        textBoldness: 3,
-                        colorOfText: const Color(0xFF3558DA),
-                        maxLines: 1,
-                      ),
-                    ),
-                    backgroundColor: rowColor,
-                    onTap: widget.onCourseTap == null ? null : handleTap,
-                  ),
-                  dataCell(
-                    smcText(
-                      textToDisplay: cellText(course.courseCode),
-                      textSize: 12,
-                      textBoldness: 4,
-                      colorOfText: const Color(0xFF2E3954),
-                      maxLines: 1,
-                    ),
-                    alignment: Alignment.centerLeft,
-                    backgroundColor: rowColor,
-                    onTap: widget.onCourseTap == null ? null : handleTap,
-                  ),
-                  dataCell(
-                    smcText(
-                      textToDisplay: cellText(course.courseTitle),
-                      textSize: 12,
-                      colorOfText: const Color(0xFF2E3954),
+                      textSize: 11,
+                      textBoldness: 3,
+                      colorOfText: const Color(0xFF3558DA),
                       maxLines: 2,
                     ),
-                    alignment: Alignment.centerLeft,
-                    backgroundColor: rowColor,
-                    onTap: widget.onCourseTap == null ? null : handleTap,
                   ),
-                  dataCell(
-                    smcText(
-                      textToDisplay: cellText(course.credits),
-                      textSize: 12,
-                      colorOfText: const Color(0xFF2E3954),
-                      maxLines: 1,
-                    ),
-                    backgroundColor: rowColor,
-                    onTap: widget.onCourseTap == null ? null : handleTap,
+                  backgroundColor: rowColor,
+                  onTap: widget.onCourseTap == null ? null : handleTap,
+                ),
+                dataCell(
+                  smcText(
+                    textToDisplay: cellText(course.courseCode),
+                    textSize: 12,
+                    textBoldness: 4,
+                    colorOfText: const Color(0xFF2E3954),
+                    maxLines: 1,
                   ),
-                  numericDataCell(
-                    course.lectureHrs,
-                    boldWhenNonZero: true,
-                    backgroundColor: rowColor,
-                    onTap: widget.onCourseTap == null ? null : handleTap,
+                  alignment: Alignment.centerLeft,
+                  backgroundColor: rowColor,
+                  onTap: widget.onCourseTap == null ? null : handleTap,
+                ),
+                dataCell(
+                  smcText(
+                    textToDisplay: cellText(course.courseTitle),
+                    textSize: 12,
+                    colorOfText: const Color(0xFF2E3954),
+                    maxLines: 2,
                   ),
-                  numericDataCell(
-                    course.tutorialHrs,
-                    boldWhenNonZero: true,
-                    backgroundColor: rowColor,
-                    onTap: widget.onCourseTap == null ? null : handleTap,
+                  alignment: Alignment.centerLeft,
+                  backgroundColor: rowColor,
+                  onTap: widget.onCourseTap == null ? null : handleTap,
+                ),
+                dataCell(
+                  smcText(
+                    textToDisplay: cellText(course.credits),
+                    textSize: 12,
+                    colorOfText: const Color(0xFF2E3954),
+                    maxLines: 1,
                   ),
-                  numericDataCell(
-                    course.practicalHrs,
-                    boldWhenNonZero: true,
+                  backgroundColor: rowColor,
+                  onTap: widget.onCourseTap == null ? null : handleTap,
+                ),
+                numericDataCell(
+                  course.lectureHrs,
+                  boldWhenNonZero: true,
+                  backgroundColor: rowColor,
+                  onTap: widget.onCourseTap == null ? null : handleTap,
+                ),
+                numericDataCell(
+                  course.tutorialHrs,
+                  boldWhenNonZero: true,
+                  backgroundColor: rowColor,
+                  onTap: widget.onCourseTap == null ? null : handleTap,
+                ),
+                numericDataCell(
+                  course.practicalHrs,
+                  boldWhenNonZero: true,
+                  backgroundColor: rowColor,
+                  onTap: widget.onCourseTap == null ? null : handleTap,
+                ),
+                numericDataCell(
+                  course.othersHrs,
+                  boldWhenNonZero: true,
+                  backgroundColor: rowColor,
+                  onTap: widget.onCourseTap == null ? null : handleTap,
+                ),
+                numericDataCell(
+                  course.cieMarks,
+                  boldWhenNonZero: true,
+                  backgroundColor: rowColor,
+                  onTap: widget.onCourseTap == null ? null : handleTap,
+                ),
+                textDataCell(
+                  course.seeExamDuration,
+                  boldWhenNonEmpty: true,
+                  backgroundColor: rowColor,
+                  onTap: widget.onCourseTap == null ? null : handleTap,
+                ),
+                numericDataCell(
+                  course.seeTheoryMarks,
+                  boldWhenNonZero: true,
+                  backgroundColor: rowColor,
+                  onTap: widget.onCourseTap == null ? null : handleTap,
+                ),
+                numericDataCell(
+                  course.seeLabMarks,
+                  boldWhenNonZero: true,
+                  backgroundColor: rowColor,
+                  onTap: widget.onCourseTap == null ? null : handleTap,
+                ),
+                numericDataCell(
+                  course.totalMarks,
+                  boldWhenNonZero: true,
+                  backgroundColor: rowColor,
+                  onTap: widget.onCourseTap == null ? null : handleTap,
+                ),
+              ];
+              if (_showActions) {
+                rowCells.add(
+                  actionsDataCell(
+                    course: course,
                     backgroundColor: rowColor,
-                    onTap: widget.onCourseTap == null ? null : handleTap,
                   ),
-                  numericDataCell(
-                    course.othersHrs,
-                    boldWhenNonZero: true,
-                    backgroundColor: rowColor,
-                    onTap: widget.onCourseTap == null ? null : handleTap,
-                  ),
-                  numericDataCell(
-                    course.cieMarks,
-                    boldWhenNonZero: true,
-                    backgroundColor: rowColor,
-                    onTap: widget.onCourseTap == null ? null : handleTap,
-                  ),
-                  textDataCell(
-                    course.seeExamDuration,
-                    boldWhenNonEmpty: true,
-                    backgroundColor: rowColor,
-                    onTap: widget.onCourseTap == null ? null : handleTap,
-                  ),
-                  numericDataCell(
-                    course.seeTheoryMarks,
-                    boldWhenNonZero: true,
-                    backgroundColor: rowColor,
-                    onTap: widget.onCourseTap == null ? null : handleTap,
-                  ),
-                  numericDataCell(
-                    course.seeLabMarks,
-                    boldWhenNonZero: true,
-                    backgroundColor: rowColor,
-                    onTap: widget.onCourseTap == null ? null : handleTap,
-                  ),
-                  numericDataCell(
-                    course.totalMarks,
-                    boldWhenNonZero: true,
-                    backgroundColor: rowColor,
-                    onTap: widget.onCourseTap == null ? null : handleTap,
-                  ),
-                ],
-              );
+                );
+              }
+
+              return TableRow(children: rowCells);
             }),
             if (widget.showTotalsRow && widget.totalsCourses.isNotEmpty)
               TableRow(
@@ -515,6 +616,7 @@ class _CourseListTableState extends State<CourseListTable> {
                   totalRowNumericCell(totalSeeTheoryMarks),
                   totalRowNumericCell(totalSeeLabMarks),
                   totalRowNumericCell(totalMarksSum),
+                  if (_showActions) totalRowCell(const SizedBox.shrink()),
                 ],
               ),
           ];
