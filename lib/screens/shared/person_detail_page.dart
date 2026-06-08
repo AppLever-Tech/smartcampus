@@ -9,6 +9,12 @@ import 'package:smartcampus/models/course_model.dart';
 import 'package:smartcampus/services/course_firestore_service.dart';
 import 'package:smartcampus/services/student_firestore_service.dart';
 import 'package:smartcampus/widgets/course_list_table.dart';
+import 'package:smartcampus/models/achievement_model.dart';
+import 'package:smartcampus/services/achievement_firestore_service.dart';
+import 'package:smartcampus/models/publication_model.dart';
+import 'package:smartcampus/services/publication_firestore_service.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class PersonDetailPage extends StatefulWidget {
   final dynamic person; // Can be StudentModel or FacultyModel
@@ -52,6 +58,8 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
   String _selectedEnrolledSemester = 'I';
   final CourseFirestoreService _courseService = CourseFirestoreService();
   final StudentFirestoreService _studentService = StudentFirestoreService();
+  final AchievementFirestoreService _achievementService = AchievementFirestoreService();
+  final PublicationFirestoreService _publicationService = PublicationFirestoreService();
   Stream<List<CourseModel>>? _enrolledCoursesStream;
   final Map<String, Map<String, String>> _enrolledCourseMarks = {};
   final Map<String, String> _semesterSgpaBySemester = {};
@@ -74,9 +82,9 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
       ? (widget.person as StudentModel).fullName
       : (widget.person as FacultyModel).fullName;
 
-  String get _id => widget.isStudent
-      ? (widget.person as StudentModel).studentId
-      : (widget.person as FacultyModel).facultyId;
+  String get _uuid => widget.isStudent
+      ? (widget.person as StudentModel).uuid
+      : (widget.person is FacultyModel ? (widget.person as FacultyModel).mobile : ''); // Use mobile for faculty as uuid if not present
 
   String get _idLabel => widget.isStudent ? 'USN' : 'Faculty ID';
 
@@ -224,7 +232,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
               colorOfText: Colors.white,
             ),
             smcText(
-              textToDisplay: '$_idLabel: $_id',
+              textToDisplay: '$_idLabel: ${widget.isStudent ? (widget.person as StudentModel).studentId : (widget.person as FacultyModel).facultyId}',
               textSize: 12,
               colorOfText: Colors.white.withOpacity(0.8),
             ),
@@ -268,7 +276,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
                   maxLines: 1,
                 ),
                 smcText(
-                  textToDisplay: '$_idLabel: $_id',
+                  textToDisplay: '$_idLabel: ${widget.isStudent ? (widget.person as StudentModel).studentId : (widget.person as FacultyModel).facultyId}',
                   textSize: 11,
                   colorOfText: Colors.white.withOpacity(0.85),
                   maxLines: 1,
@@ -1729,23 +1737,1310 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
   }
 
   Widget _buildAchievements() {
-    return const Center(
-      child: smcText(
-        textToDisplay: 'No achievements recorded yet.',
-        textSize: 14,
-        colorOfText: ColorConst.textSecondary,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const smcText(
+                textToDisplay: 'Achievements',
+                textSize: 16,
+                textBoldness: 5,
+                colorOfText: ColorConst.textPrimary,
+              ),
+              ElevatedButton.icon(
+                onPressed: () => _openAchievementDialog(),
+                icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+                label: const smcText(
+                  textToDisplay: 'Add Achievement',
+                  textSize: 13,
+                  textBoldness: 4,
+                  colorOfText: Colors.white,
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ColorConst.primaryBlue,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<List<AchievementModel>>(
+            stream: _achievementService.getAchievementsForStudent(_uuid),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+
+              final achievements = snapshot.data ?? [];
+
+              if (achievements.isEmpty) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(40),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.emoji_events_outlined, size: 64, color: Colors.grey.shade300),
+                        const SizedBox(height: 16),
+                        const smcText(
+                          textToDisplay: "No achievements recorded yet. Click Add Achievement to add the accomplishments.",
+                          textSize: 14,
+                          colorOfText: ColorConst.textSecondary,
+                          textAlign: TextAlign.center,
+                          maxLines: 3,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  return _buildAchievementTable(achievements, constraints.maxWidth);
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAchievementTable(List<AchievementModel> achievements, double tableWidth) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE3EAF8)),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: SingleChildScrollView(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: tableWidth - 40),
+                child: DataTable(
+                  showCheckboxColumn: false,
+                  headingRowHeight: 50,
+                  dataRowMinHeight: 52,
+                  dataRowMaxHeight: 58,
+                  horizontalMargin: 0,
+                  columnSpacing: 0,
+                  dividerThickness: 1,
+                  border: const TableBorder(
+                    horizontalInside: BorderSide(color: Color(0xFFE3EAF8)),
+                    verticalInside: BorderSide(color: Color(0xFFE3EAF8)),
+                    top: BorderSide(color: Color(0xFFE3EAF8)),
+                    bottom: BorderSide(color: Color(0xFFE3EAF8)),
+                    left: BorderSide(color: Color(0xFFE3EAF8)),
+                    right: BorderSide(color: Color(0xFFE3EAF8)),
+                  ),
+                  headingRowColor: MaterialStateProperty.all(const Color(0xFFF4F7FF)),
+                  columns: const [
+                    DataColumn(
+                      label: SizedBox(
+                        width: 50,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'S.No',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 150,
+                        child: Padding(
+                          padding: EdgeInsets.only(left: 12),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: smcText(
+                              textToDisplay: 'Title',
+                              textSize: 12,
+                              textBoldness: 4,
+                              colorOfText: Color(0xFF5C6B8B),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 120,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Category',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 120,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Level',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 100,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Date',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const DataColumn(
+                      label: SizedBox(
+                        width: 100,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Certificate',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: const SizedBox(
+                        width: 120,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Actions',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  rows: achievements.asMap().entries.map((entry) {
+                    final int index = entry.key;
+                    final a = entry.value;
+                    return DataRow(
+                      cells: [
+                        DataCell(
+                          Center(
+                            child: smcText(
+                              textToDisplay: '${index + 1}',
+                              textSize: 12,
+                              colorOfText: const Color(0xFF2E3954),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Padding(
+                            padding: const EdgeInsets.only(left: 12),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: smcText(
+                                textToDisplay: a.title,
+                                textSize: 12,
+                                colorOfText: const Color(0xFF2E3954),
+                                maxLines: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEFF4FF),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: smcText(
+                                textToDisplay: a.category,
+                                textSize: 11,
+                                textBoldness: 3,
+                                colorOfText: const Color(0xFF3558DA),
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Center(
+                            child: smcText(
+                              textToDisplay: a.level,
+                              textSize: 12,
+                              colorOfText: const Color(0xFF2E3954),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Center(
+                            child: smcText(
+                              textToDisplay: _formatDisplayDate(a.date),
+                              textSize: 12,
+                              colorOfText: const Color(0xFF2E3954),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Center(
+                            child: a.certificateUrl != null
+                                ? InkWell(
+                                    onTap: () async {
+                                      if (await canLaunchUrl(Uri.parse(a.certificateUrl!))) {
+                                        await launchUrl(Uri.parse(a.certificateUrl!));
+                                      }
+                                    },
+                                    child: Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: const Color(0xFFE3EAF8)),
+                                        color: const Color(0xFFF8FAFF),
+                                      ),
+                                      clipBehavior: Clip.antiAlias,
+                                      child: a.certificateFileName?.toLowerCase().endsWith('.pdf') ?? false
+                                          ? const Icon(Icons.picture_as_pdf_rounded, color: Colors.redAccent, size: 20)
+                                          : Image.network(
+                                              a.certificateUrl!,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, size: 20, color: Colors.grey),
+                                            ),
+                                    ),
+                                  )
+                                : const smcText(textToDisplay: '—', textSize: 12, colorOfText: Colors.grey),
+                          ),
+                        ),
+                        DataCell(
+                          Center(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.visibility_outlined, size: 18, color: ColorConst.primaryBlue),
+                                  onPressed: () => _viewAchievement(a),
+                                  tooltip: 'View',
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.green),
+                                  onPressed: () => _openAchievementDialog(achievement: a),
+                                  tooltip: 'Edit',
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
+                                  onPressed: () => _deleteAchievement(a),
+                                  tooltip: 'Delete',
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildPublications() {
-    return const Center(
-      child: smcText(
-        textToDisplay: 'No publications recorded yet.',
-        textSize: 14,
-        colorOfText: ColorConst.textSecondary,
+  void _openAchievementDialog({AchievementModel? achievement}) async {
+    final bool isEdit = achievement != null;
+    final formKey = GlobalKey<FormState>();
+    final titleCtrl = TextEditingController(text: achievement?.title ?? '');
+    final orgCtrl = TextEditingController(text: achievement?.organization ?? '');
+    final descCtrl = TextEditingController(text: achievement?.description ?? '');
+    final dateCtrl = TextEditingController(text: achievement?.date ?? '');
+    String? selectedCategory = achievement?.category;
+    String? selectedLevel = achievement?.level;
+    Uint8List? selectedFileBytes;
+    String? selectedFileName = achievement?.certificateFileName;
+    String? existingUrl = achievement?.certificateUrl;
+    bool saving = false;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: formKey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          smcText(
+                            textToDisplay: '${isEdit ? 'Edit' : 'Add'} Achievement',
+                            textSize: 18,
+                            textBoldness: 5,
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded),
+                            onPressed: () => Navigator.pop(ctx),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      TextFormField(
+                        controller: titleCtrl,
+                        decoration: _dialogFieldDecor('Achievement Title *', hint: 'e.g. First Place in Hackathon'),
+                        validator: (v) => v!.isEmpty ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: selectedCategory,
+                              decoration: _dialogFieldDecor('Category *'),
+                              items: ['Academic', 'Technical', 'Sports', 'Cultural', 'Certification', 'Other']
+                                  .map((c) => DropdownMenuItem(value: c, child: Text(c, style: const TextStyle(fontSize: 13))))
+                                  .toList(),
+                              onChanged: (v) => setModalState(() => selectedCategory = v),
+                              validator: (v) => v == null ? 'Required' : null,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: selectedLevel,
+                              decoration: _dialogFieldDecor('Level *'),
+                              items: ['College', 'State', 'National', 'International']
+                                  .map((l) => DropdownMenuItem(value: l, child: Text(l, style: const TextStyle(fontSize: 13))))
+                                  .toList(),
+                              onChanged: (v) => setModalState(() => selectedLevel = v),
+                              validator: (v) => v == null ? 'Required' : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: orgCtrl,
+                              decoration: _dialogFieldDecor('Organization *', hint: 'e.g. VTU, Google'),
+                              validator: (v) => v!.isEmpty ? 'Required' : null,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: TextFormField(
+                              controller: dateCtrl,
+                              readOnly: true,
+                              decoration: _dialogFieldDecor('Achievement Date *').copyWith(
+                                suffixIcon: const Icon(Icons.calendar_today_outlined, size: 16),
+                              ),
+                              onTap: () async {
+                                final picked = await showDatePicker(
+                                  context: ctx,
+                                  initialDate: DateTime.now(),
+                                  firstDate: DateTime(2000),
+                                  lastDate: DateTime.now(),
+                                );
+                                if (picked != null) {
+                                  setModalState(() => dateCtrl.text = picked.toIso8601String().split('T')[0]);
+                                }
+                              },
+                              validator: (v) => v!.isEmpty ? 'Required' : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: descCtrl,
+                        maxLines: 3,
+                        decoration: _dialogFieldDecor('Description', hint: 'Briefly describe the achievement'),
+                      ),
+                      const SizedBox(height: 20),
+                      const smcText(textToDisplay: 'Certificate (PDF/JPG/PNG)', textSize: 13, textBoldness: 4),
+                      const SizedBox(height: 8),
+                      InkWell(
+                        onTap: () async {
+                          final result = await FilePicker.platform.pickFiles(
+                            type: FileType.custom,
+                            allowedExtensions: ['pdf', 'jpg', 'png', 'jpeg'],
+                            withData: true,
+                          );
+                          if (result != null) {
+                            setModalState(() {
+                              selectedFileBytes = result.files.first.bytes;
+                              selectedFileName = result.files.first.name;
+                            });
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(10),
+                            color: const Color(0xFFF9FAFD),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.upload_file_rounded, color: ColorConst.primaryBlue, size: 20),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  selectedFileName ?? 'Tap to upload certificate',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: selectedFileName != null ? ColorConst.textPrimary : Colors.grey,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (selectedFileName != null)
+                                IconButton(
+                                  icon: const Icon(Icons.close, size: 18),
+                                  onPressed: () => setModalState(() {
+                                    selectedFileBytes = null;
+                                    selectedFileName = null;
+                                    existingUrl = null;
+                                  }),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: saving ? null : () async {
+                            if (!formKey.currentState!.validate()) return;
+                            setModalState(() => saving = true);
+                            try {
+                              String? finalUrl = existingUrl;
+                              if (selectedFileBytes != null) {
+                                finalUrl = await _achievementService.uploadCertificate(
+                                  _uuid,
+                                  selectedFileName!,
+                                  selectedFileBytes!,
+                                );
+                              }
+
+                              final a = AchievementModel(
+                                id: achievement?.id,
+                                uuid: _uuid,
+                                title: titleCtrl.text.trim(),
+                                category: selectedCategory!,
+                                level: selectedLevel!,
+                                organization: orgCtrl.text.trim(),
+                                date: dateCtrl.text,
+                                description: descCtrl.text.trim(),
+                                certificateUrl: finalUrl,
+                                certificateFileName: selectedFileName,
+                                createdOn: achievement?.createdOn ?? DateTime.now(),
+                              );
+
+                              if (isEdit) {
+                                await _achievementService.updateAchievement(achievement!.id!, a);
+                              } else {
+                                await _achievementService.addAchievement(a);
+                              }
+                              if (ctx.mounted) Navigator.pop(ctx);
+                            } catch (e) {
+                              setModalState(() => saving = false);
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: ColorConst.primaryBlue,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          child: saving
+                              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : smcText(textToDisplay: isEdit ? 'Save Changes' : 'Add Achievement', textSize: 14, colorOfText: Colors.white, textBoldness: 5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
+  }
+
+  InputDecoration _dialogFieldDecor(String label, {String? hint}) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      labelStyle: const TextStyle(fontSize: 13, color: ColorConst.textSecondary),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: ColorConst.borderSoft)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    );
+  }
+
+  void _viewAchievement(AchievementModel a) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: smcText(textToDisplay: a.title, textSize: 18, textBoldness: 5),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildDetailRow('Category', a.category),
+            _buildDetailRow('Level', a.level),
+            _buildDetailRow('Organization', a.organization),
+            _buildDetailRow('Date', _formatDisplayDate(a.date)),
+            const SizedBox(height: 12),
+            const smcText(textToDisplay: 'Description:', textSize: 13, textBoldness: 4),
+            const SizedBox(height: 4),
+            smcText(textToDisplay: a.description.isEmpty ? '—' : a.description, textSize: 13, maxLines: 5),
+            if (a.certificateUrl != null) ...[
+              const SizedBox(height: 16),
+              const smcText(textToDisplay: 'Certificate Preview:', textSize: 13, textBoldness: 4),
+              const SizedBox(height: 8),
+              if (a.certificateFileName?.toLowerCase().endsWith('.pdf') ?? false)
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    if (await canLaunchUrl(Uri.parse(a.certificateUrl!))) {
+                      await launchUrl(Uri.parse(a.certificateUrl!));
+                    }
+                  },
+                  icon: const Icon(Icons.picture_as_pdf_rounded, size: 18),
+                  label: const Text('Open PDF Certificate'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: ColorConst.primaryBlue,
+                    side: const BorderSide(color: ColorConst.primaryBlue),
+                  ),
+                )
+              else
+                GestureDetector(
+                  onTap: () async {
+                    if (await canLaunchUrl(Uri.parse(a.certificateUrl!))) {
+                      await launchUrl(Uri.parse(a.certificateUrl!));
+                    }
+                  },
+                  child: Container(
+                    height: 200,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: ColorConst.borderSoft),
+                      color: const Color(0xFFF7F9FF),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Stack(
+                      children: [
+                        Image.network(
+                          a.certificateUrl!,
+                          width: double.infinity,
+                          height: double.infinity,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const Center(
+                            child: Icon(Icons.broken_image_outlined, color: ColorConst.textSecondary),
+                          ),
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return const Center(child: CircularProgressIndicator());
+                          },
+                        ),
+                        Positioned(
+                          right: 8,
+                          bottom: 8,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Icon(Icons.open_in_new_rounded, color: Colors.white, size: 16),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  void _deleteAchievement(AchievementModel a) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Achievement'),
+        content: Text('Are you sure you want to delete "${a.title}"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _achievementService.deleteAchievement(a.id!, a.certificateUrl);
+    }
+  }
+
+  Widget _buildPublications() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const smcText(
+                textToDisplay: 'Publications',
+                textSize: 16,
+                textBoldness: 5,
+                colorOfText: ColorConst.textPrimary,
+              ),
+              ElevatedButton.icon(
+                onPressed: () => _openPublicationDialog(),
+                icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+                label: const smcText(
+                  textToDisplay: 'Add Publication',
+                  textSize: 13,
+                  textBoldness: 4,
+                  colorOfText: Colors.white,
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ColorConst.primaryBlue,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<List<PublicationModel>>(
+            stream: _publicationService.getPublicationsForStudent(_uuid),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+
+              final publications = snapshot.data ?? [];
+
+              if (publications.isEmpty) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(40),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.library_books_outlined, size: 64, color: Colors.grey.shade300),
+                        const SizedBox(height: 16),
+                        const smcText(
+                          textToDisplay: "No publications recorded yet. Click Add Publication to add the research work.",
+                          textSize: 14,
+                          colorOfText: ColorConst.textSecondary,
+                          textAlign: TextAlign.center,
+                          maxLines: 3,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  return _buildPublicationTable(publications, constraints.maxWidth);
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPublicationTable(List<PublicationModel> publications, double tableWidth) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE3EAF8)),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: SingleChildScrollView(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: tableWidth - 40),
+                child: DataTable(
+                  showCheckboxColumn: false,
+                  headingRowHeight: 50,
+                  dataRowMinHeight: 52,
+                  dataRowMaxHeight: 58,
+                  horizontalMargin: 0,
+                  columnSpacing: 0,
+                  dividerThickness: 1,
+                  border: const TableBorder(
+                    horizontalInside: BorderSide(color: Color(0xFFE3EAF8)),
+                    verticalInside: BorderSide(color: Color(0xFFE3EAF8)),
+                    top: BorderSide(color: Color(0xFFE3EAF8)),
+                    bottom: BorderSide(color: Color(0xFFE3EAF8)),
+                    left: BorderSide(color: Color(0xFFE3EAF8)),
+                    right: BorderSide(color: Color(0xFFE3EAF8)),
+                  ),
+                  headingRowColor: MaterialStateProperty.all(const Color(0xFFF4F7FF)),
+                  columns: const [
+                    DataColumn(
+                      label: SizedBox(
+                        width: 50,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'S.No',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 180,
+                        child: Padding(
+                          padding: EdgeInsets.only(left: 12),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: smcText(
+                              textToDisplay: 'Title',
+                              textSize: 12,
+                              textBoldness: 4,
+                              colorOfText: Color(0xFF5C6B8B),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 120,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Type',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 120,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Publisher',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 100,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Date',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 80,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'PDF',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 100,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Actions',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  rows: publications.asMap().entries.map((entry) {
+                    final int index = entry.key;
+                    final p = entry.value;
+                    return DataRow(
+                      cells: [
+                        DataCell(
+                          Center(
+                            child: smcText(
+                              textToDisplay: '${index + 1}',
+                              textSize: 12,
+                              colorOfText: const Color(0xFF2E3954),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Padding(
+                            padding: const EdgeInsets.only(left: 12),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: smcText(
+                                textToDisplay: p.title,
+                                textSize: 12,
+                                colorOfText: const Color(0xFF2E3954),
+                                maxLines: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF0FDF4),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: smcText(
+                                textToDisplay: p.type,
+                                textSize: 11,
+                                textBoldness: 3,
+                                colorOfText: const Color(0xFF166534),
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Center(
+                            child: smcText(
+                              textToDisplay: p.publisher,
+                              textSize: 12,
+                              colorOfText: const Color(0xFF2E3954),
+                              maxLines: 1,
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Center(
+                            child: smcText(
+                              textToDisplay: _formatDisplayDate(p.date),
+                              textSize: 12,
+                              colorOfText: const Color(0xFF2E3954),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Center(
+                            child: p.pdfUrl != null
+                                ? IconButton(
+                                    icon: const Icon(Icons.picture_as_pdf_rounded, color: Colors.redAccent, size: 20),
+                                    onPressed: () async {
+                                      if (await canLaunchUrl(Uri.parse(p.pdfUrl!))) {
+                                        await launchUrl(Uri.parse(p.pdfUrl!));
+                                      }
+                                    },
+                                    tooltip: 'View PDF',
+                                  )
+                                : const smcText(textToDisplay: '—', textSize: 12, colorOfText: Colors.grey),
+                          ),
+                        ),
+                        DataCell(
+                          Center(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.visibility_outlined, size: 18, color: ColorConst.primaryBlue),
+                                  onPressed: () => _viewPublication(p),
+                                  tooltip: 'View',
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.green),
+                                  onPressed: () => _openPublicationDialog(publication: p),
+                                  tooltip: 'Edit',
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
+                                  onPressed: () => _deletePublication(p),
+                                  tooltip: 'Delete',
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openPublicationDialog({PublicationModel? publication}) async {
+    final bool isEdit = publication != null;
+    final formKey = GlobalKey<FormState>();
+    final titleCtrl = TextEditingController(text: publication?.title ?? '');
+    final authorsCtrl = TextEditingController(text: publication?.authors ?? '');
+    final publisherCtrl = TextEditingController(text: publication?.publisher ?? '');
+    final dateCtrl = TextEditingController(text: publication?.date ?? '');
+    final abstractCtrl = TextEditingController(text: publication?.abstract ?? '');
+    String? selectedType = publication?.type;
+    Uint8List? selectedFileBytes;
+    String? selectedFileName = publication?.pdfFileName;
+    String? existingUrl = publication?.pdfUrl;
+    bool saving = false;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: formKey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          smcText(
+                            textToDisplay: '${isEdit ? 'Edit' : 'Add'} Publication',
+                            textSize: 18,
+                            textBoldness: 5,
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded),
+                            onPressed: () => Navigator.pop(ctx),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      TextFormField(
+                        controller: titleCtrl,
+                        decoration: _dialogFieldDecor('Publication Title *', hint: 'e.g. AI in Modern Education'),
+                        validator: (v) => v!.isEmpty ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: selectedType,
+                              decoration: _dialogFieldDecor('Publication Type *'),
+                              items: ['Journal', 'Conference', 'Research Paper', 'Book Chapter', 'Patent']
+                                  .map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13))))
+                                  .toList(),
+                              onChanged: (v) => setModalState(() => selectedType = v),
+                              validator: (v) => v == null ? 'Required' : null,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: TextFormField(
+                              controller: dateCtrl,
+                              readOnly: true,
+                              decoration: _dialogFieldDecor('Publication Date *').copyWith(
+                                suffixIcon: const Icon(Icons.calendar_today_outlined, size: 16),
+                              ),
+                              onTap: () async {
+                                final picked = await showDatePicker(
+                                  context: ctx,
+                                  initialDate: DateTime.now(),
+                                  firstDate: DateTime(2000),
+                                  lastDate: DateTime.now(),
+                                );
+                                if (picked != null) {
+                                  setModalState(() => dateCtrl.text = picked.toIso8601String().split('T')[0]);
+                                }
+                              },
+                              validator: (v) => v!.isEmpty ? 'Required' : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: authorsCtrl,
+                        decoration: _dialogFieldDecor('Authors *', hint: 'e.g. John Doe, Jane Smith'),
+                        validator: (v) => v!.isEmpty ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: publisherCtrl,
+                        decoration: _dialogFieldDecor('Publisher *', hint: 'e.g. IEEE, Springer'),
+                        validator: (v) => v!.isEmpty ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: abstractCtrl,
+                        maxLines: 4,
+                        decoration: _dialogFieldDecor('Abstract', hint: 'Brief summary of the publication'),
+                      ),
+                      const SizedBox(height: 20),
+                      const smcText(textToDisplay: 'Full Paper (PDF Only)', textSize: 13, textBoldness: 4),
+                      const SizedBox(height: 8),
+                      InkWell(
+                        onTap: () async {
+                          final result = await FilePicker.platform.pickFiles(
+                            type: FileType.custom,
+                            allowedExtensions: ['pdf'],
+                            withData: true,
+                          );
+                          if (result != null) {
+                            setModalState(() {
+                              selectedFileBytes = result.files.first.bytes;
+                              selectedFileName = result.files.first.name;
+                            });
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(10),
+                            color: const Color(0xFFF9FAFD),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.picture_as_pdf_rounded, color: Colors.redAccent, size: 20),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  selectedFileName ?? 'Tap to upload PDF',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: selectedFileName != null ? ColorConst.textPrimary : Colors.grey,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (selectedFileName != null)
+                                IconButton(
+                                  icon: const Icon(Icons.close, size: 18),
+                                  onPressed: () => setModalState(() {
+                                    selectedFileBytes = null;
+                                    selectedFileName = null;
+                                    existingUrl = null;
+                                  }),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: saving ? null : () async {
+                            if (!formKey.currentState!.validate()) return;
+                            setModalState(() => saving = true);
+                            try {
+                              String? finalUrl = existingUrl;
+                              if (selectedFileBytes != null) {
+                                finalUrl = await _publicationService.uploadPublicationPdf(
+                                  _uuid,
+                                  selectedFileName!,
+                                  selectedFileBytes!,
+                                );
+                              }
+
+                              final p = PublicationModel(
+                                id: publication?.id,
+                                uuid: _uuid,
+                                title: titleCtrl.text.trim(),
+                                type: selectedType!,
+                                authors: authorsCtrl.text.trim(),
+                                publisher: publisherCtrl.text.trim(),
+                                date: dateCtrl.text,
+                                abstract: abstractCtrl.text.trim(),
+                                pdfUrl: finalUrl,
+                                pdfFileName: selectedFileName,
+                                createdOn: publication?.createdOn ?? DateTime.now(),
+                              );
+
+                              if (isEdit) {
+                                await _publicationService.updatePublication(publication!.id!, p);
+                              } else {
+                                await _publicationService.addPublication(p);
+                              }
+                              if (ctx.mounted) Navigator.pop(ctx);
+                            } catch (e) {
+                              setModalState(() => saving = false);
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: ColorConst.primaryBlue,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          child: saving
+                              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : smcText(textToDisplay: isEdit ? 'Save Changes' : 'Add Publication', textSize: 14, colorOfText: Colors.white, textBoldness: 5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _viewPublication(PublicationModel p) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: smcText(textToDisplay: p.title, textSize: 18, textBoldness: 5),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildDetailRow('Type', p.type),
+              _buildDetailRow('Authors', p.authors),
+              _buildDetailRow('Publisher', p.publisher),
+              _buildDetailRow('Date', _formatDisplayDate(p.date)),
+              const SizedBox(height: 12),
+              const smcText(textToDisplay: 'Abstract:', textSize: 13, textBoldness: 4),
+              const SizedBox(height: 4),
+              smcText(textToDisplay: p.abstract.isEmpty ? '—' : p.abstract, textSize: 13, maxLines: 10),
+              if (p.pdfUrl != null) ...[
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    if (await canLaunchUrl(Uri.parse(p.pdfUrl!))) {
+                      await launchUrl(Uri.parse(p.pdfUrl!));
+                    }
+                  },
+                  icon: const Icon(Icons.picture_as_pdf_rounded, size: 18),
+                  label: const Text('View Full Paper'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: ColorConst.primaryBlue,
+                    side: const BorderSide(color: ColorConst.primaryBlue),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  void _deletePublication(PublicationModel p) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Publication'),
+        content: Text('Are you sure you want to delete "${p.title}"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _publicationService.deletePublication(p.id!, p.pdfUrl);
+    }
   }
 }
 

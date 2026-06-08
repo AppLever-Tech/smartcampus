@@ -154,21 +154,21 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   void initState() {
     super.initState();
     refresh();
-    settingsService.getItems('smccourseType').listen((items) {
+    settingsService.getItems('smcCourseType').listen((items) {
       if (!mounted) return;
       setState(() => courseTypes = items);
       
       // Ensure default course types exist
       _ensureDefaultCourseTypes(items);
     });
-    settingsService.getItems('smcbatchmaster').listen((items) {
+    settingsService.getItems('smcBatchMaster').listen((items) {
       if (!mounted) return;
       setState(() => batches = items);
       
       // Ensure default batches exist
       _ensureDefaultBatches(items);
     });
-    settingsService.getItems('smcschememaster').listen((items) {
+    settingsService.getItems('smcSchemaMaster').listen((items) {
       if (!mounted) return;
       setState(() => schemes = items);
       
@@ -4156,17 +4156,17 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
     switch (selectedSettingsFilter) {
       case 0:
-        collection = 'smccourseType';
+        collection = 'smcCourseType';
         items = courseTypes;
         title = 'Course Type';
         break;
       case 1:
-        collection = 'smcbatchmaster';
+        collection = 'smcBatchMaster';
         items = batches;
         title = 'Batch';
         break;
       case 2:
-        collection = 'smcschememaster';
+        collection = 'smcSchemaMaster';
         items = schemes;
         title = 'Scheme';
         break;
@@ -4446,7 +4446,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     );
   }
 
-  Future<void> _ensureDefaultCourseTypes(List<SettingsItem> currentItems) async {
+  void _ensureDefaultCourseTypes(List<SettingsItem> currentItems) async {
       final defaults = [
         {'code': 'PCC', 'name': 'Professional Core Course'},
         {'code': 'IPCC', 'name': 'Integrated Professional Core Course'},
@@ -4469,7 +4469,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       
       if (duplicatesToRemove.isNotEmpty) {
         for (var id in duplicatesToRemove) {
-          await settingsService.deleteItem('smccourseType', id);
+          await settingsService.deleteItem('smcCourseType', id);
         }
         return; // Exit and let the next stream event handle the rest
       }
@@ -4478,7 +4478,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       for (var def in defaults) {
         final exists = currentItems.any((item) => item.code == def['code']);
         if (!exists) {
-          await settingsService.addItem('smccourseType', name: def['name']!, code: def['code']);
+          await settingsService.addItem('smcCourseType', name: def['name']!, code: def['code']);
         }
       }
     }
@@ -4504,7 +4504,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       
       if (duplicatesToRemove.isNotEmpty) {
         for (var id in duplicatesToRemove) {
-          await settingsService.deleteItem('smcbatchmaster', id);
+          await settingsService.deleteItem('smcBatchMaster', id);
         }
         return; // Exit and let the next stream event handle the rest
       }
@@ -4513,7 +4513,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       for (var def in defaults) {
         final exists = currentItems.any((item) => item.name == def['name']);
         if (!exists) {
-          await settingsService.addItem('smcbatchmaster', name: def['name']!, description: def['description']);
+          await settingsService.addItem('smcBatchMaster', name: def['name']!, description: def['description']);
         }
       }
     }
@@ -4539,7 +4539,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       
       if (duplicatesToRemove.isNotEmpty) {
         for (var id in duplicatesToRemove) {
-          await settingsService.deleteItem('smcschememaster', id);
+          await settingsService.deleteItem('smcSchemaMaster', id);
         }
         return; 
       }
@@ -4548,7 +4548,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       for (var def in defaults) {
         final exists = currentItems.any((item) => item.name == def['name']);
         if (!exists) {
-          await settingsService.addItem('smcschememaster', name: def['name']!, description: def['description']);
+          await settingsService.addItem('smcSchemaMaster', name: def['name']!, description: def['description']);
         }
       }
     }
