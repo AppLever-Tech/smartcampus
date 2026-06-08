@@ -4108,19 +4108,20 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     return GestureDetector(
       onTap: () => setState(() => selectedSettingsFilter = index),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? ColorConst.primaryBlue : Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          color: isSelected ? const Color(0xFF3558DA).withOpacity(0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(99),
           border: Border.all(
-            color: isSelected ? ColorConst.primaryBlue : const Color(0xFFE3EAF8),
+            color: isSelected ? const Color(0xFF3558DA) : const Color(0xFFE2E8F5),
+            width: 1,
           ),
         ),
         child: smcText(
           textToDisplay: label,
-          textSize: 14,
+          textSize: 13,
           textBoldness: isSelected ? 5 : 4,
-          colorOfText: isSelected ? Colors.white : ColorConst.textSecondary,
+          colorOfText: isSelected ? const Color(0xFF3558DA) : const Color(0xFF64748B),
         ),
       ),
     );
