@@ -45,6 +45,27 @@ class TimeBlockFirestoreService {
     await _firestore.collection(collection).doc(blockId).delete();
   }
 
+  Stream<List<TimeBlockRecord>> watchTimeBlocksForOrg({
+    required String orgId,
+  }) {
+    final orgNorm = OrgField.normalize(orgId);
+    if (orgNorm.isEmpty) {
+      return Stream.value(const <TimeBlockRecord>[]);
+    }
+
+    return _firestore
+        .collection(collection)
+        .where(OrgField.orgIdKey, isEqualTo: orgNorm)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs
+          .map(
+            (doc) => TimeBlockRecord.fromFirestore(doc.id, doc.data()),
+          )
+          .toList();
+    });
+  }
+
   Stream<List<TimeBlockRecord>> watchTimeBlocks({
     required String orgId,
     required String timeTableUid,

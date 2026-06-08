@@ -9,8 +9,14 @@ import 'package:smartcampus/data/org_field.dart';
 import 'package:smartcampus/data/user_org_scope.dart';
 import 'package:smartcampus/models/course_model.dart';
 import 'package:smartcampus/screens/auth/landing_page.dart';
+import 'package:smartcampus/screens/dept_admin/time_table/models/time_block_record.dart';
+import 'package:smartcampus/screens/dept_admin/time_table/models/time_table_day.dart';
+import 'package:smartcampus/screens/dept_admin/time_table/time_block_firestore_service.dart';
+import 'package:smartcampus/screens/dept_admin/time_table/time_table_settings_firestore_service.dart';
+import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_classes_page.dart';
 import 'package:smartcampus/screens/faculty/faculty_dashboard_mobile_layout.dart';
 import 'package:smartcampus/screens/faculty/faculty_profile_not_found_page.dart';
+import 'package:smartcampus/screens/faculty/faculty_upcoming_classes.dart';
 import 'package:smartcampus/screens/shared/person_detail_page.dart';
 import 'package:smartcampus/services/course_firestore_service.dart';
 import 'package:smartcampus/services/faculty_firestore_service.dart';
@@ -45,9 +51,14 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
   final CourseFirestoreService courseService = CourseFirestoreService();
   final UserMasterFirestoreService userMasterService =
       UserMasterFirestoreService();
+  final TimeBlockFirestoreService timeBlockService = TimeBlockFirestoreService();
+  final TimeTableSettingsFirestoreService timeTableSettingsService =
+      TimeTableSettingsFirestoreService();
 
   UserOrgScope? _orgScope;
   StreamSubscription<List<CourseModel>>? _courseSubscription;
+  StreamSubscription<List<TimeBlockRecord>>? _timeBlockSubscription;
+  StreamSubscription<Map<String, dynamic>?>? _timeTableSettingsSubscription;
 
   String get scopedOrgId =>
       _orgScope?.orgId ?? OrgField.normalize(widget.orgId);
@@ -61,8 +72,9 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
 
   FacultyModel? facultyProfile;
   List<CourseModel> allCourses = [];
+  List<TimeBlockRecord> allTimeBlocks = [];
+  List<TimeTableDay> timetableDays = const [];
   List<DepartmentMasterItem> _departments = const [];
-  String organizationDisplayName = '';
   String departmentDisplayName = '';
 
   List<CourseModel> get assignedCourses {
@@ -72,6 +84,19 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
     return CourseFirestoreService.filterCoursesForFaculty(
       allCourses,
       facultyProfile!,
+    );
+  }
+
+  int get upcomingClassesCount {
+    final faculty = facultyProfile;
+    if (faculty == null) {
+      return 0;
+    }
+    return FacultyUpcomingClasses.countForNextFiveDays(
+      timeBlocks: allTimeBlocks,
+      assignedCourses: assignedCourses,
+      faculty: faculty,
+      timetableDays: timetableDays,
     );
   }
 
@@ -153,6 +178,40 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
     });
   }
 
+  void _bindScopedTimeBlockListener() {
+    _timeBlockSubscription?.cancel();
+    final scope = _orgScope;
+    if (scope == null || !scope.hasOrg) {
+      return;
+    }
+    _timeBlockSubscription = timeBlockService
+        .watchTimeBlocksForOrg(orgId: scope.orgId)
+        .listen((blocks) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => allTimeBlocks = blocks);
+    });
+  }
+
+  void _bindScopedTimeTableSettingsListener() {
+    _timeTableSettingsSubscription?.cancel();
+    final scope = _orgScope;
+    if (scope == null || !scope.hasOrg) {
+      return;
+    }
+    _timeTableSettingsSubscription = timeTableSettingsService
+        .watchSettings(orgId: scope.orgId)
+        .listen((settings) {
+      if (!mounted) {
+        return;
+      }
+      setState(
+        () => timetableDays = timeTableSettingsService.parseDays(settings),
+      );
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -162,6 +221,8 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
   @override
   void dispose() {
     _courseSubscription?.cancel();
+    _timeBlockSubscription?.cancel();
+    _timeTableSettingsSubscription?.cancel();
     super.dispose();
   }
 
@@ -189,9 +250,9 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
       final scope = UserOrgScope(orgId: orgId, deptId: '');
       _orgScope = scope;
       _bindScopedCourseListener();
+      _bindScopedTimeBlockListener();
+      _bindScopedTimeTableSettingsListener();
 
-      final org =
-          await roleService.authService.getOrganizationById(scope.orgId);
       final departments = await roleService.loadDepartmentsForOrg(scope.orgId);
       if (!mounted) {
         return;
@@ -199,9 +260,6 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
       setState(() {
         facultyProfile = resolvedFaculty;
         _departments = departments;
-        organizationDisplayName = (org?.orgName ?? '').trim().isEmpty
-            ? scope.orgId
-            : org!.orgName;
         departmentDisplayName = '';
         _syncDepartmentDisplayName();
         loading = false;
@@ -294,6 +352,7 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
         faculty: faculty,
         displayName: widget.displayName,
         dashboardContent: _buildDashboardView(),
+        classesContent: _buildClassesView(),
         profileContent: _buildProfileView(),
       );
     }
@@ -317,14 +376,26 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
   }
 
   Widget _buildSelectedView() {
-    if (selectedMenuIndex == 1) {
-      return _buildProfileView();
+    switch (selectedMenuIndex) {
+      case 1:
+        return _buildProfileView();
+      case 2:
+        return _buildClassesView();
+      default:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildDashboardView(),
+          ],
+        );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildDashboardView(),
-      ],
+  }
+
+  Widget _buildClassesView() {
+    return FacultyClassesPage(
+      orgId: scopedOrgId,
+      faculty: facultyProfile!,
+      assignedCourses: assignedCourses,
     );
   }
 
@@ -423,6 +494,16 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
                 ),
               ],
             ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: _buildStatCard(
+                title: 'Upcoming\nClasses',
+                count: upcomingClassesCount.toString(),
+                icon: Icons.calendar_today_rounded,
+                color: Colors.orange,
+              ),
+            ),
           ] else
             Row(
               children: [
@@ -446,11 +527,10 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
                 const SizedBox(width: 16),
                 Expanded(
                   child: _buildStatCard(
-                    title: 'Organization',
-                    count: organizationDisplayName,
-                    icon: Icons.apartment_rounded,
+                    title: 'Upcoming\nClasses',
+                    count: upcomingClassesCount.toString(),
+                    icon: Icons.calendar_today_rounded,
                     color: Colors.orange,
-                    compactValue: true,
                   ),
                 ),
               ],
@@ -647,6 +727,13 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
               icon: Icons.person_outline_rounded,
               isSelected: selectedMenuIndex == 1,
               onTap: () => setState(() => selectedMenuIndex = 1),
+            ),
+            const SizedBox(height: 8),
+            _menuTile(
+              title: 'Classes',
+              icon: Icons.class_outlined,
+              isSelected: selectedMenuIndex == 2,
+              onTap: () => setState(() => selectedMenuIndex = 2),
             ),
             const Spacer(),
             _menuTile(

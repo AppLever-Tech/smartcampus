@@ -11,6 +11,7 @@ class FacultyDashboardMobileLayout extends StatelessWidget {
   final FacultyModel faculty;
   final String displayName;
   final Widget dashboardContent;
+  final Widget classesContent;
   final Widget profileContent;
 
   const FacultyDashboardMobileLayout({
@@ -21,6 +22,7 @@ class FacultyDashboardMobileLayout extends StatelessWidget {
     required this.faculty,
     required this.displayName,
     required this.dashboardContent,
+    required this.classesContent,
     required this.profileContent,
   });
 
@@ -88,6 +90,10 @@ class FacultyDashboardMobileLayout extends StatelessWidget {
             child: SizedBox.expand(child: dashboardContent),
           ),
           SizedBox.expand(child: profileContent),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: SizedBox.expand(child: classesContent),
+          ),
         ],
       ),
       bottomNavigationBar: Container(
@@ -125,6 +131,11 @@ class FacultyDashboardMobileLayout extends StatelessWidget {
                 icon: Icon(Icons.person_outline_rounded),
                 activeIcon: Icon(Icons.person_rounded),
                 label: 'Profile',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.class_outlined),
+                activeIcon: Icon(Icons.class_rounded),
+                label: 'Classes',
               ),
             ],
           ),

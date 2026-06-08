@@ -9,14 +9,27 @@ import 'package:smartcampus/screens/dept_admin/time_table/time_block_firestore_s
 import 'package:smartcampus/screens/dept_admin/time_table/time_table_delete_confirm_dialog.dart';
 import 'package:smartcampus/screens/dept_admin/time_table/time_table_settings_firestore_service.dart';
 import 'package:smartcampus/screens/dept_admin/time_table/time_table_settings_list_actions.dart';
+import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_class_resolver.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 
 class TimeTableDetailPage extends StatefulWidget {
   final TimeTableRecord timeTable;
+  final bool readOnly;
+  final bool embedded;
+  final bool facultyView;
+  final Set<String> facultyKeys;
+  final Set<String> facultyCourseKeys;
+  final VoidCallback? onBack;
 
   const TimeTableDetailPage({
     super.key,
     required this.timeTable,
+    this.readOnly = false,
+    this.embedded = false,
+    this.facultyView = false,
+    this.facultyKeys = const {},
+    this.facultyCourseKeys = const {},
+    this.onBack,
   });
 
   @override
@@ -26,6 +39,7 @@ class TimeTableDetailPage extends StatefulWidget {
 class _TimeTableDetailPageState extends State<TimeTableDetailPage> {
   bool isTransposed = false;
   bool isEditEnabled = false;
+  bool showOnlyMyClasses = false;
 
   static const Color _borderColor = Color(0xFFE3EAF8);
   static const Color _headerColor = Color(0xFFF4F7FF);
@@ -33,6 +47,7 @@ class _TimeTableDetailPageState extends State<TimeTableDetailPage> {
   static const double _timeBlockColumnWidth = 108 * 1.3;
   static const double _rowHeight = 88;
   static const Color _breakCellColor = Color(0xFFE8ECF2);
+  static const Color _facultyCellColor = Color(0xFFD4EDDA);
   static const Set<String> _breakCourseLabels = {
     'TEA BREAK',
     'LUNCH BREAK',
@@ -126,6 +141,22 @@ class _TimeTableDetailPageState extends State<TimeTableDetailPage> {
   }
 
   Widget _buildToolbar() {
+    if (widget.facultyView) {
+      return const SizedBox.shrink();
+    }
+
+    if (widget.readOnly) {
+      return Row(
+        children: [
+          _buildToolbarButton(
+            onPressed: _toggleTranspose,
+            icon: Icons.swap_horiz_rounded,
+            label: 'Transpose',
+          ),
+        ],
+      );
+    }
+
     return Row(
       children: [
         _buildToolbarButton(
@@ -143,10 +174,162 @@ class _TimeTableDetailPageState extends State<TimeTableDetailPage> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildShowOnlyMyClassesControl() {
+    return InkWell(
+      onTap: () => setState(() => showOnlyMyClasses = !showOnlyMyClasses),
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: Checkbox(
+                value: showOnlyMyClasses,
+                onChanged: (value) {
+                  setState(() => showOnlyMyClasses = value ?? false);
+                },
+                activeColor: ColorConst.primaryBlue,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const smcText(
+              textToDisplay: 'Show only my classes',
+              textSize: 12,
+              colorOfText: ColorConst.textPrimary,
+              maxLines: 2,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmbeddedHeader() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        IconButton(
+          onPressed: widget.onBack,
+          icon: const Icon(Icons.arrow_back_rounded),
+          color: ColorConst.textPrimary,
+          tooltip: 'Back to time tables',
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const smcText(
+                textToDisplay: 'Time Table',
+                textSize: 16,
+                textBoldness: 5,
+                colorOfText: ColorConst.textPrimary,
+              ),
+              smcText(
+                textToDisplay: _title,
+                textSize: 13,
+                colorOfText: ColorConst.textSecondary,
+                maxLines: 2,
+              ),
+            ],
+          ),
+        ),
+        if (widget.facultyView) _buildShowOnlyMyClassesControl(),
+      ],
+    );
+  }
+
+  Widget _buildScheduleContent() {
     final settingsService = TimeTableSettingsFirestoreService();
     final timeBlockService = TimeBlockFirestoreService();
+
+    return StreamBuilder<Map<String, dynamic>?>(
+      stream: settingsService.watchSettings(orgId: widget.timeTable.orgId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final days = settingsService.parseDays(snapshot.data);
+        final timeSlots = settingsService.parseTimeSlots(snapshot.data);
+
+        if (days.isEmpty || timeSlots.isEmpty) {
+          return Center(
+            child: smcText(
+              textToDisplay: days.isEmpty
+                  ? 'Configure days in Time Table Settings to view the schedule.'
+                  : 'Configure time slots in Time Table Settings to view the schedule.',
+              textSize: 14,
+              colorOfText: ColorConst.textSecondary,
+              maxLines: 3,
+            ),
+          );
+        }
+
+        return StreamBuilder<List<TimeBlockRecord>>(
+          stream: timeBlockService.watchTimeBlocks(
+            orgId: widget.timeTable.orgId,
+            timeTableUid: widget.timeTable.timeTableUid,
+          ),
+          builder: (context, blockSnapshot) {
+            final blockMap = TimeBlockFirestoreService.mapBlocksByCell(
+              blockSnapshot.data ?? const [],
+            );
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!widget.facultyView) ...[
+                  _buildToolbar(),
+                  const SizedBox(height: 8),
+                ],
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: _borderColor),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.vertical,
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: _buildTimeTableGrid(
+                            days: days,
+                            timeSlots: timeSlots,
+                            blockMap: blockMap,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.embedded) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildEmbeddedHeader(),
+          const SizedBox(height: 12),
+          Expanded(child: _buildScheduleContent()),
+        ],
+      );
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
@@ -177,75 +360,9 @@ class _TimeTableDetailPageState extends State<TimeTableDetailPage> {
           ],
         ),
       ),
-      body: StreamBuilder<Map<String, dynamic>?>(
-        stream: settingsService.watchSettings(orgId: widget.timeTable.orgId),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final days = settingsService.parseDays(snapshot.data);
-          final timeSlots = settingsService.parseTimeSlots(snapshot.data);
-
-          if (days.isEmpty || timeSlots.isEmpty) {
-            return Center(
-              child: smcText(
-                textToDisplay: days.isEmpty
-                    ? 'Configure days in Time Table Settings to view the schedule.'
-                    : 'Configure time slots in Time Table Settings to view the schedule.',
-                textSize: 14,
-                colorOfText: ColorConst.textSecondary,
-                maxLines: 3,
-              ),
-            );
-          }
-
-          return StreamBuilder<List<TimeBlockRecord>>(
-            stream: timeBlockService.watchTimeBlocks(
-              orgId: widget.timeTable.orgId,
-              timeTableUid: widget.timeTable.timeTableUid,
-            ),
-            builder: (context, blockSnapshot) {
-              final blockMap = TimeBlockFirestoreService.mapBlocksByCell(
-                blockSnapshot.data ?? const [],
-              );
-
-              return Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildToolbar(),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: _borderColor),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.vertical,
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: _buildTimeTableGrid(
-                                days: days,
-                                timeSlots: timeSlots,
-                                blockMap: blockMap,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          );
-        },
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: _buildScheduleContent(),
       ),
     );
   }
@@ -471,6 +588,30 @@ class _TimeTableDetailPageState extends State<TimeTableDetailPage> {
     return facultyName.isEmpty ? 'Unassigned' : facultyName;
   }
 
+  bool _blockBelongsToFaculty(TimeBlockRecord? block) {
+    if (block == null) {
+      return false;
+    }
+    return FacultyClassResolver.blockMatchesFaculty(
+      block: block,
+      courseKeys: widget.facultyCourseKeys,
+      facultyKeys: widget.facultyKeys,
+    );
+  }
+
+  TimeBlockRecord? _blockForDisplay(TimeBlockRecord? block) {
+    if (!widget.facultyView || !showOnlyMyClasses) {
+      return block;
+    }
+    if (_isBreakAllocation(block)) {
+      return block;
+    }
+    if (!_blockBelongsToFaculty(block)) {
+      return null;
+    }
+    return block;
+  }
+
   bool _isBreakAllocation(TimeBlockRecord? block) {
     if (block == null) {
       return false;
@@ -490,10 +631,14 @@ class _TimeTableDetailPageState extends State<TimeTableDetailPage> {
     required TimeTableTimeSlot timeSlot,
     TimeBlockRecord? block,
   }) {
-    final bool hasAllocation =
-        block != null &&
-        (block.courseId.isNotEmpty || block.courseName.isNotEmpty);
-    final bool isBreakCell = _isBreakAllocation(block);
+    final displayBlock = _blockForDisplay(block);
+    final bool hasAllocation = displayBlock != null &&
+        (displayBlock.courseId.isNotEmpty ||
+            displayBlock.courseName.isNotEmpty);
+    final bool isBreakCell = _isBreakAllocation(displayBlock);
+    final bool isFacultyCell =
+        widget.facultyView && _blockBelongsToFaculty(block);
+    final allocatedBlock = displayBlock;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -502,54 +647,62 @@ class _TimeTableDetailPageState extends State<TimeTableDetailPage> {
             ? constraints.maxHeight
             : _rowHeight;
 
-        final double bottomInset = isEditEnabled ? 30 : 6;
+        final double bottomInset = widget.readOnly || !isEditEnabled ? 6 : 30;
 
         return SizedBox(
           width: _timeBlockColumnWidth,
           height: cellHeight,
           child: ColoredBox(
-            color: isBreakCell ? _breakCellColor : const Color(0xFFFCFDFF),
+            color: isFacultyCell
+                ? _facultyCellColor
+                : isBreakCell
+                    ? _breakCellColor
+                    : const Color(0xFFFCFDFF),
             child: Stack(
               children: [
                 Positioned.fill(
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(6, 6, 6, bottomInset),
                     child: Center(
-                      child: hasAllocation
+                      child: hasAllocation && allocatedBlock != null
                           ? Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               crossAxisAlignment: CrossAxisAlignment.center,
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 smcText(
-                                  textToDisplay: block.courseName,
+                                  textToDisplay: allocatedBlock.courseName,
                                   textSize: 11,
                                   textBoldness: 5,
                                   colorOfText: ColorConst.textPrimary,
                                   textAlign: TextAlign.center,
                                   maxLines: 2,
                                 ),
-                                if (block.courseId.isNotEmpty) ...[
+                                if (allocatedBlock.courseId.isNotEmpty) ...[
                                   const SizedBox(height: 2),
                                   smcText(
-                                    textToDisplay: block.courseId,
+                                    textToDisplay: allocatedBlock.courseId,
                                     textSize: 10,
-                                    colorOfText: ColorConst.primaryBlue,
+                                    colorOfText: isFacultyCell
+                                        ? const Color(0xFF1B5E20)
+                                        : ColorConst.primaryBlue,
                                     textAlign: TextAlign.center,
                                     maxLines: 1,
                                   ),
                                 ],
-                                if (!isBreakCell) ...[
+                                if (!isBreakCell &&
+                                    (!widget.facultyView || !isFacultyCell)) ...[
                                   const SizedBox(height: 2),
                                   smcText(
-                                    textToDisplay: _facultyDisplayLabel(block),
+                                    textToDisplay:
+                                        _facultyDisplayLabel(allocatedBlock),
                                     textSize: 9,
                                     textBoldness:
-                                        block.facultyName.trim().isEmpty
+                                        allocatedBlock.facultyName.trim().isEmpty
                                             ? 3
                                             : 5,
                                     colorOfText:
-                                        block.facultyName.trim().isEmpty
+                                        allocatedBlock.facultyName.trim().isEmpty
                                             ? ColorConst.textSecondary
                                             : ColorConst.textPrimary,
                                     textAlign: TextAlign.center,
@@ -568,19 +721,20 @@ class _TimeTableDetailPageState extends State<TimeTableDetailPage> {
                     ),
                   ),
                 ),
-                if (isEditEnabled)
+                if (isEditEnabled && !widget.readOnly)
                   Positioned(
                     left: 0,
                     right: 0,
                     bottom: 0,
                     child: Center(
-                      child: hasAllocation
+                      child: hasAllocation && allocatedBlock != null
                           ? TimeTableSettingsListActions(
                               onEdit: () => _openAllocateCourse(
                                 day: day,
                                 timeSlot: timeSlot,
                               ),
-                              onDelete: () => _confirmDeleteAllocation(block),
+                              onDelete: () =>
+                                  _confirmDeleteAllocation(allocatedBlock),
                             )
                           : IconButton(
                               onPressed: () => _openAllocateCourse(
