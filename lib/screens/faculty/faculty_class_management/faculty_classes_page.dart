@@ -11,10 +11,13 @@ import 'package:smartcampus/screens/dept_admin/time_table/models/time_table_time
 import 'package:smartcampus/screens/dept_admin/time_table/time_block_firestore_service.dart';
 import 'package:smartcampus/screens/dept_admin/time_table/time_table_firestore_service.dart';
 import 'package:smartcampus/screens/dept_admin/time_table/time_table_settings_firestore_service.dart';
+import 'package:smartcampus/screens/faculty/faculty_class_management/class_attendance_firestore_service.dart';
+import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_active_tab.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_class_resolver.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_completed_tab.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_timetable_tab.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_upcoming_tab.dart';
+import 'package:smartcampus/screens/faculty/faculty_class_management/models/completed_class_record.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/models/faculty_assigned_class.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 
@@ -39,15 +42,19 @@ class _FacultyClassesPageState extends State<FacultyClassesPage> {
   final TimeTableFirestoreService _timeTableService = TimeTableFirestoreService();
   final TimeTableSettingsFirestoreService _settingsService =
       TimeTableSettingsFirestoreService();
+  final ClassAttendanceFirestoreService _classService =
+      ClassAttendanceFirestoreService();
 
   StreamSubscription<List<TimeBlockRecord>>? _timeBlockSubscription;
   StreamSubscription<List<TimeTableRecord>>? _timeTableSubscription;
   StreamSubscription<Map<String, dynamic>?>? _settingsSubscription;
+  StreamSubscription<List<CompletedClassRecord>>? _classSubscription;
 
   List<TimeBlockRecord> _timeBlocks = const [];
   List<TimeTableRecord> _timeTables = const [];
   List<TimeTableDay> _timetableDays = const [];
   List<TimeTableTimeSlot> _timeSlots = const [];
+  List<CompletedClassRecord> _classRecords = const [];
   bool _initialLoading = true;
   int _selectedFilter = 0;
 
@@ -62,6 +69,7 @@ class _FacultyClassesPageState extends State<FacultyClassesPage> {
     _timeBlockSubscription?.cancel();
     _timeTableSubscription?.cancel();
     _settingsSubscription?.cancel();
+    _classSubscription?.cancel();
     super.dispose();
   }
 
@@ -69,8 +77,9 @@ class _FacultyClassesPageState extends State<FacultyClassesPage> {
     _timeBlockSubscription?.cancel();
     _timeTableSubscription?.cancel();
     _settingsSubscription?.cancel();
+    _classSubscription?.cancel();
 
-    var pendingStreams = 3;
+    var pendingStreams = 4;
     void markStreamReady() {
       pendingStreams--;
       if (pendingStreams <= 0 && mounted) {
@@ -110,6 +119,16 @@ class _FacultyClassesPageState extends State<FacultyClassesPage> {
       });
       markStreamReady();
     });
+
+    _classSubscription = _classService
+        .watchClassesForOrg(orgId: widget.orgId)
+        .listen((records) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _classRecords = records);
+      markStreamReady();
+    });
   }
 
   List<FacultyAssignedClass> get _assignedClasses {
@@ -145,9 +164,11 @@ class _FacultyClassesPageState extends State<FacultyClassesPage> {
             children: [
               _buildFilterChip('Upcoming', 0),
               const SizedBox(width: 8),
-              _buildFilterChip('Completed', 1),
+              _buildFilterChip('Active', 1),
               const SizedBox(width: 8),
-              _buildFilterChip('Time Table', 2),
+              _buildFilterChip('Completed', 2),
+              const SizedBox(width: 8),
+              _buildFilterChip('Time Table', 3),
             ],
           ),
         ),
@@ -183,12 +204,22 @@ class _FacultyClassesPageState extends State<FacultyClassesPage> {
   Widget _buildSelectedTab() {
     switch (_selectedFilter) {
       case 1:
-        return FacultyCompletedTab(
+        return FacultyActiveTab(
           orgId: widget.orgId,
           faculty: widget.faculty,
+          assignedCourses: widget.assignedCourses,
+          classRecords: _classRecords,
           timeSlots: _timeSlots,
         );
       case 2:
+        return FacultyCompletedTab(
+          orgId: widget.orgId,
+          faculty: widget.faculty,
+          assignedCourses: widget.assignedCourses,
+          classRecords: _classRecords,
+          timeSlots: _timeSlots,
+        );
+      case 3:
         return FacultyTimetableTab(
           assignedClasses: _assignedClasses,
           faculty: widget.faculty,
@@ -196,9 +227,13 @@ class _FacultyClassesPageState extends State<FacultyClassesPage> {
         );
       default:
         return FacultyUpcomingTab(
+          orgId: widget.orgId,
+          faculty: widget.faculty,
           assignedClasses: _assignedClasses,
+          assignedCourses: widget.assignedCourses,
           timetableDays: _timetableDays,
           timeSlots: _timeSlots,
+          classRecords: _classRecords,
         );
     }
   }

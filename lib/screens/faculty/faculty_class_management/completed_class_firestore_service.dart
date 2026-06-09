@@ -1,51 +1,74 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:smartcampus/data/faculty_model.dart';
-import 'package:smartcampus/data/org_field.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_class_date_utils.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_class_resolver.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/models/completed_class_record.dart';
+import 'package:smartcampus/screens/faculty/faculty_class_management/models/faculty_scheduled_class.dart';
 
 class CompletedClassFirestoreService {
-  static const String collection = 'smcClasses';
-
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  Stream<List<CompletedClassRecord>> watchCompletedClassesForOrg({
-    required String orgId,
+  static List<CompletedClassRecord> filterForFaculty({
+    required List<CompletedClassRecord> records,
+    required FacultyModel faculty,
   }) {
-    final orgNorm = OrgField.normalize(orgId);
-    if (orgNorm.isEmpty) {
-      return Stream.value(const <CompletedClassRecord>[]);
-    }
+    final facultyKeys = FacultyClassResolver.facultyKeysFor(faculty);
 
-    return _firestore
-        .collection(collection)
-        .where(OrgField.orgIdKey, isEqualTo: orgNorm)
-        .snapshots()
-        .map((snapshot) {
-      final records = snapshot.docs
-          .map(
-            (doc) => CompletedClassRecord.fromFirestore(doc.id, doc.data()),
-          )
-          .toList();
-      records.sort((a, b) => b.classDate.compareTo(a.classDate));
-      return records;
-    });
+    return records.where((record) {
+      return facultyKeys.contains(record.facultyUid.trim());
+    }).toList();
   }
 
-  static List<CompletedClassRecord> filterForFaculty({
+  static List<CompletedClassRecord> filterActiveForFaculty({
     required List<CompletedClassRecord> records,
     required FacultyModel faculty,
     DateTime? referenceDate,
   }) {
-    final facultyKeys = FacultyClassResolver.facultyKeysFor(faculty);
     final today = FacultyClassDateUtils.dateOnly(referenceDate ?? DateTime.now());
 
-    return records.where((record) {
-      if (!facultyKeys.contains(record.facultyUid.trim())) {
-        return false;
-      }
-      return record.classDate.isBefore(today);
+    return filterForFaculty(records: records, faculty: faculty).where((record) {
+      return record.isActive &&
+          FacultyClassDateUtils.isSameDay(record.classDate, today);
     }).toList();
+  }
+
+  static List<CompletedClassRecord> filterCompletedForFaculty({
+    required List<CompletedClassRecord> records,
+    required FacultyModel faculty,
+  }) {
+    return filterForFaculty(records: records, faculty: faculty)
+        .where((record) => record.isCompleted)
+        .toList();
+  }
+
+  static Set<String> activeSessionKeysForFaculty({
+    required List<CompletedClassRecord> records,
+    required FacultyModel faculty,
+    DateTime? referenceDate,
+  }) {
+    return filterActiveForFaculty(
+      records: records,
+      faculty: faculty,
+      referenceDate: referenceDate,
+    )
+        .map((record) => record.sessionKeyValue)
+        .toSet();
+  }
+
+  static bool isScheduledClassActive({
+    required CompletedClassRecord record,
+    required FacultyScheduledClass scheduledClass,
+  }) {
+    final sessionKey = CompletedClassRecord.sessionKey(
+      classDate: scheduledClass.scheduledDate,
+      timeBlockUid: scheduledClass.assignedClass.block.id,
+      timeTableUid: scheduledClass.assignedClass.block.timeTableUid,
+      courseId: scheduledClass.courseId,
+      batch: scheduledClass.assignedClass.batch,
+      section: scheduledClass.assignedClass.section,
+      semester: scheduledClass.assignedClass.semester,
+      dayUid: scheduledClass.assignedClass.dayUid,
+      dayName: scheduledClass.dayName,
+      timeSlotUid: scheduledClass.assignedClass.timeSlotUid,
+      timeSlotName: scheduledClass.timeSlotName,
+    );
+    return record.sessionKeyValue == sessionKey;
   }
 }

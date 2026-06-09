@@ -211,6 +211,39 @@ class FacultyClassResolver {
     return breakLabels.contains(courseId) || breakLabels.contains(courseName);
   }
 
+  static CourseModel? resolveCourseForTimeBlock({
+    required List<CourseModel> courses,
+    required String courseId,
+    required String batch,
+    required String semester,
+  }) {
+    final normalizedCourseId = courseId.trim().toLowerCase();
+    if (normalizedCourseId.isEmpty) {
+      return null;
+    }
+
+    CourseModel? fallback;
+    for (final course in courses) {
+      final code = course.courseCode.trim().toLowerCase();
+      final id = course.id.trim().toLowerCase();
+      if (code != normalizedCourseId && id != normalizedCourseId) {
+        continue;
+      }
+
+      fallback ??= course;
+
+      final batchMatch =
+          batch.trim().isEmpty || course.batch.trim() == batch.trim();
+      final semesterMatch = semester.trim().isEmpty ||
+          course.semester.trim() == semester.trim();
+      if (batchMatch && semesterMatch) {
+        return course;
+      }
+    }
+
+    return fallback;
+  }
+
   static int _compareSemester(String a, String b) {
     final aNum = int.tryParse(a.replaceAll(RegExp(r'[^0-9]'), ''));
     final bNum = int.tryParse(b.replaceAll(RegExp(r'[^0-9]'), ''));
