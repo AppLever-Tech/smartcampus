@@ -73,21 +73,27 @@ class ClassAttendanceFirestoreService {
       timeSlotName: timeSlotName,
     );
 
+    // Query by org only and filter in memory so we do not depend on a
+    // Firestore composite index for faculty_uid + class_date + status.
     final snapshot = await _firestore
         .collection(collection)
         .where(OrgField.orgIdKey, isEqualTo: orgNorm)
-        .where('faculty_uid', isEqualTo: facultyUid.trim())
-        .where(
-          'class_date',
-          isEqualTo: Timestamp.fromDate(
-            FacultyClassDateUtils.dateOnly(classDate),
-          ),
-        )
-        .where('status', isEqualTo: 'active')
         .get();
+
+    final normalizedFacultyUid = facultyUid.trim();
+    final targetDate = FacultyClassDateUtils.dateOnly(classDate);
 
     for (final doc in snapshot.docs) {
       final record = CompletedClassRecord.fromFirestore(doc.id, doc.data());
+      if (!record.isActive) {
+        continue;
+      }
+      if (record.facultyUid.trim() != normalizedFacultyUid) {
+        continue;
+      }
+      if (!FacultyClassDateUtils.isSameDay(record.classDate, targetDate)) {
+        continue;
+      }
       if (record.sessionKeyValue == sessionKey) {
         return record;
       }
@@ -117,21 +123,26 @@ class ClassAttendanceFirestoreService {
       throw Exception('Organisation is required to start a class.');
     }
 
-    final existing = await findActiveClassForSession(
-      orgId: orgId,
-      facultyUid: facultyUid,
-      classDate: classDate,
-      timeBlockUid: timeBlockUid,
-      timeTableUid: timeTableUid,
-      courseId: courseId,
-      batch: batch,
-      section: section,
-      semester: semester,
-      dayUid: dayUid,
-      dayName: dayName,
-      timeSlotUid: timeSlotUid,
-      timeSlotName: timeSlotName,
-    );
+    CompletedClassRecord? existing;
+    try {
+      existing = await findActiveClassForSession(
+        orgId: orgId,
+        facultyUid: facultyUid,
+        classDate: classDate,
+        timeBlockUid: timeBlockUid,
+        timeTableUid: timeTableUid,
+        courseId: courseId,
+        batch: batch,
+        section: section,
+        semester: semester,
+        dayUid: dayUid,
+        dayName: dayName,
+        timeSlotUid: timeSlotUid,
+        timeSlotName: timeSlotName,
+      );
+    } catch (_) {
+      // Duplicate lookup is best-effort; class creation must still proceed.
+    }
     if (existing != null) {
       return existing.id;
     }
@@ -161,6 +172,20 @@ class ClassAttendanceFirestoreService {
     return docRef.id;
   }
 
+  Future<CompletedClassRecord?> getClassRecord(String recordId) async {
+    final id = recordId.trim();
+    if (id.isEmpty) {
+      return null;
+    }
+
+    final doc = await _firestore.collection(collection).doc(id).get();
+    if (!doc.exists || doc.data() == null) {
+      return null;
+    }
+
+    return CompletedClassRecord.fromFirestore(doc.id, doc.data()!);
+  }
+
   Future<void> saveAttendance({
     required String recordId,
     required Map<String, bool> attendanceByStudentKey,
@@ -181,6 +206,16 @@ class ClassAttendanceFirestoreService {
 
     await recordRef.update({
       'attendance': attendance,
+    });
+  }
+
+  Future<void> completeClass({required String recordId}) async {
+    final recordRef = _firestore.collection(collection).doc(recordId.trim());
+    if (recordId.trim().isEmpty) {
+      throw Exception('Class record is required to complete a class.');
+    }
+
+    await recordRef.update({
       'status': 'completed',
       'completed_at': FieldValue.serverTimestamp(),
     });

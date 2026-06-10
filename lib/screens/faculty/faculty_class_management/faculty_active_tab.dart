@@ -36,7 +36,7 @@ class FacultyActiveTab extends StatelessWidget {
       return const FacultyClassesEmptyState(
         title: 'No active classes',
         message:
-            'Classes you start today will appear here until attendance is saved.',
+            'Classes you start today will appear here until you complete them.',
         icon: Icons.play_circle_outline_rounded,
       );
     }

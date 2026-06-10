@@ -1,6 +1,7 @@
 import 'package:smartcampus/screens/dept_admin/time_table/models/time_table_day.dart';
 import 'package:smartcampus/screens/dept_admin/time_table/models/time_table_time_slot.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_class_date_utils.dart';
+import 'package:smartcampus/screens/faculty/faculty_class_management/models/completed_class_record.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/models/faculty_assigned_class.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/models/faculty_scheduled_class.dart';
 
@@ -85,6 +86,57 @@ class FacultyUpcomingClassResolver {
       }
     }
     return flattened;
+  }
+
+  static int countVisibleUpcoming({
+    required List<FacultyAssignedClass> assignedClasses,
+    required List<TimeTableDay> timetableDays,
+    List<TimeTableTimeSlot> timeSlots = const [],
+    required Set<String> activeSessionKeys,
+    DateTime? referenceDate,
+  }) {
+    final grouped = groupByDate(
+      assignedClasses: assignedClasses,
+      timetableDays: timetableDays,
+      timeSlots: timeSlots,
+      referenceDate: referenceDate,
+    );
+    if (grouped.isEmpty) {
+      return 0;
+    }
+
+    final today = FacultyClassDateUtils.dateOnly(referenceDate ?? DateTime.now());
+    final windowDates = FacultyClassDateUtils.upcomingWindowDates(
+      referenceDate: today,
+    );
+    var count = 0;
+
+    for (final date in windowDates) {
+      final classes = grouped[date];
+      if (classes == null) {
+        continue;
+      }
+      for (final scheduledClass in classes) {
+        final sessionKey = CompletedClassRecord.sessionKey(
+          classDate: scheduledClass.scheduledDate,
+          timeBlockUid: scheduledClass.assignedClass.block.id,
+          timeTableUid: scheduledClass.assignedClass.block.timeTableUid,
+          courseId: scheduledClass.courseId,
+          batch: scheduledClass.assignedClass.batch,
+          section: scheduledClass.assignedClass.section,
+          semester: scheduledClass.assignedClass.semester,
+          dayUid: scheduledClass.assignedClass.dayUid,
+          dayName: scheduledClass.dayName,
+          timeSlotUid: scheduledClass.assignedClass.timeSlotUid,
+          timeSlotName: scheduledClass.timeSlotName,
+        );
+        if (!activeSessionKeys.contains(sessionKey)) {
+          count++;
+        }
+      }
+    }
+
+    return count;
   }
 
   static int _compareScheduledClasses(

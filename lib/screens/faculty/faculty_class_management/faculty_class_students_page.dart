@@ -7,6 +7,7 @@ import 'package:smartcampus/models/course_model.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/class_attendance_firestore_service.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_class_date_utils.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_class_resolver.dart';
+import 'package:smartcampus/screens/faculty/faculty_class_management/models/completed_class_record.dart';
 import 'package:smartcampus/services/course_firestore_service.dart';
 import 'package:smartcampus/services/student_firestore_service.dart';
 import 'package:smartcampus/widgets/profile_photo_avatar.dart';
@@ -146,10 +147,13 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
   bool _attendanceMode = false;
   bool _savingAttendance = false;
   bool _startingClass = false;
+  bool _completingClass = false;
+  bool _classCompleted = false;
   String? _loadError;
   String? _classRecordId;
   List<StudentModel> _enrolledStudents = const [];
   Map<String, bool> _attendanceByStudentKey = {};
+  Map<String, bool> _savedAttendance = {};
 
   @override
   void initState() {
@@ -173,7 +177,8 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
   String get _facultyUid =>
       CourseFirestoreService.facultyAssignmentKey(widget.faculty);
 
-  bool get _classStarted => _classRecordId?.trim().isNotEmpty ?? false;
+  bool get _classStarted =>
+      (_classRecordId?.trim().isNotEmpty ?? false) && !_classCompleted;
 
   bool get _canStartClass =>
       !_loading &&
@@ -182,10 +187,19 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
       _enrolledStudents.isNotEmpty &&
       !_attendanceMode &&
       !_classStarted &&
+      !_classCompleted &&
       FacultyClassDateUtils.isSameDay(
         widget.classDate,
         FacultyClassDateUtils.dateOnly(DateTime.now()),
       );
+
+  bool get _canManageActiveClass =>
+      _classStarted &&
+      !_attendanceMode &&
+      !_loading &&
+      _loadError == null;
+
+  bool get _showAttendanceColumn => _classStarted;
 
   Future<void> _loadStudents() async {
     setState(() {
@@ -243,41 +257,46 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
   }
 
   Future<void> _restoreActiveClassState() async {
+    CompletedClassRecord? record;
+
     if (_classRecordId != null) {
-      if (mounted) {
-        _beginAttendanceMode();
+      try {
+        record = await _attendanceService.getClassRecord(_classRecordId!);
+      } catch (_) {
+        // Best-effort restore; students list still works.
       }
+    } else {
+      try {
+        record = await _attendanceService.findActiveClassForSession(
+          orgId: widget.orgId,
+          facultyUid: _facultyUid,
+          classDate: widget.classDate,
+          timeBlockUid: widget.timeBlockUid,
+          timeTableUid: widget.timeTableUid,
+          courseId: widget.courseId,
+          batch: widget.batch,
+          section: widget.section,
+          semester: widget.semester,
+          dayUid: widget.dayUid,
+          dayName: widget.dayName ?? '',
+          timeSlotUid: widget.timeSlotUid,
+          timeSlotName: widget.timeSlotName,
+        );
+      } catch (_) {
+        // Best-effort restore; students list still works.
+      }
+    }
+
+    final resolvedRecord = record;
+    if (!mounted || resolvedRecord == null) {
       return;
     }
 
-    try {
-      final activeRecord = await _attendanceService.findActiveClassForSession(
-        orgId: widget.orgId,
-        facultyUid: _facultyUid,
-        classDate: widget.classDate,
-        timeBlockUid: widget.timeBlockUid,
-        timeTableUid: widget.timeTableUid,
-        courseId: widget.courseId,
-        batch: widget.batch,
-        section: widget.section,
-        semester: widget.semester,
-        dayUid: widget.dayUid,
-        dayName: widget.dayName ?? '',
-        timeSlotUid: widget.timeSlotUid,
-        timeSlotName: widget.timeSlotName,
-      );
-
-      if (!mounted || activeRecord == null) {
-        return;
-      }
-
-      setState(() {
-        _classRecordId = activeRecord.id;
-      });
-      _beginAttendanceMode(initialAttendance: activeRecord.attendance);
-    } catch (_) {
-      // Active class lookup is best-effort; students list still works.
-    }
+    setState(() {
+      _classRecordId = resolvedRecord.id;
+      _classCompleted = resolvedRecord.isCompleted;
+      _savedAttendance = Map<String, bool>.from(resolvedRecord.attendance);
+    });
   }
 
   Future<void> _confirmStartClass() async {
@@ -353,7 +372,6 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
         _startingClass = false;
         _classRecordId = recordId;
       });
-      _beginAttendanceMode();
     } catch (e) {
       if (!mounted) {
         return;
@@ -366,20 +384,18 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
   }
 
   void _beginAttendanceMode({Map<String, bool>? initialAttendance}) {
+    final source = initialAttendance ?? _savedAttendance;
     setState(() {
       _attendanceMode = true;
       _attendanceByStudentKey = {
         for (final student in _enrolledStudents)
-          _studentKey(student): initialAttendance?[_studentKey(student)] ?? false,
+          _studentKey(student): source[_studentKey(student)] ?? false,
       };
     });
   }
 
   void _cancelAttendance() {
-    setState(() {
-      _attendanceMode = false;
-      _attendanceByStudentKey = {};
-    });
+    setState(() => _attendanceMode = false);
   }
 
   Future<void> _saveAttendance() async {
@@ -405,12 +421,14 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
       setState(() {
         _savingAttendance = false;
         _attendanceMode = false;
-        _attendanceByStudentKey = {};
+        _savedAttendance = Map<String, bool>.from(_attendanceByStudentKey);
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Attendance saved successfully.'),
+          content: Text(
+            'Attendance saved. Use Complete Class when you are finished.',
+          ),
         ),
       );
     } catch (e) {
@@ -418,6 +436,91 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
       setState(() => _savingAttendance = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to save attendance: $e')),
+      );
+    }
+  }
+
+  Future<void> _confirmCompleteClass() async {
+    final recordId = _classRecordId?.trim() ?? '';
+    if (recordId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Start the class before completing it.'),
+        ),
+      );
+      return;
+    }
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const smcText(
+          textToDisplay: 'Complete Class',
+          textSize: 18,
+          textBoldness: 4,
+          colorOfText: ColorConst.textPrimary,
+        ),
+        content: const smcText(
+          textToDisplay:
+              'Are you sure you want to complete this class? It will move to Completed and no longer appear under Active.',
+          textSize: 14,
+          colorOfText: ColorConst.textSecondary,
+          maxLines: 4,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const smcText(
+              textToDisplay: 'No',
+              textSize: 14,
+              textBoldness: 3,
+              colorOfText: ColorConst.textSecondary,
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const smcText(
+              textToDisplay: 'Yes',
+              textSize: 14,
+              textBoldness: 4,
+              colorOfText: ColorConst.primaryBlue,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    setState(() => _completingClass = true);
+
+    try {
+      await _attendanceService.completeClass(recordId: recordId);
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _completingClass = false;
+        _classCompleted = true;
+        _attendanceMode = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Class completed successfully.'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _completingClass = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to complete class: $e')),
       );
     }
   }
@@ -493,8 +596,10 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
         ),
         actions: [
           if (_canStartClass) _buildStartClassButton(compact: true),
-          if (_classStarted && !_attendanceMode && !_loading)
+          if (_canManageActiveClass) ...[
             _buildMarkAttendanceButton(compact: true),
+            _buildCompleteClassButton(compact: true),
+          ],
         ],
       ),
       body: Padding(
@@ -518,6 +623,33 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
         ),
         style: ElevatedButton.styleFrom(
           backgroundColor: ColorConst.primaryBlue,
+          foregroundColor: Colors.white,
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 12 : 16,
+            vertical: compact ? 8 : 10,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompleteClassButton({bool compact = false}) {
+    return Padding(
+      padding: EdgeInsets.only(right: compact ? 8 : 0),
+      child: ElevatedButton.icon(
+        onPressed: _completingClass ? null : _confirmCompleteClass,
+        icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+        label: const smcText(
+          textToDisplay: 'Complete Class',
+          textSize: 13,
+          textBoldness: 4,
+          colorOfText: Colors.white,
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF2E7D32),
           foregroundColor: Colors.white,
           padding: EdgeInsets.symmetric(
             horizontal: compact ? 12 : 16,
@@ -601,8 +733,10 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
                 _buildStartClassButton(),
                 const SizedBox(width: 8),
               ],
-              if (_classStarted && !_attendanceMode && !_loading) ...[
+              if (_canManageActiveClass) ...[
                 _buildMarkAttendanceButton(),
+                const SizedBox(width: 8),
+                _buildCompleteClassButton(),
                 const SizedBox(width: 8),
               ],
               IconButton(
@@ -765,6 +899,51 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
     );
   }
 
+  bool? _attendanceStatusFor(
+    StudentModel student, {
+    required bool editable,
+  }) {
+    final key = _studentKey(student);
+    final map = editable ? _attendanceByStudentKey : _savedAttendance;
+    if (!map.containsKey(key)) {
+      return null;
+    }
+    return map[key] ?? false;
+  }
+
+  Widget _buildAttendanceReadOnlyBadge(StudentModel student) {
+    final status = _attendanceStatusFor(student, editable: false);
+    if (status == null) {
+      return const smcText(
+        textToDisplay: '—',
+        textSize: 12,
+        colorOfText: ColorConst.textSecondary,
+      );
+    }
+
+    final isPresent = status;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: isPresent ? const Color(0xFFE8F5E9) : const Color(0xFFFFEBEE),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: smcText(
+        textToDisplay: isPresent ? 'Present' : 'Absent',
+        textSize: 11,
+        textBoldness: 4,
+        colorOfText: isPresent ? const Color(0xFF2E7D32) : const Color(0xFFC62828),
+      ),
+    );
+  }
+
+  Widget _buildAttendanceCell(StudentModel student) {
+    if (_attendanceMode) {
+      return _buildAttendanceSwitch(student);
+    }
+    return _buildAttendanceReadOnlyBadge(student);
+  }
+
   Widget _buildAttendanceSwitch(StudentModel student) {
     final key = _studentKey(student);
     return Switch(
@@ -876,7 +1055,7 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
       ),
     ];
 
-    if (_attendanceMode) {
+    if (_showAttendanceColumn) {
       columns.add(
         const DataColumn(
           label: SizedBox(
@@ -1080,11 +1259,11 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
                             ),
                           ];
 
-                          if (_attendanceMode) {
+                          if (_showAttendanceColumn) {
                             cells.add(
                               DataCell(
                                 Center(
-                                  child: _buildAttendanceSwitch(student),
+                                  child: _buildAttendanceCell(student),
                                 ),
                               ),
                             );
@@ -1182,8 +1361,8 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
                     colorOfText: ColorConst.textSecondary,
                     maxLines: 2,
                   ),
-                  trailing: _attendanceMode
-                      ? _buildAttendanceSwitch(student)
+                  trailing: _showAttendanceColumn
+                      ? _buildAttendanceCell(student)
                       : null,
                 );
               },

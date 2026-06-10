@@ -12,10 +12,12 @@ import 'package:smartcampus/screens/dept_admin/time_table/time_block_firestore_s
 import 'package:smartcampus/screens/dept_admin/time_table/time_table_firestore_service.dart';
 import 'package:smartcampus/screens/dept_admin/time_table/time_table_settings_firestore_service.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/class_attendance_firestore_service.dart';
+import 'package:smartcampus/screens/faculty/faculty_class_management/completed_class_firestore_service.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_active_tab.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_class_resolver.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_completed_tab.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_timetable_tab.dart';
+import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_upcoming_class_resolver.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_upcoming_tab.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/models/completed_class_record.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/models/faculty_assigned_class.dart';
@@ -142,6 +144,44 @@ class _FacultyClassesPageState extends State<FacultyClassesPage> {
     );
   }
 
+  int get _upcomingCount {
+    return FacultyUpcomingClassResolver.countVisibleUpcoming(
+      assignedClasses: _assignedClasses,
+      timetableDays: _timetableDays,
+      timeSlots: _timeSlots,
+      activeSessionKeys:
+          CompletedClassFirestoreService.activeSessionKeysForFaculty(
+        records: _classRecords,
+        faculty: widget.faculty,
+      ),
+    );
+  }
+
+  int get _activeCount {
+    return CompletedClassFirestoreService.filterActiveForFaculty(
+      records: _classRecords,
+      faculty: widget.faculty,
+    ).length;
+  }
+
+  int get _completedCount {
+    return CompletedClassFirestoreService.filterCompletedForFaculty(
+      records: _classRecords,
+      faculty: widget.faculty,
+    ).length;
+  }
+
+  int get _timetableCount {
+    final timeTableUids = <String>{};
+    for (final assignedClass in _assignedClasses) {
+      final uid = assignedClass.timeTable.timeTableUid.trim();
+      if (uid.isNotEmpty) {
+        timeTableUids.add(uid);
+      }
+    }
+    return timeTableUids.length;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_initialLoading) {
@@ -162,13 +202,13 @@ class _FacultyClassesPageState extends State<FacultyClassesPage> {
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
-              _buildFilterChip('Upcoming', 0),
+              _buildFilterChip('Upcoming', 0, _upcomingCount),
               const SizedBox(width: 8),
-              _buildFilterChip('Active', 1),
+              _buildFilterChip('Active', 1, _activeCount),
               const SizedBox(width: 8),
-              _buildFilterChip('Completed', 2),
+              _buildFilterChip('Completed', 2, _completedCount),
               const SizedBox(width: 8),
-              _buildFilterChip('Time Table', 3),
+              _buildFilterChip('Time Table', 3, _timetableCount),
             ],
           ),
         ),
@@ -178,7 +218,7 @@ class _FacultyClassesPageState extends State<FacultyClassesPage> {
     );
   }
 
-  Widget _buildFilterChip(String label, int index) {
+  Widget _buildFilterChip(String label, int index, int count) {
     final isSelected = _selectedFilter == index;
     return GestureDetector(
       onTap: () => setState(() => _selectedFilter = index),
@@ -192,7 +232,7 @@ class _FacultyClassesPageState extends State<FacultyClassesPage> {
           ),
         ),
         child: smcText(
-          textToDisplay: label,
+          textToDisplay: '$label ($count)',
           textSize: 14,
           textBoldness: isSelected ? 5 : 4,
           colorOfText: isSelected ? Colors.white : ColorConst.textSecondary,
