@@ -9,12 +9,14 @@ import 'package:smartcampus/data/user_org_scope.dart';
 import 'package:smartcampus/models/course_model.dart';
 import 'package:smartcampus/screens/auth/landing_page.dart';
 import 'package:smartcampus/screens/shared/person_detail_page.dart';
+import 'package:smartcampus/screens/student/student_class_management/student_classes_page.dart';
 import 'package:smartcampus/screens/student/student_dashboard_mobile_layout.dart';
 import 'package:smartcampus/screens/student/student_profile_not_found_page.dart';
 import 'package:smartcampus/services/course_firestore_service.dart';
 import 'package:smartcampus/services/org_role_firestore_service.dart';
 import 'package:smartcampus/services/student_firestore_service.dart';
 import 'package:smartcampus/services/user_master_firestore_service.dart';
+import 'package:smartcampus/widgets/app_info_dialog.dart';
 import 'package:smartcampus/widgets/profile_photo_avatar.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 
@@ -231,6 +233,7 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
         displayName: widget.displayName,
         dashboardContent: _buildDashboardView(),
         profileContent: _buildProfileView(),
+        classesContent: _buildClassesView(),
       );
     }
 
@@ -253,14 +256,26 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
   }
 
   Widget _buildSelectedView() {
-    if (selectedMenuIndex == 1) {
-      return _buildProfileView();
+    switch (selectedMenuIndex) {
+      case 1:
+        return _buildProfileView();
+      case 2:
+        return _buildClassesView();
+      default:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildDashboardView(),
+          ],
+        );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildDashboardView(),
-      ],
+  }
+
+  Widget _buildClassesView() {
+    return StudentClassesPage(
+      orgId: scopedOrgId,
+      student: studentProfile!,
+      enrolledCourses: enrolledCourses,
     );
   }
 
@@ -592,7 +607,21 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
               isSelected: selectedMenuIndex == 1,
               onTap: () => setState(() => selectedMenuIndex = 1),
             ),
+            const SizedBox(height: 8),
+            _menuTile(
+              title: 'Classes',
+              icon: Icons.class_outlined,
+              isSelected: selectedMenuIndex == 2,
+              onTap: () => setState(() => selectedMenuIndex = 2),
+            ),
             const Spacer(),
+            _menuTile(
+              title: 'Version',
+              icon: Icons.info_outline_rounded,
+              isSelected: false,
+              onTap: () => AppInfoDialog.show(context),
+            ),
+            const SizedBox(height: 8),
             _menuTile(
               title: 'Logout',
               icon: Icons.logout_rounded,

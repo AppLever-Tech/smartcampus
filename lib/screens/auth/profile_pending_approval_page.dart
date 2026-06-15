@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:smartcampus/const/color_const.dart';
 import 'package:smartcampus/data/mock_master_data.dart';
 import 'package:smartcampus/screens/auth/landing_page.dart';
+import 'package:smartcampus/widgets/app_info_dialog.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 
 class ProfilePendingApprovalPage extends StatelessWidget {
@@ -65,6 +66,13 @@ class ProfilePendingApprovalPage extends StatelessWidget {
                       onTap: () => onSupport(context),
                     ),
                     const Spacer(),
+                    _menuTile(
+                      title: 'Version',
+                      icon: Icons.info_outline_rounded,
+                      isSelected: false,
+                      onTap: () => AppInfoDialog.show(context),
+                    ),
+                    const SizedBox(height: 8),
                     _menuTile(
                       title: 'Logout',
                       icon: Icons.logout_rounded,

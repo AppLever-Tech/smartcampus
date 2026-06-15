@@ -52,6 +52,18 @@ class CompletedClassFirestoreService {
         .toSet();
   }
 
+  /// Session keys for classes already started or completed that should not
+  /// appear under Upcoming for the same scheduled slot and date.
+  static Set<String> sessionKeysExcludedFromUpcoming({
+    required List<CompletedClassRecord> records,
+    required FacultyModel faculty,
+  }) {
+    return filterForFaculty(records: records, faculty: faculty)
+        .where((record) => record.isActive || record.isCompleted)
+        .map((record) => record.sessionKeyValue)
+        .toSet();
+  }
+
   static bool isScheduledClassActive({
     required CompletedClassRecord record,
     required FacultyScheduledClass scheduledClass,

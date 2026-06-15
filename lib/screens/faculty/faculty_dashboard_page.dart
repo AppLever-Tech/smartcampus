@@ -22,6 +22,7 @@ import 'package:smartcampus/services/course_firestore_service.dart';
 import 'package:smartcampus/services/faculty_firestore_service.dart';
 import 'package:smartcampus/services/org_role_firestore_service.dart';
 import 'package:smartcampus/services/user_master_firestore_service.dart';
+import 'package:smartcampus/widgets/app_info_dialog.dart';
 import 'package:smartcampus/widgets/profile_photo_avatar.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 
@@ -736,6 +737,13 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
               onTap: () => setState(() => selectedMenuIndex = 2),
             ),
             const Spacer(),
+            _menuTile(
+              title: 'Version',
+              icon: Icons.info_outline_rounded,
+              isSelected: false,
+              onTap: () => AppInfoDialog.show(context),
+            ),
+            const SizedBox(height: 8),
             _menuTile(
               title: 'Logout',
               icon: Icons.logout_rounded,

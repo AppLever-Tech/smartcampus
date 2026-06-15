@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:smartcampus/const/color_const.dart';
-import 'package:smartcampus/data/faculty_model.dart';
+import 'package:smartcampus/data/student_model.dart';
 import 'package:smartcampus/models/course_model.dart';
 import 'package:smartcampus/screens/dept_admin/time_table/models/time_block_record.dart';
 import 'package:smartcampus/screens/dept_admin/time_table/models/time_table_day.dart';
@@ -12,34 +12,33 @@ import 'package:smartcampus/screens/dept_admin/time_table/time_block_firestore_s
 import 'package:smartcampus/screens/dept_admin/time_table/time_table_firestore_service.dart';
 import 'package:smartcampus/screens/dept_admin/time_table/time_table_settings_firestore_service.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/class_attendance_firestore_service.dart';
-import 'package:smartcampus/screens/faculty/faculty_class_management/completed_class_firestore_service.dart';
-import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_active_tab.dart';
-import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_class_resolver.dart';
-import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_completed_tab.dart';
-import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_timetable_tab.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_upcoming_class_resolver.dart';
-import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_upcoming_tab.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/models/completed_class_record.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/models/faculty_assigned_class.dart';
+import 'package:smartcampus/screens/student/student_class_management/student_active_tab.dart';
+import 'package:smartcampus/screens/student/student_class_management/student_class_firestore_service.dart';
+import 'package:smartcampus/screens/student/student_class_management/student_class_resolver.dart';
+import 'package:smartcampus/screens/student/student_class_management/student_completed_tab.dart';
+import 'package:smartcampus/screens/student/student_class_management/student_upcoming_tab.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 
-class FacultyClassesPage extends StatefulWidget {
+class StudentClassesPage extends StatefulWidget {
   final String orgId;
-  final FacultyModel faculty;
-  final List<CourseModel> assignedCourses;
+  final StudentModel student;
+  final List<CourseModel> enrolledCourses;
 
-  const FacultyClassesPage({
+  const StudentClassesPage({
     super.key,
     required this.orgId,
-    required this.faculty,
-    required this.assignedCourses,
+    required this.student,
+    required this.enrolledCourses,
   });
 
   @override
-  State<FacultyClassesPage> createState() => _FacultyClassesPageState();
+  State<StudentClassesPage> createState() => _StudentClassesPageState();
 }
 
-class _FacultyClassesPageState extends State<FacultyClassesPage> {
+class _StudentClassesPageState extends State<StudentClassesPage> {
   final TimeBlockFirestoreService _timeBlockService = TimeBlockFirestoreService();
   final TimeTableFirestoreService _timeTableService = TimeTableFirestoreService();
   final TimeTableSettingsFirestoreService _settingsService =
@@ -134,11 +133,11 @@ class _FacultyClassesPageState extends State<FacultyClassesPage> {
   }
 
   List<FacultyAssignedClass> get _assignedClasses {
-    return FacultyClassResolver.resolveAssignedClasses(
+    return StudentClassResolver.resolveAssignedClasses(
       timeBlocks: _timeBlocks,
       timeTables: _timeTables,
-      faculty: widget.faculty,
-      assignedCourses: widget.assignedCourses,
+      student: widget.student,
+      enrolledCourses: widget.enrolledCourses,
       timetableDays: _timetableDays,
       timeSlots: _timeSlots,
     );
@@ -150,36 +149,28 @@ class _FacultyClassesPageState extends State<FacultyClassesPage> {
       timetableDays: _timetableDays,
       timeSlots: _timeSlots,
       excludedSessionKeys:
-          CompletedClassFirestoreService.sessionKeysExcludedFromUpcoming(
+          StudentClassFirestoreService.sessionKeysExcludedFromUpcoming(
         records: _classRecords,
-        faculty: widget.faculty,
+        student: widget.student,
+        enrolledCourses: widget.enrolledCourses,
       ),
     );
   }
 
   int get _activeCount {
-    return CompletedClassFirestoreService.filterActiveForFaculty(
+    return StudentClassFirestoreService.filterActiveForStudent(
       records: _classRecords,
-      faculty: widget.faculty,
+      student: widget.student,
+      enrolledCourses: widget.enrolledCourses,
     ).length;
   }
 
   int get _completedCount {
-    return CompletedClassFirestoreService.filterCompletedForFaculty(
+    return StudentClassFirestoreService.filterCompletedForStudent(
       records: _classRecords,
-      faculty: widget.faculty,
+      student: widget.student,
+      enrolledCourses: widget.enrolledCourses,
     ).length;
-  }
-
-  int get _timetableCount {
-    final timeTableUids = <String>{};
-    for (final assignedClass in _assignedClasses) {
-      final uid = assignedClass.timeTable.timeTableUid.trim();
-      if (uid.isNotEmpty) {
-        timeTableUids.add(uid);
-      }
-    }
-    return timeTableUids.length;
   }
 
   @override
@@ -187,6 +178,13 @@ class _FacultyClassesPageState extends State<FacultyClassesPage> {
     if (_initialLoading) {
       return const Center(child: CircularProgressIndicator());
     }
+
+    final batch = widget.student.batch.trim();
+    final semester = widget.student.currentSemester.trim();
+    final subtitle = [
+      if (batch.isNotEmpty) 'Batch $batch',
+      if (semester.isNotEmpty) 'Semester $semester',
+    ].join(' · ');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -197,6 +195,14 @@ class _FacultyClassesPageState extends State<FacultyClassesPage> {
           textBoldness: 5,
           colorOfText: ColorConst.textPrimary,
         ),
+        if (subtitle.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          smcText(
+            textToDisplay: subtitle,
+            textSize: 13,
+            colorOfText: ColorConst.textSecondary,
+          ),
+        ],
         const SizedBox(height: 16),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -207,8 +213,6 @@ class _FacultyClassesPageState extends State<FacultyClassesPage> {
               _buildFilterChip('Active', 1, _activeCount),
               const SizedBox(width: 8),
               _buildFilterChip('Completed', 2, _completedCount),
-              const SizedBox(width: 8),
-              _buildFilterChip('Time Table', 3, _timetableCount),
             ],
           ),
         ),
@@ -244,33 +248,24 @@ class _FacultyClassesPageState extends State<FacultyClassesPage> {
   Widget _buildSelectedTab() {
     switch (_selectedFilter) {
       case 1:
-        return FacultyActiveTab(
-          orgId: widget.orgId,
-          faculty: widget.faculty,
-          assignedCourses: widget.assignedCourses,
+        return StudentActiveTab(
+          student: widget.student,
+          enrolledCourses: widget.enrolledCourses,
           classRecords: _classRecords,
           timeSlots: _timeSlots,
         );
       case 2:
-        return FacultyCompletedTab(
-          orgId: widget.orgId,
-          faculty: widget.faculty,
-          assignedCourses: widget.assignedCourses,
+        return StudentCompletedTab(
+          student: widget.student,
+          enrolledCourses: widget.enrolledCourses,
           classRecords: _classRecords,
           timeSlots: _timeSlots,
         );
-      case 3:
-        return FacultyTimetableTab(
-          assignedClasses: _assignedClasses,
-          faculty: widget.faculty,
-          assignedCourses: widget.assignedCourses,
-        );
       default:
-        return FacultyUpcomingTab(
-          orgId: widget.orgId,
-          faculty: widget.faculty,
+        return StudentUpcomingTab(
+          student: widget.student,
           assignedClasses: _assignedClasses,
-          assignedCourses: widget.assignedCourses,
+          enrolledCourses: widget.enrolledCourses,
           timetableDays: _timetableDays,
           timeSlots: _timeSlots,
           classRecords: _classRecords,

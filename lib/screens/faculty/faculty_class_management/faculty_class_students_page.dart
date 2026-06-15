@@ -5,6 +5,7 @@ import 'package:smartcampus/data/faculty_model.dart';
 import 'package:smartcampus/data/student_model.dart';
 import 'package:smartcampus/models/course_model.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/class_attendance_firestore_service.dart';
+import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_class_attendance_export.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_class_date_utils.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_class_resolver.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/models/completed_class_record.dart';
@@ -148,6 +149,7 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
   bool _savingAttendance = false;
   bool _startingClass = false;
   bool _completingClass = false;
+  bool _exportingAttendance = false;
   bool _classCompleted = false;
   String? _loadError;
   String? _classRecordId;
@@ -193,13 +195,21 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
         FacultyClassDateUtils.dateOnly(DateTime.now()),
       );
 
-  bool get _canManageActiveClass =>
-      _classStarted &&
-      !_attendanceMode &&
-      !_loading &&
-      _loadError == null;
+  bool get _classStateReady => !_loading && _loadError == null;
 
-  bool get _showAttendanceColumn => _classStarted;
+  bool get _canManageActiveClass =>
+      _classStateReady &&
+      _classStarted &&
+      !_attendanceMode;
+
+  bool get _showAttendanceColumn =>
+      _classStateReady && (_classStarted || _classCompleted);
+
+  bool get _canExportAttendance =>
+      _classStateReady &&
+      _classCompleted &&
+      !_exportingAttendance &&
+      _enrolledStudents.isNotEmpty;
 
   Future<void> _loadStudents() async {
     setState(() {
@@ -242,11 +252,12 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
         );
 
       if (!mounted) return;
+      await _restoreActiveClassState();
+      if (!mounted) return;
       setState(() {
         _loading = false;
         _enrolledStudents = enrolled;
       });
-      await _restoreActiveClassState();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -267,7 +278,7 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
       }
     } else {
       try {
-        record = await _attendanceService.findActiveClassForSession(
+        record = await _attendanceService.findClassRecordForSession(
           orgId: widget.orgId,
           facultyUid: _facultyUid,
           classDate: widget.classDate,
@@ -292,11 +303,9 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
       return;
     }
 
-    setState(() {
-      _classRecordId = resolvedRecord.id;
-      _classCompleted = resolvedRecord.isCompleted;
-      _savedAttendance = Map<String, bool>.from(resolvedRecord.attendance);
-    });
+    _classRecordId = resolvedRecord.id;
+    _classCompleted = resolvedRecord.isCompleted;
+    _savedAttendance = Map<String, bool>.from(resolvedRecord.attendance);
   }
 
   Future<void> _confirmStartClass() async {
@@ -384,6 +393,10 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
   }
 
   void _beginAttendanceMode({Map<String, bool>? initialAttendance}) {
+    if (_classCompleted) {
+      return;
+    }
+
     final source = initialAttendance ?? _savedAttendance;
     setState(() {
       _attendanceMode = true;
@@ -437,6 +450,42 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to save attendance: $e')),
       );
+    }
+  }
+
+  Future<void> _exportAttendance() async {
+    if (!_canExportAttendance) {
+      return;
+    }
+
+    setState(() => _exportingAttendance = true);
+
+    try {
+      await FacultyClassAttendanceExport.exportToExcel(
+        context: context,
+        courseId: widget.courseId,
+        courseName: widget.courseName,
+        classDate: widget.classDate,
+        batch: widget.batch,
+        section: widget.section,
+        semester: widget.semester,
+        dayName: widget.dayName,
+        timing: widget.timing,
+        students: _enrolledStudents,
+        attendanceByStudentKey: _savedAttendance,
+        studentKeyFor: _studentKey,
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to export attendance: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _exportingAttendance = false);
+      }
     }
   }
 
@@ -600,6 +649,7 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
             _buildMarkAttendanceButton(compact: true),
             _buildCompleteClassButton(compact: true),
           ],
+          if (_canExportAttendance) _buildExportAttendanceButton(compact: true),
         ],
       ),
       body: Padding(
@@ -617,6 +667,42 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
         icon: const Icon(Icons.fact_check_outlined, size: 18),
         label: const smcText(
           textToDisplay: 'Mark Attendance',
+          textSize: 13,
+          textBoldness: 4,
+          colorOfText: Colors.white,
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: ColorConst.primaryBlue,
+          foregroundColor: Colors.white,
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 12 : 16,
+            vertical: compact ? 8 : 10,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExportAttendanceButton({bool compact = false}) {
+    return Padding(
+      padding: EdgeInsets.only(right: compact ? 8 : 0),
+      child: ElevatedButton.icon(
+        onPressed: _exportingAttendance ? null : _exportAttendance,
+        icon: _exportingAttendance
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Icon(Icons.download_rounded, size: 18),
+        label: const smcText(
+          textToDisplay: 'Export Excel',
           textSize: 13,
           textBoldness: 4,
           colorOfText: Colors.white,
@@ -737,6 +823,10 @@ class _FacultyClassStudentsPageState extends State<FacultyClassStudentsPage> {
                 _buildMarkAttendanceButton(),
                 const SizedBox(width: 8),
                 _buildCompleteClassButton(),
+                const SizedBox(width: 8),
+              ],
+              if (_canExportAttendance) ...[
+                _buildExportAttendanceButton(),
                 const SizedBox(width: 8),
               ],
               IconButton(

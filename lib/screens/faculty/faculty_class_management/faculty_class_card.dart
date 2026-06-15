@@ -13,6 +13,7 @@ class FacultyClassCard extends StatelessWidget {
   final String? section;
   final String? semester;
   final IconData icon;
+  final String studentsActionLabel;
   final VoidCallback? onStudentsTap;
   final VoidCallback? onNotesTap;
   final VoidCallback? onSyllabusTap;
@@ -28,6 +29,7 @@ class FacultyClassCard extends StatelessWidget {
     this.section,
     this.semester,
     this.icon = Icons.menu_book_rounded,
+    this.studentsActionLabel = 'Students',
     this.onStudentsTap,
     this.onNotesTap,
     this.onSyllabusTap,
@@ -226,7 +228,7 @@ class FacultyClassCard extends StatelessWidget {
         children: [
           _buildFooterAction(
             icon: Icons.people_outline_rounded,
-            label: 'Students',
+            label: studentsActionLabel,
             onTap: onStudentsTap,
           ),
           const SizedBox(width: 6),

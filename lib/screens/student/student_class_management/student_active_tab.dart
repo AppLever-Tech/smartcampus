@@ -1,53 +1,49 @@
 import 'package:flutter/material.dart';
 import 'package:smartcampus/const/color_const.dart';
-import 'package:smartcampus/data/faculty_model.dart';
+import 'package:smartcampus/data/student_model.dart';
 import 'package:smartcampus/models/course_model.dart';
 import 'package:smartcampus/screens/dept_admin/time_table/models/time_table_time_slot.dart';
-import 'package:smartcampus/screens/faculty/faculty_class_management/completed_class_firestore_service.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_class_card.dart';
-import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_class_date_utils.dart';
-import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_class_students_page.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/models/completed_class_record.dart';
+import 'package:smartcampus/screens/student/student_class_management/student_class_detail_dialog.dart';
+import 'package:smartcampus/screens/student/student_class_management/student_class_firestore_service.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 
-class FacultyCompletedTab extends StatelessWidget {
-  final String orgId;
-  final FacultyModel faculty;
-  final List<CourseModel> assignedCourses;
+class StudentActiveTab extends StatelessWidget {
+  final StudentModel student;
+  final List<CourseModel> enrolledCourses;
   final List<CompletedClassRecord> classRecords;
   final List<TimeTableTimeSlot> timeSlots;
 
-  const FacultyCompletedTab({
+  const StudentActiveTab({
     super.key,
-    required this.orgId,
-    required this.faculty,
-    required this.assignedCourses,
+    required this.student,
+    required this.enrolledCourses,
     required this.classRecords,
     this.timeSlots = const [],
   });
 
   @override
   Widget build(BuildContext context) {
-    final completed = CompletedClassFirestoreService.filterCompletedForFaculty(
+    final active = StudentClassFirestoreService.filterActiveForStudent(
       records: classRecords,
-      faculty: faculty,
+      student: student,
+      enrolledCourses: enrolledCourses,
     );
 
-    if (completed.isEmpty) {
+    if (active.isEmpty) {
       return const FacultyClassesEmptyState(
-        title: 'No completed classes',
-        message:
-            'Past classes recorded in smcClasses will appear here once completed.',
-        icon: Icons.history_rounded,
+        title: 'No active classes',
+        message: 'Classes in progress for your batch and semester appear here.',
+        icon: Icons.play_circle_outline_rounded,
       );
     }
 
     return ListView(
       children: [
-        for (final record in completed) ...[
-          smcText(
-            textToDisplay:
-                FacultyClassDateUtils.formatCompletedDate(record.classDate),
+        for (final record in active) ...[
+          const smcText(
+            textToDisplay: 'In progress',
             textSize: 13,
             textBoldness: 4,
             colorOfText: ColorConst.textSecondary,
@@ -65,6 +61,7 @@ class FacultyCompletedTab extends StatelessWidget {
                 title: record.courseName.isNotEmpty
                     ? record.courseName
                     : record.courseId,
+                studentsActionLabel: 'Info',
                 courseCode: record.courseId.isNotEmpty &&
                         record.courseName.isNotEmpty
                     ? record.courseId
@@ -74,26 +71,20 @@ class FacultyCompletedTab extends StatelessWidget {
                 batch: record.batch,
                 section: record.section,
                 semester: record.semester,
-                icon: Icons.check_circle_outline_rounded,
-                onStudentsTap: () => FacultyClassStudentsPage.open(
+                icon: Icons.play_circle_outline_rounded,
+                onStudentsTap: () => StudentClassDetailDialog.show(
                   context: cardContext,
-                  orgId: orgId,
-                  faculty: faculty,
-                  assignedCourses: assignedCourses,
-                  courseId: record.courseId,
                   courseName: record.courseName,
+                  courseId: record.courseId,
+                  dayName: record.dayName,
+                  timing: timing,
                   batch: record.batch,
                   section: record.section,
                   semester: record.semester,
-                  dayName: record.dayName,
-                  timing: timing,
-                  timeSlotName: record.timeSlotName,
-                  timeSlotUid: record.timeSlotUid,
-                  timeTableUid: record.timeTableUid,
-                  timeBlockUid: record.timeBlockUid,
-                  dayUid: record.dayUid,
+                  facultyName: record.facultyName,
                   classDate: record.classDate,
-                  activeClassRecordId: record.id,
+                  student: student,
+                  classRecord: record,
                 ),
               );
             },

@@ -12,6 +12,7 @@ class StudentDashboardMobileLayout extends StatelessWidget {
   final String displayName;
   final Widget dashboardContent;
   final Widget profileContent;
+  final Widget classesContent;
 
   const StudentDashboardMobileLayout({
     super.key,
@@ -22,6 +23,7 @@ class StudentDashboardMobileLayout extends StatelessWidget {
     required this.displayName,
     required this.dashboardContent,
     required this.profileContent,
+    required this.classesContent,
   });
 
   @override
@@ -88,6 +90,10 @@ class StudentDashboardMobileLayout extends StatelessWidget {
             child: SizedBox.expand(child: dashboardContent),
           ),
           SizedBox.expand(child: profileContent),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: SizedBox.expand(child: classesContent),
+          ),
         ],
       ),
       bottomNavigationBar: Container(
@@ -125,6 +131,11 @@ class StudentDashboardMobileLayout extends StatelessWidget {
                 icon: Icon(Icons.person_outline_rounded),
                 activeIcon: Icon(Icons.person_rounded),
                 label: 'Profile',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.class_outlined),
+                activeIcon: Icon(Icons.class_rounded),
+                label: 'Classes',
               ),
             ],
           ),

@@ -54,6 +54,72 @@ class ClassAttendanceFirestoreService {
     required String timeSlotUid,
     required String timeSlotName,
   }) async {
+    return _findClassRecordForSession(
+      orgId: orgId,
+      facultyUid: facultyUid,
+      classDate: classDate,
+      timeBlockUid: timeBlockUid,
+      timeTableUid: timeTableUid,
+      courseId: courseId,
+      batch: batch,
+      section: section,
+      semester: semester,
+      dayUid: dayUid,
+      dayName: dayName,
+      timeSlotUid: timeSlotUid,
+      timeSlotName: timeSlotName,
+      activeOnly: true,
+    );
+  }
+
+  Future<CompletedClassRecord?> findClassRecordForSession({
+    required String orgId,
+    required String facultyUid,
+    required DateTime classDate,
+    required String timeBlockUid,
+    required String timeTableUid,
+    required String courseId,
+    required String batch,
+    required String section,
+    required String semester,
+    required String dayUid,
+    required String dayName,
+    required String timeSlotUid,
+    required String timeSlotName,
+  }) async {
+    return _findClassRecordForSession(
+      orgId: orgId,
+      facultyUid: facultyUid,
+      classDate: classDate,
+      timeBlockUid: timeBlockUid,
+      timeTableUid: timeTableUid,
+      courseId: courseId,
+      batch: batch,
+      section: section,
+      semester: semester,
+      dayUid: dayUid,
+      dayName: dayName,
+      timeSlotUid: timeSlotUid,
+      timeSlotName: timeSlotName,
+    );
+  }
+
+  Future<CompletedClassRecord?> _findClassRecordForSession({
+    required String orgId,
+    required String facultyUid,
+    required DateTime classDate,
+    required String timeBlockUid,
+    required String timeTableUid,
+    required String courseId,
+    required String batch,
+    required String section,
+    required String semester,
+    required String dayUid,
+    required String dayName,
+    required String timeSlotUid,
+    required String timeSlotName,
+    bool activeOnly = false,
+  }) async {
     final orgNorm = OrgField.normalize(orgId);
     if (orgNorm.isEmpty) {
       return null;
@@ -82,23 +148,31 @@ class ClassAttendanceFirestoreService {
 
     final normalizedFacultyUid = facultyUid.trim();
     final targetDate = FacultyClassDateUtils.dateOnly(classDate);
+    CompletedClassRecord? activeMatch;
+    CompletedClassRecord? completedMatch;
 
     for (final doc in snapshot.docs) {
       final record = CompletedClassRecord.fromFirestore(doc.id, doc.data());
-      if (!record.isActive) {
-        continue;
-      }
       if (record.facultyUid.trim() != normalizedFacultyUid) {
         continue;
       }
       if (!FacultyClassDateUtils.isSameDay(record.classDate, targetDate)) {
         continue;
       }
-      if (record.sessionKeyValue == sessionKey) {
-        return record;
+      if (record.sessionKeyValue != sessionKey) {
+        continue;
+      }
+      if (record.isActive) {
+        activeMatch = record;
+      } else if (record.isCompleted) {
+        completedMatch = record;
       }
     }
-    return null;
+
+    if (activeOnly) {
+      return activeMatch;
+    }
+    return activeMatch ?? completedMatch;
   }
 
   Future<String> startClass({

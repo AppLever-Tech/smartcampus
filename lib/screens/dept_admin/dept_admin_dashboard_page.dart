@@ -18,6 +18,7 @@ import 'package:smartcampus/services/faculty_firestore_service.dart';
 import 'package:smartcampus/services/student_firestore_service.dart';
 import 'package:smartcampus/services/org_role_firestore_service.dart';
 import 'package:smartcampus/widgets/department_form_sheet.dart';
+import 'package:smartcampus/widgets/app_info_dialog.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 import 'package:smartcampus/models/course_model.dart';
 import 'package:smartcampus/services/course_firestore_service.dart';
@@ -3402,6 +3403,14 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       onTap: onSupport,
                     ),
                     const Spacer(),
+                    _menuTile(
+                      title: 'Version',
+                      icon: Icons.info_outline_rounded,
+                      isSelected: false,
+                      sidebarExpanded: sidebarExpanded,
+                      onTap: () => AppInfoDialog.show(context),
+                    ),
+                    const SizedBox(height: 8),
                     _menuTile(
                       title: 'Logout',
                       icon: Icons.logout_rounded,

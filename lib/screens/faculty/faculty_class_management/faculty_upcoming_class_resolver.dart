@@ -92,7 +92,7 @@ class FacultyUpcomingClassResolver {
     required List<FacultyAssignedClass> assignedClasses,
     required List<TimeTableDay> timetableDays,
     List<TimeTableTimeSlot> timeSlots = const [],
-    required Set<String> activeSessionKeys,
+    required Set<String> excludedSessionKeys,
     DateTime? referenceDate,
   }) {
     final grouped = groupByDate(
@@ -130,7 +130,7 @@ class FacultyUpcomingClassResolver {
           timeSlotUid: scheduledClass.assignedClass.timeSlotUid,
           timeSlotName: scheduledClass.timeSlotName,
         );
-        if (!activeSessionKeys.contains(sessionKey)) {
+        if (!excludedSessionKeys.contains(sessionKey)) {
           count++;
         }
       }

@@ -1,34 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:smartcampus/const/color_const.dart';
-import 'package:smartcampus/data/faculty_model.dart';
+import 'package:smartcampus/data/student_model.dart';
 import 'package:smartcampus/models/course_model.dart';
 import 'package:smartcampus/screens/dept_admin/time_table/models/time_table_day.dart';
 import 'package:smartcampus/screens/dept_admin/time_table/models/time_table_time_slot.dart';
-import 'package:smartcampus/screens/faculty/faculty_class_management/completed_class_firestore_service.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_class_card.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_class_date_utils.dart';
-import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_class_students_page.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_upcoming_class_resolver.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/models/completed_class_record.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/models/faculty_assigned_class.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/models/faculty_scheduled_class.dart';
+import 'package:smartcampus/screens/student/student_class_management/student_class_detail_dialog.dart';
+import 'package:smartcampus/screens/student/student_class_management/student_class_firestore_service.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 
-class FacultyUpcomingTab extends StatelessWidget {
-  final String orgId;
-  final FacultyModel faculty;
+class StudentUpcomingTab extends StatelessWidget {
+  final StudentModel student;
   final List<FacultyAssignedClass> assignedClasses;
-  final List<CourseModel> assignedCourses;
+  final List<CourseModel> enrolledCourses;
   final List<TimeTableDay> timetableDays;
   final List<TimeTableTimeSlot> timeSlots;
   final List<CompletedClassRecord> classRecords;
 
-  const FacultyUpcomingTab({
+  const StudentUpcomingTab({
     super.key,
-    required this.orgId,
-    required this.faculty,
+    required this.student,
     required this.assignedClasses,
-    required this.assignedCourses,
+    required this.enrolledCourses,
     required this.timetableDays,
     required this.timeSlots,
     this.classRecords = const [],
@@ -67,16 +65,17 @@ class FacultyUpcomingTab extends StatelessWidget {
     );
 
     final excludedSessionKeys =
-        CompletedClassFirestoreService.sessionKeysExcludedFromUpcoming(
+        StudentClassFirestoreService.sessionKeysExcludedFromUpcoming(
       records: classRecords,
-      faculty: faculty,
+      student: student,
+      enrolledCourses: enrolledCourses,
     );
 
     if (grouped.isEmpty) {
-      return FacultyClassesEmptyState(
+      return const FacultyClassesEmptyState(
         title: 'No upcoming classes',
         message:
-            'No classes are scheduled for today, tomorrow, or the next three days.',
+            'No classes are scheduled for your batch and semester in the next five days.',
         icon: Icons.event_available_outlined,
       );
     }
@@ -101,7 +100,7 @@ class FacultyUpcomingTab extends StatelessWidget {
       return const FacultyClassesEmptyState(
         title: 'No upcoming classes',
         message:
-            'All scheduled classes for this window have already been started or completed.',
+            'All scheduled classes for this window have already started or completed.',
         icon: Icons.event_available_outlined,
       );
     }
@@ -121,52 +120,43 @@ class FacultyUpcomingTab extends StatelessWidget {
               colorOfText: ColorConst.textPrimary,
             ),
             const SizedBox(height: 10),
-            ...visibleSections[date]!.map(
-              (scheduledClass) {
-                final assignedClass = scheduledClass.assignedClass;
-                final classDate = scheduledClass.scheduledDate;
-                final showCourseCode = assignedClass.courseId.isNotEmpty &&
-                    assignedClass.courseName.isNotEmpty;
+            ...visibleSections[date]!.map((scheduledClass) {
+              final assignedClass = scheduledClass.assignedClass;
+              final classDate = scheduledClass.scheduledDate;
+              final showCourseCode = assignedClass.courseId.isNotEmpty &&
+                  assignedClass.courseName.isNotEmpty;
+              final timing = FacultyClassCard.resolveTimingLabel(
+                timeSlotUid: assignedClass.timeSlotUid,
+                timeSlotName: assignedClass.timeSlotName,
+                timeSlots: timeSlots,
+              );
 
-                final timing = FacultyClassCard.resolveTimingLabel(
-                  timeSlotUid: assignedClass.timeSlotUid,
-                  timeSlotName: assignedClass.timeSlotName,
-                  timeSlots: timeSlots,
-                );
-
-                return FacultyClassCard(
-                  title: assignedClass.courseName.isNotEmpty
-                      ? assignedClass.courseName
-                      : assignedClass.courseId,
-                  courseCode:
-                      showCourseCode ? assignedClass.courseId : null,
+              return FacultyClassCard(
+                title: assignedClass.courseName.isNotEmpty
+                    ? assignedClass.courseName
+                    : assignedClass.courseId,
+                studentsActionLabel: 'Info',
+                courseCode: showCourseCode ? assignedClass.courseId : null,
+                dayName: assignedClass.dayName,
+                timing: timing,
+                batch: assignedClass.batch,
+                section: assignedClass.section,
+                semester: assignedClass.semester,
+                onStudentsTap: () => StudentClassDetailDialog.show(
+                  context: context,
+                  courseName: assignedClass.courseName,
+                  courseId: assignedClass.courseId,
                   dayName: assignedClass.dayName,
                   timing: timing,
                   batch: assignedClass.batch,
                   section: assignedClass.section,
                   semester: assignedClass.semester,
-                  onStudentsTap: () => FacultyClassStudentsPage.open(
-                    context: context,
-                    orgId: orgId,
-                    faculty: faculty,
-                    assignedCourses: assignedCourses,
-                    courseId: assignedClass.courseId,
-                    courseName: assignedClass.courseName,
-                    batch: assignedClass.batch,
-                    section: assignedClass.section,
-                    semester: assignedClass.semester,
-                    dayName: assignedClass.dayName,
-                    timing: timing,
-                    timeSlotName: assignedClass.timeSlotName,
-                    timeSlotUid: assignedClass.timeSlotUid,
-                    timeTableUid: assignedClass.block.timeTableUid,
-                    timeBlockUid: assignedClass.block.id,
-                    dayUid: assignedClass.dayUid,
-                    classDate: classDate,
-                  ),
-                );
-              },
-            ),
+                  facultyName: assignedClass.block.facultyName,
+                  classDate: classDate,
+                  student: student,
+                ),
+              );
+            }),
             const SizedBox(height: 12),
           ],
       ],

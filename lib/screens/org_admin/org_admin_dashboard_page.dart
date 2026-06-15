@@ -4,6 +4,7 @@ import 'package:smartcampus/const/color_const.dart';
 import 'package:smartcampus/data/mock_master_data.dart';
 import 'package:smartcampus/screens/auth/landing_page.dart';
 import 'package:smartcampus/services/org_role_firestore_service.dart';
+import 'package:smartcampus/widgets/app_info_dialog.dart';
 import 'package:smartcampus/widgets/department_form_sheet.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
 import 'package:smartcampus/screens/shared/basic_details_screen.dart';
@@ -537,6 +538,13 @@ class OrgAdminDashboardPageState extends State<OrgAdminDashboardPage> {
                       icon: Icons.support_agent_rounded,
                       isSelected: false,
                       onTap: onSupport,
+                    ),
+                    const SizedBox(height: 8),
+                    _menuTile(
+                      title: 'Version',
+                      icon: Icons.info_outline_rounded,
+                      isSelected: false,
+                      onTap: () => AppInfoDialog.show(context),
                     ),
                     const SizedBox(height: 8),
                     _menuTile(
