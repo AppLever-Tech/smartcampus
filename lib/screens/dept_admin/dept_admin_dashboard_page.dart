@@ -68,6 +68,15 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   List<FacultyModel> facultyList = [];
   List<StudentModel> studentList = [];
   List<CourseModel> courseList = [];
+
+  FacultyModel? selectedProctor;
+  final TextEditingController proctorSearchController = TextEditingController();
+  int proctorRowsPerPage = 100;
+  int proctorCurrentPage = 1;
+  String proctorGenderFilter = 'All Gender';
+  double proctorListPanelRatio = 0.5;
+
+  List<FacultyModel> filteredProctors = [];
   List<SettingsItem> courseTypes = [];
   List<SettingsItem> batches = [];
   List<SettingsItem> schemes = [];
@@ -392,6 +401,22 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute<void>(builder: (_) => const LandingPage()),
           (route) => false,
+    );
+  }
+  Future<void> _importProctorAssignments() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xlsx'],
+    );
+
+    if (result == null) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Excel file selected successfully'),
+      ),
     );
   }
 
@@ -3357,8 +3382,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                     ),
                     const SizedBox(height: 8),
                     _menuTile(
-                      title: 'Users',
-                      icon: Icons.manage_accounts_outlined,
+                      title: 'Proctor Management',
+                      icon: Icons.supervisor_account_outlined,
                       isSelected: selectedMenuIndex == 4,
                       sidebarExpanded: sidebarExpanded,
                       onTap: () => setState(() {
@@ -3370,8 +3395,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                     ),
                     const SizedBox(height: 8),
                     _menuTile(
-                      title: 'Time Table',
-                      icon: Icons.calendar_month_outlined,
+                      title: 'Users',
+                      icon: Icons.manage_accounts_outlined,
                       isSelected: selectedMenuIndex == 5,
                       sidebarExpanded: sidebarExpanded,
                       onTap: () => setState(() {
@@ -3383,12 +3408,25 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                     ),
                     const SizedBox(height: 8),
                     _menuTile(
-                      title: 'Settings',
-                      icon: Icons.settings_outlined,
+                      title: 'Time Table',
+                      icon: Icons.calendar_month_outlined,
                       isSelected: selectedMenuIndex == 6,
                       sidebarExpanded: sidebarExpanded,
                       onTap: () => setState(() {
                         selectedMenuIndex = 6;
+                        selectedStudentDetail = null;
+                        selectedFacultyDetail = null;
+                        selectedCourseDetail = null;
+                      }),
+                    ),
+                    const SizedBox(height: 8),
+                    _menuTile(
+                      title: 'Settings',
+                      icon: Icons.settings_outlined,
+                      isSelected: selectedMenuIndex == 7,
+                      sidebarExpanded: sidebarExpanded,
+                      onTap: () => setState(() {
+                        selectedMenuIndex = 7;
                         selectedStudentDetail = null;
                         selectedFacultyDetail = null;
                         selectedCourseDetail = null;
@@ -3454,10 +3492,12 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       case 3:
         return _buildCoursesView();
       case 4:
-        return _buildUserManagementView();
+        return _buildProctorManagementView();
       case 5:
-        return _buildTimeTableView();
+        return _buildUserManagementView();
       case 6:
+        return _buildTimeTableView();
+      case 7:
         return _buildSettingsView();
 
       default:
@@ -4443,6 +4483,640 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildProctorManagementView() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (selectedProctor == null) {
+          return _buildProctorTable();
+        }
+
+        const double dividerWidth = 10;
+        const double minListWidth = 360;
+        const double minDetailWidth = 320;
+        final double availableWidth =
+        (constraints.maxWidth - dividerWidth).clamp(0, double.infinity);
+
+        if (availableWidth <= minListWidth + minDetailWidth) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(flex: 5, child: _buildProctorTable()),
+              _buildProctorPanelDivider(constraints.maxWidth),
+              Expanded(
+                flex: 4,
+                child: _buildProctorDetailsPanel(),
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              width: availableWidth * proctorListPanelRatio,
+              child: _buildProctorTable(),
+            ),
+            _buildProctorPanelDivider(constraints.maxWidth),
+            Expanded(
+              child: _buildProctorDetailsPanel(),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildProctorPanelDivider(double totalWidth) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeColumn,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragUpdate: (details) {
+          setState(() {
+            proctorListPanelRatio += details.delta.dx / totalWidth;
+            proctorListPanelRatio = proctorListPanelRatio.clamp(0.3, 0.7);
+          });
+        },
+        child: SizedBox(
+          width: 10,
+          child: Center(
+            child: Container(
+              width: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD8E2F4),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProctorTable() {
+    final String searchTerm = proctorSearchController.text.trim().toLowerCase();
+    final List<FacultyModel> genderFiltered = proctorGenderFilter == 'All Gender'
+        ? facultyList
+        : facultyList.where((f) => f.gender == proctorGenderFilter).toList();
+    final List<FacultyModel> searched = genderFiltered.where((f) {
+      if (searchTerm.isEmpty) return true;
+      return '${f.facultyId} ${f.fullName} ${f.email} ${f.mobile} ${f.gender}'
+          .toLowerCase()
+          .contains(searchTerm);
+    }).toList()
+      ..sort(
+            (a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()),
+      );
+
+    final int totalRows = searched.length;
+    final int totalPages = totalRows == 0 ? 1 : ((totalRows - 1) ~/ proctorRowsPerPage) + 1;
+    final int safePage = proctorCurrentPage.clamp(1, totalPages);
+    final int startIndex = (safePage - 1) * proctorRowsPerPage;
+    final int endIndex = (startIndex + proctorRowsPerPage).clamp(0, totalRows);
+    final List<FacultyModel> pageRows =
+    totalRows == 0 ? <FacultyModel>[] : searched.sublist(startIndex, endIndex);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE4EBFB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF0FF),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(Icons.assignment_ind_outlined, color: ColorConst.primaryBlue),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Flexible(
+                          child: smcText(
+                            textToDisplay: 'Proctor Management',
+                            textSize: 16,
+                            textBoldness: 5,
+                            colorOfText: Color(0xFF1F2F52),
+                            maxLines: 1,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF4FF),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: smcText(
+                            textToDisplay: '${facultyList.length}',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: ColorConst.primaryBlue,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    const smcText(
+                      textToDisplay: 'View and manage student-proctor assignments',
+                      textSize: 12,
+                      colorOfText: Color(0xFF7D87A3),
+                      maxLines: 2,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _importProctorAssignments,
+                    icon: const Icon(Icons.upload_file_rounded),
+                    label: const Text('Import Excel'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: ColorConst.primaryBlue,
+                      side: const BorderSide(color: ColorConst.primaryBlue),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Search and Filters
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFCFDFF),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE8EDFA)),
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final bool stackFilters = constraints.maxWidth < 560;
+                final Widget searchField = SizedBox(
+                  height: 44,
+                  child: TextField(
+                    controller: proctorSearchController,
+                    onChanged: (_) => setState(() => proctorCurrentPage = 1),
+                    decoration: InputDecoration(
+                      hintText: 'Search proctor...',
+                      prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Color(0xFF8A96B2)),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: ColorConst.primaryBlue),
+                      ),
+                    ),
+                  ),
+                );
+                final Widget genderDropdown = SizedBox(
+                  height: 44,
+                  child: DropdownButtonFormField<String>(
+                    isExpanded: true,
+                    value: ['All Gender', 'Male', 'Female', 'Other', 'Prefer not to say']
+                        .contains(proctorGenderFilter)
+                        ? proctorGenderFilter
+                        : 'All Gender',
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F5)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: ColorConst.primaryBlue),
+                      ),
+                    ),
+                    items: ['All Gender', 'Male', 'Female', 'Other', 'Prefer not to say']
+                        .map(
+                          (g) => DropdownMenuItem(
+                        value: g,
+                        child: Text(
+                          g,
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      ),
+                    )
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) {
+                        setState(() {
+                          proctorGenderFilter = v;
+                          proctorCurrentPage = 1;
+                        });
+                      }
+                    },
+                  ),
+                );
+                final Widget resetButton = SizedBox(
+                  height: 44,
+                  child: OutlinedButton(
+                    onPressed: () {
+                      setState(() {
+                        proctorSearchController.clear();
+                        proctorGenderFilter = 'All Gender';
+                        proctorCurrentPage = 1;
+                      });
+                    },
+                    child: const smcText(
+                      textToDisplay: 'Reset',
+                      textSize: 12,
+                      textBoldness: 3,
+                      colorOfText: Color(0xFF4F5E7D),
+                    ),
+                  ),
+                );
+
+                if (stackFilters) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      searchField,
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(child: genderDropdown),
+                          const SizedBox(width: 12),
+                          resetButton,
+                        ],
+                      ),
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(flex: 3, child: searchField),
+                    const SizedBox(width: 12),
+                    Expanded(flex: 2, child: genderDropdown),
+                    const SizedBox(width: 12),
+                    resetButton,
+                  ],
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE3EAF8)),
+              ),
+              child: totalRows == 0
+                  ? const Center(
+                child: smcText(
+                  textToDisplay: 'No proctor found.',
+                  textSize: 13,
+                  colorOfText: Color(0xFF8A96B2),
+                ),
+              )
+                  : Column(
+                children: [
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final double tableWidth = constraints.maxWidth;
+                        return SingleChildScrollView(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(minWidth: tableWidth),
+                              child: DataTable(
+                                showCheckboxColumn: false,
+                                headingRowHeight: 50,
+                                dataRowMinHeight: 52,
+                                dataRowMaxHeight: 58,
+                                horizontalMargin: 0,
+                                columnSpacing: 0,
+                                dividerThickness: 1,
+                                border: TableBorder.all(color: const Color(0xFFE3EAF8), width: 1),
+                                headingRowColor: MaterialStateProperty.all(const Color(0xFFF4F7FF)),
+                                columns: const [
+                                  DataColumn(label: SizedBox(width: 50, child: Center(child: smcText(textToDisplay: 'S.No', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
+                                  DataColumn(label: SizedBox(width: 100, child: Padding(padding: EdgeInsets.only(left: 8), child: Align(alignment: Alignment.centerLeft, child: smcText(textToDisplay: 'Faculty ID', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B)))))),
+                                  DataColumn(label: SizedBox(width: 200, child: Center(child: smcText(textToDisplay: 'Name', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
+                                  DataColumn(label: SizedBox(width: 110, child: Center(child: smcText(textToDisplay: 'Students', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
+                                  DataColumn(label: SizedBox(width: 80, child: Center(child: smcText(textToDisplay: 'Actions', textSize: 12, textBoldness: 4, colorOfText: Color(0xFF5C6B8B))))),
+                                ],
+                                rows: pageRows.asMap().entries.map((entry) {
+                                  final int index = entry.key;
+                                  final FacultyModel f = entry.value;
+                                  final int serialNo = startIndex + index + 1;
+                                  final bool isSelected = selectedProctor?.facultyId == f.facultyId;
+                                  return DataRow(
+                                    selected: isSelected,
+                                    onSelectChanged: (_) => setState(() => selectedProctor = f),
+                                    color: isSelected
+                                        ? WidgetStateProperty.all(const Color(0xFFE8F0FE))
+                                        : null,
+                                    cells: [
+                                      DataCell(
+                                        Center(
+                                          child: smcText(
+                                            textToDisplay: '$serialNo',
+                                            textSize: 12,
+                                            colorOfText: const Color(0xFF2E3954),
+                                          ),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Padding(
+                                          padding: const EdgeInsets.only(left: 8),
+                                          child: Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: smcText(
+                                              textToDisplay: f.facultyId,
+                                              textSize: 12,
+                                              textBoldness: 4,
+                                              colorOfText: const Color(0xFF2E3954),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                                          child: Row(
+                                            children: [
+                                              _buildFacultyAvatar(f),
+                                              const SizedBox(width: 10),
+                                              Expanded(
+                                                child: smcText(
+                                                  textToDisplay: f.fullName,
+                                                  textSize: 12,
+                                                  colorOfText: const Color(0xFF2E3954),
+                                                  maxLines: 1,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Center(
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                            decoration: BoxDecoration(color: const Color(0xFFEFF4FF), borderRadius: BorderRadius.circular(999)),
+                                            child: const smcText(textToDisplay: '15', textSize: 11, textBoldness: 3, colorOfText: Color(0xFF3558DA)),
+                                          ),
+                                        ),
+                                      ),
+                                      DataCell(
+                                            Center(
+                                              child: PopupMenuButton<String>(
+                                                icon: const Icon(Icons.more_vert, color: Color(0xFF5C6B8B), size: 20),
+                                                onSelected: (value) {
+                                                  if (value == 'edit') {
+                                                    // TODO: Implement edit proctor logic
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      const SnackBar(content: Text('Edit proctor functionality coming soon')),
+                                                    );
+                                                  } else if (value == 'delete') {
+                                                    // TODO: Implement delete proctor logic
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      const SnackBar(content: Text('Delete proctor functionality coming soon')),
+                                                    );
+                                                  }
+                                                },
+                                                itemBuilder: (context) => const [
+                                                  PopupMenuItem(
+                                                    value: "edit",
+                                                    child: Text("Edit"),
+                                                  ),
+                                                  PopupMenuItem(
+                                                    value: "delete",
+                                                    child: Text(
+                                                      "Delete",
+                                                      style: TextStyle(color: Colors.red),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                    ],
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  // Pagination
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: const BoxDecoration(
+                      border: Border(top: BorderSide(color: Color(0xFFE3EAF8))),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        smcText(
+                          textToDisplay: 'Showing ${startIndex + 1} to $endIndex of $totalRows entries',
+                          textSize: 12,
+                          colorOfText: const Color(0xFF7D87A3),
+                        ),
+                        Row(
+                          children: [
+                            const smcText(
+                              textToDisplay: 'Rows per page:',
+                              textSize: 12,
+                              colorOfText: Color(0xFF7D87A3),
+                            ),
+                            const SizedBox(width: 8),
+                            DropdownButton<int>(
+                              value: proctorRowsPerPage,
+                              underline: const SizedBox(),
+                              icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 16),
+                              items: [10, 20, 50, 100].map((int value) {
+                                return DropdownMenuItem<int>(
+                                  value: value,
+                                  child: smcText(textToDisplay: value.toString(), textSize: 12),
+                                );
+                              }).toList(),
+                              onChanged: (int? newValue) {
+                                if (newValue != null) {
+                                  setState(() {
+                                    proctorRowsPerPage = newValue;
+                                    proctorCurrentPage = 1;
+                                  });
+                                }
+                              },
+                            ),
+                            const SizedBox(width: 16),
+                            IconButton(
+                              icon: const Icon(Icons.chevron_left_rounded, size: 20),
+                              onPressed: proctorCurrentPage > 1
+                                  ? () => setState(() => proctorCurrentPage--)
+                                  : null,
+                              color: proctorCurrentPage > 1 ? const Color(0xFF4F5E7D) : const Color(0xFFC4CDE0),
+                            ),
+                            smcText(
+                              textToDisplay: 'Page $safePage of $totalPages',
+                              textSize: 12,
+                              colorOfText: const Color(0xFF4F5E7D),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.chevron_right_rounded, size: 20),
+                              onPressed: proctorCurrentPage < totalPages
+                                  ? () => setState(() => proctorCurrentPage++)
+                                  : null,
+                              color: proctorCurrentPage < totalPages ? const Color(0xFF4F5E7D) : const Color(0xFFC4CDE0),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProctorDetailsPanel() {
+    if (selectedProctor == null) return const SizedBox.shrink();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFFE4EBFB),
+        ),
+      ),
+      child: Column(
+        children: [
+          // BLUE HEADER
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: const BoxDecoration(
+              color: ColorConst.primaryBlue,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      selectedProctor!.fullName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      "Faculty ID: ${selectedProctor!.facultyId}",
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: () {
+                    setState(() {
+                      selectedProctor = null;
+                    });
+                  },
+                  icon: const Icon(
+                    Icons.close,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const smcText(
+                    textToDisplay: "Assigned Students",
+                    textSize: 16,
+                    textBoldness: 5,
+                    colorOfText: ColorConst.primaryBlue,
+                  ),
+                  const Divider(),
+                  const Expanded(
+                    child: Center(
+                      child: smcText(
+                        textToDisplay: "No Students Assigned",
+                        textSize: 14,
+                        colorOfText: Color(0xFF8A96B2),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

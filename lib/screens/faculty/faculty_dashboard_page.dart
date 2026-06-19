@@ -116,7 +116,7 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
   String _firstNonEmpty(Iterable<String> values) {
     for (final value in values) {
       final normalized = OrgField.normalize(value);
-      if (normalized.isNotEmpty) {
+      if (normalized.isEmpty) {
         return normalized;
       }
     }
