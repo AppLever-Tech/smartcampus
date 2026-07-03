@@ -1,17 +1,22 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:smartcampus/const/color_const.dart';
 import 'package:smartcampus/data/org_field.dart';
 import 'package:smartcampus/data/student_model.dart';
 import 'package:smartcampus/data/user_org_scope.dart';
+import 'package:smartcampus/models/announcement_model.dart';
 import 'package:smartcampus/models/course_model.dart';
 import 'package:smartcampus/screens/auth/landing_page.dart';
 import 'package:smartcampus/screens/shared/person_detail_page.dart';
 import 'package:smartcampus/screens/student/student_class_management/student_classes_page.dart';
+import 'package:smartcampus/screens/student/student_courses_page.dart';
+import 'package:smartcampus/screens/student/student_course_registration/student_course_registration_page.dart';
 import 'package:smartcampus/screens/student/student_dashboard_mobile_layout.dart';
 import 'package:smartcampus/screens/student/student_profile_not_found_page.dart';
+import 'package:smartcampus/services/announcement_firestore_service.dart';
 import 'package:smartcampus/services/course_firestore_service.dart';
 import 'package:smartcampus/services/org_role_firestore_service.dart';
 import 'package:smartcampus/services/student_firestore_service.dart';
@@ -19,6 +24,7 @@ import 'package:smartcampus/services/user_master_firestore_service.dart';
 import 'package:smartcampus/widgets/app_info_dialog.dart';
 import 'package:smartcampus/widgets/profile_photo_avatar.dart';
 import 'package:smartcampus/widgets/smc_text.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class StudentDashboardPage extends StatefulWidget {
   final String orgId;
@@ -46,9 +52,13 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
   final CourseFirestoreService courseService = CourseFirestoreService();
   final UserMasterFirestoreService userMasterService =
       UserMasterFirestoreService();
+  final AnnouncementFirestoreService announcementService =
+      AnnouncementFirestoreService();
 
   UserOrgScope? _orgScope;
   StreamSubscription<List<CourseModel>>? _courseSubscription;
+  StreamSubscription<List<AnnouncementModel>>? _announcementSubscription;
+  List<AnnouncementModel> announcements = [];
 
   String get scopedOrgId =>
       _orgScope?.orgId ?? OrgField.normalize(widget.orgId);
@@ -90,6 +100,38 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
     });
   }
 
+  void _bindAnnouncementListener() {
+    _announcementSubscription?.cancel();
+    final scope = _orgScope;
+    if (scope == null || !scope.hasOrg) {
+      return;
+    }
+    _announcementSubscription = announcementService
+        .getAnnouncementsForDept(orgId: scope.orgId, deptId: scope.deptId)
+        .listen((announcementList) {
+      if (!mounted) {
+        return;
+      }
+      // First filter to org and dept
+      final orgDeptFiltered = announcementList.where((a) {
+        final matchesOrg = a.orgId == OrgField.normalize(scope.orgId);
+        final matchesDept = a.deptId == OrgField.normalize(scope.deptId);
+        return matchesOrg && matchesDept;
+      }).toList();
+      // Filter announcements for student's batch or all students
+      final studentBatch = studentProfile?.batch ?? '';
+      final filtered = orgDeptFiltered.where((a) {
+        if (a.targetSchemes.isEmpty) {
+          return true;
+        }
+        return a.targetSchemes.contains(studentBatch);
+      }).toList();
+      setState(() {
+        announcements = filtered;
+      });
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -99,6 +141,7 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
   @override
   void dispose() {
     _courseSubscription?.cancel();
+    _announcementSubscription?.cancel();
     super.dispose();
   }
 
@@ -120,6 +163,9 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
         uuid: widget.uuid,
         prefetched: widget.student,
       );
+      
+      // Bind announcement listener after we have student profile for filtering
+      _bindAnnouncementListener();
       final org =
           await roleService.authService.getOrganizationById(scope.orgId);
       String deptName = scope.deptId;
@@ -255,19 +301,229 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
     );
   }
 
-  Widget _buildSelectedView() {
-    switch (selectedMenuIndex) {
-      case 1:
-        return _buildProfileView();
-      case 2:
-        return _buildClassesView();
-      default:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildDashboardView(),
+  void _showAnnouncementDetails(AnnouncementModel announcement) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: smcText(textToDisplay: announcement.title, textSize: 18, textBoldness: 5),
+          content: SizedBox(
+            width: 600,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF4FF),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: smcText(
+                          textToDisplay: announcement.category,
+                          textSize: 11,
+                          textBoldness: 3,
+                          colorOfText: ColorConst.primaryBlue,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      smcText(
+                        textToDisplay: '${announcement.publishDate.day}/${announcement.publishDate.month}/${announcement.publishDate.year}',
+                        textSize: 12,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const smcText(
+                    textToDisplay: 'Description',
+                    textSize: 12,
+                    textBoldness: 4,
+                    colorOfText: ColorConst.textSecondary,
+                  ),
+                  const SizedBox(height: 8),
+                  smcText(
+                    textToDisplay: announcement.description,
+                    textSize: 12,
+                  ),
+                  if (announcement.attachmentUrl.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    InkWell(
+                      onTap: () async {
+                        final uri = Uri.parse(announcement.attachmentUrl);
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri);
+                        }
+                      },
+                      child: Row(
+                        children: [
+                          const Icon(Icons.attach_file, color: ColorConst.primaryBlue),
+                          const SizedBox(width: 8),
+                          smcText(
+                            textToDisplay: announcement.attachmentName,
+                            textSize: 12,
+                            colorOfText: ColorConst.primaryBlue,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const smcText(
+                textToDisplay: 'Close',
+                textSize: 14,
+                textBoldness: 3,
+                colorOfText: ColorConst.textSecondary,
+              ),
+            ),
           ],
         );
+      },
+    );
+  }
+
+  Widget _buildAnnouncementCard(AnnouncementModel announcement) {
+    return InkWell(
+      onTap: () => _showAnnouncementDetails(announcement),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE3EAF8)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: smcText(
+                    textToDisplay: announcement.title,
+                    textSize: 14,
+                    textBoldness: 5,
+                    colorOfText: ColorConst.textPrimary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF4FF),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: smcText(
+                    textToDisplay: announcement.category,
+                    textSize: 11,
+                    textBoldness: 3,
+                    colorOfText: ColorConst.primaryBlue,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            smcText(
+              textToDisplay: announcement.description,
+              textSize: 13,
+              colorOfText: ColorConst.textSecondary,
+              maxLines: 3,
+            ),
+            const SizedBox(height: 12),
+            smcText(
+              textToDisplay: '${announcement.publishDate.day}/${announcement.publishDate.month}/${announcement.publishDate.year}',
+              textSize: 12,
+              colorOfText: ColorConst.textSecondary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotificationsView() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const smcText(
+          textToDisplay: 'Notifications & Announcements',
+          textSize: 16,
+          textBoldness: 5,
+          colorOfText: ColorConst.textPrimary,
+        ),
+        const SizedBox(height: 24),
+        Expanded(
+          child: announcements.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.notifications_none_outlined, size: 48, color: Colors.grey.shade300),
+                      const SizedBox(height: 16),
+                      const smcText(
+                        textToDisplay: 'No announcements currently available',
+                        textSize: 14,
+                        colorOfText: ColorConst.textSecondary,
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.separated(
+                  itemCount: announcements.length,
+                  separatorBuilder: (ctx, i) => const SizedBox(height: 16),
+                  itemBuilder: (ctx, i) => _buildAnnouncementCard(announcements[i]),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSelectedView() {
+    switch (selectedMenuIndex) {
+      case 0:
+        return _buildDashboardView();
+
+      case 1:
+        return _buildProfileView();
+
+      case 2:
+        return StudentCoursesPage(
+          student: studentProfile!,
+          orgId: scopedOrgId,
+        );
+
+      case 3:
+        return _buildClassesView();
+
+      case 4:
+        return const Center(
+          child: Text('Assignments'),
+        );
+
+      case 5:
+        return const Center(
+          child: Text('Leave & Requests'),
+        );
+
+      case 6:
+        return _buildNotificationsView();
+
+      case 7:
+        return const Center(
+          child: Text('Settings'),
+        );
+
+      default:
+        return _buildDashboardView();
     }
   }
 
@@ -290,10 +546,9 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
       return cgpa.isEmpty ? 'NA' : cgpa;
     }();
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         Row(
           children: [
             const smcText(
@@ -419,26 +674,32 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
           colorOfText: ColorConst.textPrimary,
         ),
         const SizedBox(height: 16),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE3EAF8)),
-          ),
-          child: const smcText(
-            textToDisplay:
-                'No events & announcements currently available',
-            textSize: 14,
-            colorOfText: ColorConst.textSecondary,
-            maxLines: 3,
-            textAlign: TextAlign.center,
-          ),
-        ),
+        if (announcements.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE3EAF8)),
+            ),
+            child: const smcText(
+              textToDisplay:
+                  'No events & announcements currently available',
+              textSize: 14,
+              colorOfText: ColorConst.textSecondary,
+              maxLines: 3,
+              textAlign: TextAlign.center,
+            ),
+          )
+        else
+          ...announcements.take(3).map((a) => Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: _buildAnnouncementCard(a),
+          )),
         ],
-      ),
-    );
+      );
+
   }
 
   Widget _buildProfileView() {
@@ -541,11 +802,15 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
         border: Border(right: BorderSide(color: Color(0xFFE3EAF8))),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: sidebarExpanded
-              ? CrossAxisAlignment.start
-              : CrossAxisAlignment.center,
+          padding: const EdgeInsets.all(12),
+          child: Column(
+              crossAxisAlignment: sidebarExpanded
+                  ? CrossAxisAlignment.start
+                  : CrossAxisAlignment.center,
+              children: [
+
+          Expanded(
+          child: ListView(
           children: [
             if (sidebarExpanded)
               Padding(
@@ -601,20 +866,65 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
               onTap: () => setState(() => selectedMenuIndex = 0),
             ),
             const SizedBox(height: 8),
+
             _menuTile(
-              title: 'Profile',
-              icon: Icons.person_outline_rounded,
-              isSelected: selectedMenuIndex == 1,
-              onTap: () => setState(() => selectedMenuIndex = 1),
-            ),
-            const SizedBox(height: 8),
-            _menuTile(
-              title: 'Classes',
-              icon: Icons.class_outlined,
-              isSelected: selectedMenuIndex == 2,
-              onTap: () => setState(() => selectedMenuIndex = 2),
-            ),
-            const Spacer(),
+                    title: 'Profile',
+                    icon: Icons.person_outline_rounded,
+                    isSelected: selectedMenuIndex == 1,
+                    onTap: () => setState(() => selectedMenuIndex = 1),
+                  ),
+                  const SizedBox(height: 8),
+
+                  _menuTile(
+                    title: 'Courses',
+                    icon: Icons.menu_book_outlined,
+                    isSelected: selectedMenuIndex == 2,
+                    onTap: () => setState(() => selectedMenuIndex = 2),
+                  ),
+                  const SizedBox(height: 8),
+
+                  _menuTile(
+                    title: 'Classes',
+                    icon: Icons.class_outlined,
+                    isSelected: selectedMenuIndex == 3,
+                    onTap: () => setState(() => selectedMenuIndex = 3),
+                  ),
+                  const SizedBox(height: 8),
+
+                  _menuTile(
+                    title: 'Assignments',
+                    icon: Icons.assignment_outlined,
+                    isSelected: selectedMenuIndex == 4,
+                    onTap: () => setState(() => selectedMenuIndex = 4),
+                  ),
+                  const SizedBox(height: 8),
+
+                  _menuTile(
+                    title: 'Leave & Requests',
+                    icon: Icons.event_note_outlined,
+                    isSelected: selectedMenuIndex == 5,
+                    onTap: () => setState(() => selectedMenuIndex = 5),
+                  ),
+                  const SizedBox(height: 8),
+
+                  _menuTile(
+                    title: 'Notifications',
+                    icon: Icons.notifications_none_outlined,
+                    isSelected: selectedMenuIndex == 6,
+                    onTap: () => setState(() => selectedMenuIndex = 6),
+                  ),
+                  const SizedBox(height: 8),
+
+                  _menuTile(
+                    title: 'Settings',
+                    icon: Icons.settings_outlined,
+                    isSelected: selectedMenuIndex == 7,
+                    onTap: () => setState(() => selectedMenuIndex = 7),
+                  ),
+          ],
+          ),
+          ),
+
             _menuTile(
               title: 'Version',
               icon: Icons.info_outline_rounded,

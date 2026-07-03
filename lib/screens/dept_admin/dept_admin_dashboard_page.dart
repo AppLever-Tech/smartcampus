@@ -33,6 +33,9 @@ import 'package:smartcampus/services/user_master_firestore_service.dart';
 import 'package:smartcampus/services/settings_firestore_service.dart';
 import 'package:smartcampus/screens/dept_admin/dept_user_management_view.dart';
 import 'package:smartcampus/screens/dept_admin/time_table/dept_time_table_view.dart';
+import 'package:smartcampus/models/announcement_model.dart';
+import 'package:smartcampus/services/announcement_firestore_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class DeptAdminDashboardPage extends StatefulWidget {
   final String orgId;
@@ -60,10 +63,14 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   final SettingsFirestoreService settingsService = SettingsFirestoreService();
   final UserMasterFirestoreService userMasterService =
       UserMasterFirestoreService();
+  final AnnouncementFirestoreService announcementService =
+      AnnouncementFirestoreService();
 
   bool loading = true;
-  int selectedMenuIndex = 0; // 0: Dashboard, 1: Students, 2: Faculties, 3: Courses, 4: Users, 5: Time Table, 6: Settings
+  int selectedMenuIndex = 0; // 0: Dashboard, 1: Students, 2: Faculties, 3: Courses, 4: Users, 5: Time Table, 6: Settings, 7: Announcements
   int selectedSettingsFilter = 0; // 0: Course Types, 1: Batches, 2: Schemes
+  List<AnnouncementModel> announcements = [];
+  StreamSubscription<List<AnnouncementModel>>? _announcementSubscription;
   List<DepartmentMasterItem> departments = [];
   List<FacultyModel> facultyList = [];
   List<StudentModel> studentList = [];
@@ -196,7 +203,28 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     courseTableHorizontalScrollController.dispose();
     courseTableVerticalScrollController.dispose();
     _courseSubscription?.cancel();
+    _announcementSubscription?.cancel();
     super.dispose();
+  }
+
+  void _bindAnnouncementListener() {
+    _announcementSubscription?.cancel();
+    final scope = _orgScope;
+    if (scope == null || !scope.hasOrg) {
+      return;
+    }
+    _announcementSubscription = announcementService
+        .getAnnouncementsForDept(orgId: scope.orgId, deptId: scope.deptId)
+        .listen((items) {
+      if (!mounted) return;
+      // Filter to only this org and dept
+      final filtered = items.where((a) {
+        final matchesOrg = a.orgId == OrgField.normalize(scope.orgId);
+        final matchesDept = a.deptId == OrgField.normalize(scope.deptId);
+        return matchesOrg && matchesDept;
+      }).toList();
+      setState(() => announcements = filtered);
+    });
   }
 
   void closeStudentDetail() {
@@ -347,6 +375,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       );
       _orgScope = scope;
       _bindScopedCourseListener();
+      _bindAnnouncementListener();
 
       final depts = await roleService.loadDepartmentsForOrg(scope.orgId);
       final org = await roleService.authService.getOrganizationById(scope.orgId);
@@ -3421,8 +3450,10 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                     ),
                     const SizedBox(height: 8),
                     _menuTile(
+
                       title: 'Settings',
                       icon: Icons.settings_outlined,
+
                       isSelected: selectedMenuIndex == 7,
                       sidebarExpanded: sidebarExpanded,
                       onTap: () => setState(() {
@@ -3499,6 +3530,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         return _buildTimeTableView();
       case 7:
         return _buildSettingsView();
+      case 7:
+        return _buildAnnouncementsView();
 
       default:
         return _buildDashboardView();
@@ -3541,6 +3574,665 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     }
 
     return counts;
+  }
+
+  void _openAnnouncementDialog([AnnouncementModel? existing]) {
+    final formKey = GlobalKey<FormState>();
+    final titleController = TextEditingController(text: existing?.title ?? '');
+    final descriptionController = TextEditingController(text: existing?.description ?? '');
+    String selectedCategory = existing?.category ?? AnnouncementModel.categories.first;
+    DateTime selectedPublishDate = existing?.publishDate ?? DateTime.now();
+    List<String> selectedSchemes = List.from(existing?.targetSchemes ?? []);
+    Uint8List? newAttachmentBytes;
+    String? newAttachmentName;
+    bool uploading = false;
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: smcText(
+                textToDisplay: '${existing == null ? 'Create' : 'Edit'} Announcement',
+                textSize: 18,
+                textBoldness: 5,
+              ),
+              content: SizedBox(
+                width: 700,
+                child: Form(
+                  key: formKey,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextFormField(
+                          controller: titleController,
+                          decoration: InputDecoration(
+                            labelText: 'Title *',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          validator: (value) => (value?.trim().isEmpty ?? true) ? 'Title is required' : null,
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: descriptionController,
+                          decoration: InputDecoration(
+                            labelText: 'Description *',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          maxLines: 4,
+                          validator: (value) => (value?.trim().isEmpty ?? true) ? 'Description is required' : null,
+                        ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<String>(
+                          value: selectedCategory,
+                          decoration: InputDecoration(
+                            labelText: 'Category',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          items: AnnouncementModel.categories
+                              .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
+                              .toList(),
+                          onChanged: (val) => setDialogState(() => selectedCategory = val!),
+                        ),
+                        const SizedBox(height: 16),
+                        const smcText(textToDisplay: 'Target Audience (Batches):', textSize: 12, colorOfText: ColorConst.textSecondary, textBoldness: 4),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            FilterChip(
+                              label: const Text('All Students'),
+                              selected: selectedSchemes.isEmpty,
+                              onSelected: (_) => setDialogState(() => selectedSchemes = []),
+                            ),
+                            ...schemes.map((scheme) {
+                              return FilterChip(
+                                label: Text(scheme.name),
+                                selected: selectedSchemes.contains(scheme.id),
+                                onSelected: (selected) {
+                                  setDialogState(() {
+                                    if (selected) {
+                                      selectedSchemes.add(scheme.id);
+                                    } else {
+                                      selectedSchemes.remove(scheme.id);
+                                    }
+                                  });
+                                },
+                              );
+                            }),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        InkWell(
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: ctx,
+                              initialDate: selectedPublishDate,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2030),
+                            );
+                            if (picked != null) {
+                              setDialogState(() => selectedPublishDate = picked);
+                            }
+                          },
+                          child: InputDecorator(
+                            decoration: InputDecoration(
+                              labelText: 'Publish Date',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              suffixIcon: const Icon(Icons.calendar_today),
+                            ),
+                            child: Text('${selectedPublishDate.day}/${selectedPublishDate.month}/${selectedPublishDate.year}'),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        const smcText(textToDisplay: 'Attachment (PDF/Image, optional):', textSize: 12, colorOfText: ColorConst.textSecondary, textBoldness: 4),
+                        const SizedBox(height: 8),
+                        if (existing?.attachmentUrl.isNotEmpty == true && newAttachmentBytes == null)
+                          Row(
+                            children: [
+                              const Icon(Icons.attach_file, color: ColorConst.primaryBlue),
+                              const SizedBox(width: 8),
+                              smcText(textToDisplay: existing?.attachmentName ?? 'Attachment', textSize: 12),
+                              const Spacer(),
+                              TextButton.icon(
+                                icon: const Icon(Icons.close, color: Colors.red),
+                                label: const Text('Remove', style: TextStyle(color: Colors.red)),
+                                onPressed: () => setDialogState(() {
+                                  newAttachmentBytes = Uint8List(0);
+                                  newAttachmentName = '';
+                                }),
+                              ),
+                            ],
+                          ),
+                        if (newAttachmentBytes != null && newAttachmentBytes!.isNotEmpty)
+                          Row(
+                            children: [
+                              const Icon(Icons.attach_file, color: ColorConst.primaryBlue),
+                              const SizedBox(width: 8),
+                              smcText(textToDisplay: newAttachmentName ?? 'New Attachment', textSize: 12),
+                              const Spacer(),
+                              TextButton.icon(
+                                icon: const Icon(Icons.close, color: Colors.red),
+                                label: const Text('Remove', style: TextStyle(color: Colors.red)),
+                                onPressed: () => setDialogState(() {
+                                  newAttachmentBytes = null;
+                                  newAttachmentName = null;
+                                }),
+                              ),
+                            ],
+                          ),
+                        if ((newAttachmentBytes == null || newAttachmentBytes!.isEmpty) && (existing?.attachmentUrl.isEmpty ?? true))
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.upload_file),
+                            label: const Text('Select File'),
+                            style: ElevatedButton.styleFrom(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: () async {
+                              final result = await FilePicker.platform.pickFiles(
+                                type: FileType.custom,
+                                allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+                              );
+                              if (result != null && result.files.first.bytes != null) {
+                                setDialogState(() {
+                                  newAttachmentBytes = result.files.first.bytes!;
+                                  newAttachmentName = result.files.first.name;
+                                });
+                              }
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: uploading ? null : () => Navigator.pop(ctx),
+                  child: const smcText(
+                    textToDisplay: 'Cancel',
+                    textSize: 14,
+                    textBoldness: 3,
+                    colorOfText: ColorConst.textSecondary,
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: uploading
+                      ? null
+                      : () async {
+                          if (formKey.currentState!.validate()) {
+                            try {
+                              setDialogState(() => uploading = true);
+                              String attachmentUrl = existing?.attachmentUrl ?? '';
+                              String attachmentName = existing?.attachmentName ?? '';
+
+                              // Handle attachment
+                              if (newAttachmentBytes != null && newAttachmentBytes!.isNotEmpty) {
+                                // Upload new
+                                if (newAttachmentName != null && newAttachmentName!.isNotEmpty) {
+                                  attachmentUrl = await announcementService.uploadAttachment(
+                                    fileName: newAttachmentName!,
+                                    bytes: newAttachmentBytes!,
+                                    orgId: scopedOrgId,
+                                  );
+                                  attachmentName = newAttachmentName!;
+                                }
+                              } else if (newAttachmentBytes != null && newAttachmentBytes!.isEmpty) {
+                                // Remove
+                                attachmentUrl = '';
+                                attachmentName = '';
+                              }
+
+                              final announcement = AnnouncementModel(
+                                id: existing?.id ?? '',
+                                orgId: scopedOrgId,
+                                deptId: scopedDeptId,
+                                title: titleController.text.trim(),
+                                description: descriptionController.text.trim(),
+                                category: selectedCategory,
+                                targetSchemes: selectedSchemes,
+                                publishDate: selectedPublishDate,
+                                attachmentUrl: attachmentUrl,
+                                attachmentName: attachmentName,
+                                createdAt: existing?.createdAt ?? DateTime.now(),
+                                updatedAt: DateTime.now(),
+                              );
+
+                              if (existing == null) {
+                                await announcementService.createAnnouncement(announcement);
+                              } else {
+                                await announcementService.updateAnnouncement(announcement);
+                              }
+
+                              if (ctx.mounted) Navigator.pop(ctx);
+                            } catch (e) {
+                              if (ctx.mounted) {
+                                ScaffoldMessenger.of(ctx).showSnackBar(
+                                  SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                                );
+                              }
+                              setDialogState(() => uploading = false);
+                            }
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: ColorConst.primaryBlue,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: uploading
+                      ? const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            ),
+                            SizedBox(width: 8),
+                            smcText(textToDisplay: 'Saving...', textSize: 14, colorOfText: Colors.white),
+                          ],
+                        )
+                      : const smcText(textToDisplay: 'Save', textSize: 14, textBoldness: 4, colorOfText: Colors.white),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _viewAnnouncementDialog(AnnouncementModel announcement) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: smcText(textToDisplay: announcement.title, textSize: 18, textBoldness: 5),
+          content: SizedBox(
+            width: 600,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF4FF),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: smcText(
+                          textToDisplay: announcement.category,
+                          textSize: 11,
+                          textBoldness: 3,
+                          colorOfText: ColorConst.primaryBlue,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      smcText(textToDisplay: 'Published: ${announcement.publishDate.day}/${announcement.publishDate.month}/${announcement.publishDate.year}', textSize: 12),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const smcText(textToDisplay: 'Target Audience:', textSize: 12, textBoldness: 4, colorOfText: ColorConst.textSecondary),
+                  const SizedBox(height: 4),
+                  smcText(textToDisplay: announcement.targetSchemes.isEmpty ? 'All Students' : announcement.targetSchemes.map((id) => schemes.firstWhere((s) => s.id == id, orElse: () => SettingsItem(id: id, name: id)).name).join(', '), textSize: 12),
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  const smcText(textToDisplay: 'Description:', textSize: 12, textBoldness: 4, colorOfText: ColorConst.textSecondary),
+                  const SizedBox(height: 8),
+                  smcText(textToDisplay: announcement.description, textSize: 12),
+                  if (announcement.attachmentUrl.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    InkWell(
+                      onTap: () async {
+                        final uri = Uri.parse(announcement.attachmentUrl);
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri);
+                        }
+                      },
+                      child: Row(
+                        children: [
+                          const Icon(Icons.attach_file, color: ColorConst.primaryBlue),
+                          const SizedBox(width: 8),
+                          smcText(
+                            textToDisplay: announcement.attachmentName,
+                            textSize: 12,
+                            colorOfText: ColorConst.primaryBlue,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const smcText(textToDisplay: 'Close', textSize: 14, textBoldness: 3, colorOfText: ColorConst.textSecondary),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _deleteAnnouncementDialog(AnnouncementModel announcement) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const smcText(textToDisplay: 'Delete Announcement', textSize: 18, textBoldness: 5),
+          content: smcText(textToDisplay: 'Are you sure you want to delete "${announcement.title}"?', textSize: 14),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const smcText(textToDisplay: 'Cancel', textSize: 14, textBoldness: 3, colorOfText: ColorConst.textSecondary),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              onPressed: () async {
+                try {
+                  await announcementService.deleteAnnouncement(announcement.id);
+                  if (ctx.mounted) Navigator.pop(ctx);
+                } catch (e) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                    );
+                  }
+                }
+              },
+              child: const smcText(textToDisplay: 'Delete', textSize: 14, colorOfText: Colors.red),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildAnnouncementsView() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const smcText(
+          textToDisplay: 'Announcements',
+          textSize: 16,
+          textBoldness: 5,
+          colorOfText: ColorConst.textPrimary,
+        ),
+        const SizedBox(height: 24),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFE4EBFB)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEAF0FF),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(Icons.announcement_outlined, color: ColorConst.primaryBlue),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          smcText(
+                            textToDisplay: 'Manage Announcements',
+                            textSize: 16,
+                            textBoldness: 5,
+                            colorOfText: const Color(0xFF1F2F52),
+                          ),
+                          const SizedBox(height: 2),
+                          smcText(
+                            textToDisplay: 'Create and manage department announcements.',
+                            textSize: 12,
+                            colorOfText: const Color(0xFF7D87A3),
+                          ),
+                        ],
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: () => _openAnnouncementDialog(),
+                      icon: const Icon(Icons.add, size: 18, color: Colors.white),
+                      label: const smcText(
+                        textToDisplay: 'Create',
+                        textSize: 14,
+                        textBoldness: 4,
+                        colorOfText: Colors.white,
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: ColorConst.primaryBlue,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Expanded(
+                  child: announcements.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.inbox_outlined, size: 48, color: Colors.grey.shade300),
+                              const SizedBox(height: 16),
+                              smcText(
+                                textToDisplay: 'No announcements found.',
+                                textSize: 14,
+                                colorOfText: ColorConst.textSecondary,
+                              ),
+                            ],
+                          ),
+                        )
+                      : SingleChildScrollView(
+                          scrollDirection: Axis.vertical,
+                          child: Container(
+                            width: double.infinity,
+                            child: DataTable(
+                              headingRowHeight: 50,
+                              dataRowMinHeight: 52,
+                              dataRowMaxHeight: 58,
+                              horizontalMargin: 0,
+                              columnSpacing: 0,
+                              dividerThickness: 1,
+                              border: TableBorder.all(color: const Color(0xFFE3EAF8), width: 1),
+                              headingRowColor: MaterialStateProperty.all(const Color(0xFFF4F7FF)),
+                              columns: const [
+                                DataColumn(
+                                  label: SizedBox(
+                                    width: 60,
+                                    child: Center(
+                                      child: smcText(
+                                        textToDisplay: 'S.No',
+                                        textSize: 12,
+                                        textBoldness: 4,
+                                        colorOfText: Color(0xFF5C6B8B),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                DataColumn(
+                                  label: Expanded(
+                                    child: Padding(
+                                      padding: EdgeInsets.only(left: 16),
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: smcText(
+                                          textToDisplay: 'TITLE',
+                                          textSize: 12,
+                                          textBoldness: 4,
+                                          colorOfText: Color(0xFF5C6B8B),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                DataColumn(
+                                  label: SizedBox(
+                                    width: 140,
+                                    child: Center(
+                                      child: smcText(
+                                        textToDisplay: 'CATEGORY',
+                                        textSize: 12,
+                                        textBoldness: 4,
+                                        colorOfText: Color(0xFF5C6B8B),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                DataColumn(
+                                  label: SizedBox(
+                                    width: 120,
+                                    child: Center(
+                                      child: smcText(
+                                        textToDisplay: 'PUBLISHED DATE',
+                                        textSize: 12,
+                                        textBoldness: 4,
+                                        colorOfText: Color(0xFF5C6B8B),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                DataColumn(
+                                  label: SizedBox(
+                                    width: 100,
+                                    child: Center(
+                                      child: smcText(
+                                        textToDisplay: 'ACTIONS',
+                                        textSize: 12,
+                                        textBoldness: 4,
+                                        colorOfText: Color(0xFF5C6B8B),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              rows: announcements.asMap().entries.map((entry) {
+                                final int index = entry.key;
+                                final announcement = entry.value;
+                                final int serialNo = index + 1;
+                                final date = announcement.publishDate;
+                                final dateStr = '${date.day}/${date.month}/${date.year}';
+                                return DataRow(
+                                  cells: [
+                                    DataCell(
+                                      Center(
+                                        child: smcText(
+                                          textToDisplay: '$serialNo',
+                                          textSize: 12,
+                                          colorOfText: const Color(0xFF2E3954),
+                                        ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      Padding(
+                                        padding: const EdgeInsets.only(left: 16),
+                                        child: Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: smcText(
+                                            textToDisplay: announcement.title,
+                                            textSize: 12,
+                                            colorOfText: const Color(0xFF2E3954),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      Center(
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFEFF4FF),
+                                            borderRadius: BorderRadius.circular(999),
+                                          ),
+                                          child: smcText(
+                                            textToDisplay: announcement.category,
+                                            textSize: 11,
+                                            textBoldness: 3,
+                                            colorOfText: const Color(0xFF3558DA),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      Center(
+                                        child: smcText(
+                                          textToDisplay: dateStr,
+                                          textSize: 12,
+                                          colorOfText: const Color(0xFF2E3954),
+                                        ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      Center(
+                                        child: PopupMenuButton<String>(
+                                          icon: const Icon(Icons.more_vert_rounded, size: 18, color: Color(0xFF8A96B2)),
+                                          onSelected: (val) {
+                                            if (val == 'view') {
+                                              _viewAnnouncementDialog(announcement);
+                                            } else if (val == 'edit') {
+                                              _openAnnouncementDialog(announcement);
+                                            } else if (val == 'delete') {
+                                              _deleteAnnouncementDialog(announcement);
+                                            }
+                                          },
+                                          itemBuilder: (context) => [
+                                            const PopupMenuItem(value: 'view', child: Text('View')),
+                                            const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                                            const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red))),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildDashboardView() {
