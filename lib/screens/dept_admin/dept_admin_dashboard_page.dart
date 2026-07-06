@@ -31,6 +31,7 @@ import 'package:smartcampus/widgets/student_import_dialog.dart';
 import 'package:smartcampus/widgets/course_list_table.dart';
 import 'package:smartcampus/services/user_master_firestore_service.dart';
 import 'package:smartcampus/services/settings_firestore_service.dart';
+import 'package:smartcampus/services/proctor_assignment_firestore_service.dart';
 import 'package:smartcampus/screens/dept_admin/dept_user_management_view.dart';
 import 'package:smartcampus/screens/dept_admin/time_table/dept_time_table_view.dart';
 import 'package:smartcampus/models/announcement_model.dart';
@@ -61,6 +62,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   courseService =
   CourseFirestoreService();
   final SettingsFirestoreService settingsService = SettingsFirestoreService();
+  final ProctorAssignmentFirestoreService proctorAssignmentService =
+      ProctorAssignmentFirestoreService();
   final UserMasterFirestoreService userMasterService =
       UserMasterFirestoreService();
   final AnnouncementFirestoreService announcementService =
@@ -82,6 +85,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   int proctorCurrentPage = 1;
   String proctorGenderFilter = 'All Gender';
   double proctorListPanelRatio = 0.5;
+  bool _hasSeededRequestedProctorAssignments = false;
+  Map<String, List<String>> _assignedStudentDocumentIdsByProctor = {};
 
   List<FacultyModel> filteredProctors = [];
   List<SettingsItem> courseTypes = [];
@@ -416,6 +421,11 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
             (org?.orgName ?? '').trim().isEmpty ? scope!.orgId : org!.orgName;
         loading = false;
       });
+      try {
+        await _loadProctorAssignments(seedRequestedAssignments: true);
+      } catch (_) {
+        // Leave the page usable even if assignment sync fails.
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -431,6 +441,129 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       MaterialPageRoute<void>(builder: (_) => const LandingPage()),
           (route) => false,
     );
+  }
+  List<StudentModel> _sortedStudentsForProctorAssignments() {
+    final students = List<StudentModel>.from(studentList);
+    students.sort(
+      (a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()),
+    );
+    return students;
+  }
+
+  Map<String, List<StudentModel>> _requestedProctorSeedAssignments() {
+    final sortedStudents = _sortedStudentsForProctorAssignments();
+    if (sortedStudents.length < 22) {
+      return const {};
+    }
+
+    final availableFacultyIds = facultyList
+        .map((faculty) => faculty.facultyId.trim().toUpperCase())
+        .toSet();
+    final assignments = <String, List<StudentModel>>{};
+
+    List<StudentModel> studentsAtSerialNumbers(List<int> serialNumbers) {
+      return serialNumbers.map((serial) => sortedStudents[serial - 1]).toList();
+    }
+
+    if (availableFacultyIds.contains('11401199')) {
+      assignments['11401199'] = studentsAtSerialNumbers([1, 3, 4]);
+    }
+    if (availableFacultyIds.contains('11401198')) {
+      assignments['11401198'] = studentsAtSerialNumbers([13, 15, 22]);
+    }
+
+    return assignments;
+  }
+
+  Future<void> _loadProctorAssignments({
+    bool seedRequestedAssignments = false,
+  }) async {
+    final orgId = scopedOrgId;
+    if (orgId.isEmpty) {
+      return;
+    }
+
+    final deptId = scopedDeptId;
+    var assignments = await proctorAssignmentService.listAssignmentsForDept(
+      orgId: orgId,
+      deptId: deptId,
+    );
+
+    if (seedRequestedAssignments && !_hasSeededRequestedProctorAssignments) {
+      final requestedAssignments = _requestedProctorSeedAssignments();
+      for (final entry in requestedAssignments.entries) {
+        final existingAssignment = assignments[entry.key] ?? const <String>[];
+        if (existingAssignment.isNotEmpty) {
+          continue;
+        }
+
+        final documentIds = entry.value
+            .map((student) => student.documentId ?? '')
+            .where((id) => id.isNotEmpty)
+            .toList();
+        if (documentIds.isEmpty) {
+          continue;
+        }
+
+        await proctorAssignmentService.saveAssignments(
+          orgId: orgId,
+          deptId: deptId,
+          facultyId: entry.key,
+          studentDocumentIds: documentIds,
+          studentIds: entry.value.map((student) => student.studentId).toList(),
+        );
+      }
+      _hasSeededRequestedProctorAssignments = true;
+      assignments = await proctorAssignmentService.listAssignmentsForDept(
+        orgId: orgId,
+        deptId: deptId,
+      );
+    }
+
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _assignedStudentDocumentIdsByProctor = assignments;
+    });
+  }
+
+  List<StudentModel> _assignedStudentsForProctor(FacultyModel faculty) {
+    final facultyId = faculty.facultyId.trim().toUpperCase();
+    final assignedDocumentIds =
+        _assignedStudentDocumentIdsByProctor[facultyId] ?? const <String>[];
+    if (assignedDocumentIds.isEmpty) {
+      return const [];
+    }
+
+    final studentsByDocumentId = <String, StudentModel>{};
+    for (final student in studentList) {
+      final documentId = student.documentId ?? '';
+      if (documentId.isNotEmpty) {
+        studentsByDocumentId[documentId] = student;
+      }
+    }
+
+    return assignedDocumentIds
+        .map((documentId) => studentsByDocumentId[documentId])
+        .whereType<StudentModel>()
+        .toList();
+  }
+
+  int _assignedStudentCountForProctor(FacultyModel faculty) {
+    return _assignedStudentsForProctor(faculty).length;
+  }
+
+  Map<String, int> _studentSerialNumbersByDocumentId() {
+    final serialNumbers = <String, int>{};
+    final sortedStudents = _sortedStudentsForProctorAssignments();
+    for (var index = 0; index < sortedStudents.length; index++) {
+      final documentId = sortedStudents[index].documentId ?? '';
+      if (documentId.isNotEmpty) {
+        serialNumbers[documentId] = index + 1;
+      }
+    }
+    return serialNumbers;
   }
   Future<void> _importProctorAssignments() async {
     final result = await FilePicker.platform.pickFiles(
@@ -5540,6 +5673,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                   final FacultyModel f = entry.value;
                                   final int serialNo = startIndex + index + 1;
                                   final bool isSelected = selectedProctor?.facultyId == f.facultyId;
+                                  final int assignedStudentCount =
+                                      _assignedStudentCountForProctor(f);
                                   return DataRow(
                                     selected: isSelected,
                                     onSelectChanged: (_) => setState(() => selectedProctor = f),
@@ -5594,7 +5729,14 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                           child: Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                             decoration: BoxDecoration(color: const Color(0xFFEFF4FF), borderRadius: BorderRadius.circular(999)),
-                                            child: const smcText(textToDisplay: '15', textSize: 11, textBoldness: 3, colorOfText: Color(0xFF3558DA)),
+                                            child: smcText(
+                                              textToDisplay:
+                                                  '$assignedStudentCount',
+                                              textSize: 11,
+                                              textBoldness: 3,
+                                              colorOfText:
+                                                  const Color(0xFF3558DA),
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -5718,6 +5860,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
   Widget _buildProctorDetailsPanel() {
     if (selectedProctor == null) return const SizedBox.shrink();
+    final assignedStudents = _assignedStudentsForProctor(selectedProctor!);
+    final serialNumbersByDocumentId = _studentSerialNumbersByDocumentId();
 
     return Container(
       decoration: BoxDecoration(
@@ -5795,14 +5939,101 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                     colorOfText: ColorConst.primaryBlue,
                   ),
                   const Divider(),
-                  const Expanded(
-                    child: Center(
-                      child: smcText(
-                        textToDisplay: "No Students Assigned",
-                        textSize: 14,
-                        colorOfText: Color(0xFF8A96B2),
-                      ),
-                    ),
+                  Expanded(
+                    child: assignedStudents.isEmpty
+                        ? const Center(
+                            child: smcText(
+                              textToDisplay: "No Students Assigned",
+                              textSize: 14,
+                              colorOfText: Color(0xFF8A96B2),
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: assignedStudents.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 10),
+                            itemBuilder: (context, index) {
+                              final student = assignedStudents[index];
+                              final documentId = student.documentId ?? '';
+                              final serialNumber =
+                                  serialNumbersByDocumentId[documentId];
+                              return Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFCFDFF),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: const Color(0xFFE8EDFA),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 20,
+                                      backgroundColor:
+                                          const Color(0xFFEAF0FF),
+                                      child: smcText(
+                                        textToDisplay:
+                                            student.fullName.isNotEmpty
+                                                ? student.fullName[0]
+                                                    .toUpperCase()
+                                                : 'S',
+                                        textSize: 13,
+                                        textBoldness: 5,
+                                        colorOfText: ColorConst.primaryBlue,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          smcText(
+                                            textToDisplay: student.fullName,
+                                            textSize: 13,
+                                            textBoldness: 4,
+                                            colorOfText:
+                                                const Color(0xFF1F2F52),
+                                            maxLines: 1,
+                                          ),
+                                          const SizedBox(height: 2),
+                                          smcText(
+                                            textToDisplay:
+                                                'USN: ${student.studentId}',
+                                            textSize: 11,
+                                            colorOfText:
+                                                const Color(0xFF7D87A3),
+                                            maxLines: 1,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (serialNumber != null)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFEFF4FF),
+                                          borderRadius:
+                                              BorderRadius.circular(999),
+                                        ),
+                                        child: smcText(
+                                          textToDisplay:
+                                              'S.No $serialNumber',
+                                          textSize: 11,
+                                          textBoldness: 3,
+                                          colorOfText:
+                                              ColorConst.primaryBlue,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
                   ),
                 ],
               ),

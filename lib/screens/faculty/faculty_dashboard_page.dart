@@ -16,6 +16,7 @@ import 'package:smartcampus/screens/dept_admin/time_table/time_table_settings_fi
 import 'package:smartcampus/screens/faculty/faculty_class_management/faculty_classes_page.dart';
 import 'package:smartcampus/screens/faculty/faculty_dashboard_mobile_layout.dart';
 import 'package:smartcampus/screens/faculty/faculty_profile_not_found_page.dart';
+import 'package:smartcampus/screens/faculty/faculty_proctoring_page.dart';
 import 'package:smartcampus/screens/faculty/faculty_upcoming_classes.dart';
 import 'package:smartcampus/screens/shared/person_detail_page.dart';
 import 'package:smartcampus/services/course_firestore_service.dart';
@@ -116,7 +117,7 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
   String _firstNonEmpty(Iterable<String> values) {
     for (final value in values) {
       final normalized = OrgField.normalize(value);
-      if (normalized.isEmpty) {
+      if (normalized.isNotEmpty) {
         return normalized;
       }
     }
@@ -248,8 +249,12 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
         scope: rawScope,
         faculty: resolvedFaculty,
       );
-      final scope = UserOrgScope(orgId: orgId, deptId: '');
+
+      // Get deptId from the resolved faculty profile!
+      final String deptId = resolvedFaculty?.deptId ?? OrgField.normalize(widget.deptId);
+      final scope = UserOrgScope(orgId: orgId, deptId: deptId);
       _orgScope = scope;
+
       _bindScopedCourseListener();
       _bindScopedTimeBlockListener();
       _bindScopedTimeTableSettingsListener();
@@ -355,6 +360,7 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
         dashboardContent: _buildDashboardView(),
         classesContent: _buildClassesView(),
         profileContent: _buildProfileView(),
+        proctoringContent: _buildProctoringView(),
       );
     }
 
@@ -382,6 +388,8 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
         return _buildProfileView();
       case 2:
         return _buildClassesView();
+      case 3:
+        return _buildProctoringView();
       default:
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -390,6 +398,14 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
           ],
         );
     }
+  }
+
+  Widget _buildProctoringView() {
+    return FacultyProctoringPage(
+      orgId: scopedOrgId,
+      deptId: scopedDeptId,
+      faculty: facultyProfile!,
+    );
   }
 
   Widget _buildClassesView() {
@@ -735,6 +751,13 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
               icon: Icons.class_outlined,
               isSelected: selectedMenuIndex == 2,
               onTap: () => setState(() => selectedMenuIndex = 2),
+            ),
+            const SizedBox(height: 8),
+            _menuTile(
+              title: 'Proctoring',
+              icon: Icons.supervisor_account_outlined,
+              isSelected: selectedMenuIndex == 3,
+              onTap: () => setState(() => selectedMenuIndex = 3),
             ),
             const Spacer(),
             _menuTile(

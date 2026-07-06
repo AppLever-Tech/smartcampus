@@ -33,6 +33,8 @@ class smcText extends StatelessWidget {
         return FontWeight.w700;
       case 5:
         return FontWeight.w800;
+      case 6:
+        return FontWeight.w900;
       default:
         return FontWeight.w400;
     }

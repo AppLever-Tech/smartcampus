@@ -25,8 +25,8 @@ class AcademicRecordModel {
       description: data['description'],
       fileUrl: data['fileUrl'],
       fileName: data['fileName'],
-      createdOn: data['createdOn'] != null 
-          ? DateTime.parse(data['createdOn']) 
+      createdOn: data['createdOn'] != null
+          ? DateTime.parse(data['createdOn'])
           : DateTime.now(),
     );
   }

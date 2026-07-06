@@ -6,6 +6,7 @@ import 'package:smartcampus/screens/auth/landing_page.dart';
 import 'package:smartcampus/screens/auth/screen_brancher.dart';
 import 'package:smartcampus/widgets/mouse_drag_scroll_behavior.dart';
 
+import 'package:google_fonts/google_fonts.dart';
 import 'firebase_options.dart';
 
 void main() async {
@@ -46,6 +47,7 @@ class SmartCampusApp extends StatelessWidget {
       theme: ThemeData(
         scaffoldBackgroundColor: ColorConst.pageBackground,
         colorScheme: ColorScheme.fromSeed(seedColor: ColorConst.primaryBlue),
+        fontFamily: GoogleFonts.poppins().fontFamily,
       ),
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
