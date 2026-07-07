@@ -8339,7 +8339,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        height: sidebarExpanded ? 42 : 58,
+        height: sidebarExpanded ? 42 : 48,
         width: sidebarExpanded ? double.infinity : double.infinity,
         padding: EdgeInsets.symmetric(
           horizontal: sidebarExpanded ? 12 : 4,
