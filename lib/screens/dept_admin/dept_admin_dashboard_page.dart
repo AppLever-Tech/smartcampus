@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:smartcampus/const/color_const.dart';
 import 'package:smartcampus/data/org_field.dart';
 import 'package:smartcampus/data/mock_master_data.dart';
+import 'package:smartcampus/widgets/profile_photo_avatar.dart';
 import 'package:smartcampus/data/user_org_scope.dart';
 import 'package:smartcampus/data/faculty_model.dart';
 import 'package:smartcampus/data/student_model.dart';
@@ -42,6 +43,8 @@ class DeptAdminDashboardPage extends StatefulWidget {
   final String orgId;
   final String deptId;
   final String adminName;
+
+
   const DeptAdminDashboardPage({
     super.key,
     required this.orgId,
@@ -63,11 +66,11 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   CourseFirestoreService();
   final SettingsFirestoreService settingsService = SettingsFirestoreService();
   final ProctorAssignmentFirestoreService proctorAssignmentService =
-      ProctorAssignmentFirestoreService();
+  ProctorAssignmentFirestoreService();
   final UserMasterFirestoreService userMasterService =
-      UserMasterFirestoreService();
+  UserMasterFirestoreService();
   final AnnouncementFirestoreService announcementService =
-      AnnouncementFirestoreService();
+  AnnouncementFirestoreService();
 
   bool loading = true;
   int selectedMenuIndex = 0; // 0: Dashboard, 1: Students, 2: Faculties, 3: Courses, 4: Users, 5: Time Table, 6: Settings, 7: Announcements
@@ -78,6 +81,17 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   List<FacultyModel> facultyList = [];
   List<StudentModel> studentList = [];
   List<CourseModel> courseList = [];
+
+  Map<String, int> semesterCount = {};
+
+  Map<String, int> categoryCount = {};
+
+  Map<String, int> batchCount = {};
+
+  Map<String, int> courseTypeCount = {};
+
+
+
 
   FacultyModel? selectedProctor;
   final TextEditingController proctorSearchController = TextEditingController();
@@ -106,6 +120,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   String get scopedDeptId =>
       _orgScope?.deptId ?? OrgField.normalize(widget.deptId);
 
+
   void _bindScopedCourseListener() {
     _courseSubscription?.cancel();
     final scope = _orgScope;
@@ -118,11 +133,18 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       if (!mounted) return;
       setState(() {
         courseList = courses;
+        for (final course in courseList) {
+          batchCount[course.batch] =
+              (batchCount[course.batch] ?? 0) + 1;
+
+          courseTypeCount[course.courseType] =
+              (courseTypeCount[course.courseType] ?? 0) + 1;
+        }
         totalCourses = courses.length;
         coursesLoaded = true;
         if (selectedCourseDetail != null) {
           final Iterable<CourseModel> match =
-              courses.where((c) => c.id == selectedCourseDetail!.id);
+          courses.where((c) => c.id == selectedCourseDetail!.id);
           if (match.isNotEmpty) {
             selectedCourseDetail = match.first;
           }
@@ -132,11 +154,11 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   }
 
   Stream<QuerySnapshot> getCoursesStream() {
-
     return FirebaseFirestore.instance
         .collection(CourseFirestoreService.collection)
         .snapshots();
   }
+
   // Search and Pagination for Students
   final TextEditingController studentSearchController = TextEditingController();
   int studentRowsPerPage = 100;
@@ -153,9 +175,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   // Search and Pagination for Courses
   final TextEditingController courseSearchController = TextEditingController();
   final ScrollController courseTableHorizontalScrollController =
-      ScrollController();
+  ScrollController();
   final ScrollController courseTableVerticalScrollController =
-      ScrollController();
+  ScrollController();
   int courseRowsPerPage = 100;
   int courseCurrentPage = 1;
   String courseSchemeFilter = 'All Schemes';
@@ -180,21 +202,21 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     settingsService.getItems('smcCourseType').listen((items) {
       if (!mounted) return;
       setState(() => courseTypes = items);
-      
+
       // Ensure default course types exist
       _ensureDefaultCourseTypes(items);
     });
     settingsService.getItems('smcBatchMaster').listen((items) {
       if (!mounted) return;
       setState(() => batches = items);
-      
+
       // Ensure default batches exist
       _ensureDefaultBatches(items);
     });
     settingsService.getItems('smcSchemaMaster').listen((items) {
       if (!mounted) return;
       setState(() => schemes = items);
-      
+
       // Ensure default schemes exist and remove duplicates
       _ensureDefaultSchemes(items);
     });
@@ -383,7 +405,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       _bindAnnouncementListener();
 
       final depts = await roleService.loadDepartmentsForOrg(scope.orgId);
-      final org = await roleService.authService.getOrganizationById(scope.orgId);
+      final org = await roleService.authService.getOrganizationById(
+          scope.orgId);
       final faculty = await facultyService.listFacultyForDept(
         orgId: scope.orgId,
         deptId: scope.deptId,
@@ -398,7 +421,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       if (currentUser != null) {
         signedInUser = await userMasterService.getSignedInUserMaster();
         final currentDept =
-            depts.where((d) => d.deptId == scope!.deptId).firstOrNull;
+            depts
+                .where((d) => d.deptId == scope!.deptId)
+                .firstOrNull;
         if (currentDept != null && currentDept.createdBy == currentUser.uid) {
           allowed = true;
         } else {
@@ -417,8 +442,20 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         departments = depts;
         facultyList = faculty;
         studentList = students;
+        semesterCount.clear();
+        categoryCount.clear();
+
+        for (final student in studentList) {
+          semesterCount[student.currentSemester.toString()] =
+              (semesterCount[student.currentSemester.toString()] ?? 0) + 1;
+
+          categoryCount[student.category] =
+              (categoryCount[student.category] ?? 0) + 1;
+        }
         organizationDisplayName =
-            (org?.orgName ?? '').trim().isEmpty ? scope!.orgId : org!.orgName;
+        (org?.orgName ?? '')
+            .trim()
+            .isEmpty ? scope!.orgId : org!.orgName;
         loading = false;
       });
       try {
@@ -442,10 +479,12 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
           (route) => false,
     );
   }
+
   List<StudentModel> _sortedStudentsForProctorAssignments() {
     final students = List<StudentModel>.from(studentList);
     students.sort(
-      (a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()),
+          (a, b) =>
+          a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()),
     );
     return students;
   }
@@ -565,6 +604,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     }
     return serialNumbers;
   }
+
   Future<void> _importProctorAssignments() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -639,6 +679,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       );
     }
   }
+
   String _courseTypeDropdownLabel(SettingsItem courseType) {
     final code = courseType.code?.trim() ?? '';
     if (code.isNotEmpty) {
@@ -696,7 +737,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     int parseNumericField(String value) => int.tryParse(value.trim()) ?? 0;
 
     String? validateHoursField(String? value) {
-      if (value == null || value.trim().isEmpty) {
+      if (value == null || value
+          .trim()
+          .isEmpty) {
         return 'This field is required';
       }
       final n = int.tryParse(value.trim());
@@ -705,7 +748,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     }
 
     String? validateMarksField(String? value) {
-      if (value == null || value.trim().isEmpty) return null;
+      if (value == null || value
+          .trim()
+          .isEmpty) return null;
       final n = int.tryParse(value.trim());
       if (n == null || n < 0) return 'Enter a valid number';
       return null;
@@ -717,9 +762,11 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         final media = MediaQuery.of(ctx);
         final maxHeight = (media.size.height * 0.9).clamp(480.0, 820.0);
         return Dialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          insetPadding: const EdgeInsets.symmetric(
+              horizontal: 16, vertical: 16),
           backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24)),
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: 720, maxHeight: maxHeight),
             child: StatefulBuilder(
@@ -734,11 +781,13 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: ColorConst.borderSoft),
+                        borderSide: const BorderSide(
+                            color: ColorConst.borderSoft),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: ColorConst.borderSoft),
+                        borderSide: const BorderSide(
+                            color: ColorConst.borderSoft),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
@@ -755,7 +804,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       ),
                     );
 
-                Widget sectionHeader(String title, IconData icon) => Padding(
+                Widget sectionHeader(String title, IconData icon) =>
+                    Padding(
                       padding: const EdgeInsets.only(top: 8, bottom: 4),
                       child: Row(
                         children: [
@@ -771,7 +821,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       ),
                     );
 
-                InputDecoration fieldDecorInput() => InputDecoration(
+                InputDecoration fieldDecorInput() =>
+                    InputDecoration(
                       filled: true,
                       fillColor: const Color(0xFFF9FAFD),
                       contentPadding: const EdgeInsets.symmetric(
@@ -780,11 +831,13 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: ColorConst.borderSoft),
+                        borderSide: const BorderSide(
+                            color: ColorConst.borderSoft),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: ColorConst.borderSoft),
+                        borderSide: const BorderSide(
+                            color: ColorConst.borderSoft),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
@@ -795,16 +848,15 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       ),
                     );
 
-                Widget labeledField(
-                  String label,
-                  TextEditingController controller, {
-                  int labelMaxLines = 1,
-                  TextInputType keyboardType = TextInputType.number,
-                  List<TextInputFormatter>? inputFormatters,
-                  String? Function(String?)? validator,
-                  void Function(String)? onChanged,
-                  bool readOnly = false,
-                }) {
+                Widget labeledField(String label,
+                    TextEditingController controller, {
+                      int labelMaxLines = 1,
+                      TextInputType keyboardType = TextInputType.number,
+                      List<TextInputFormatter>? inputFormatters,
+                      String? Function(String?)? validator,
+                      void Function(String)? onChanged,
+                      bool readOnly = false,
+                    }) {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -878,7 +930,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                             decoration: BoxDecoration(
                               color: const Color(0xFFFCFDFF),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFE8EDFA)),
+                              border: Border.all(
+                                  color: const Color(0xFFE8EDFA)),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -908,7 +961,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                         'Theory Marks',
                                         seeTheoryMarksCtrl,
                                         inputFormatters: [
-                                          FilteringTextInputFormatter.digitsOnly,
+                                          FilteringTextInputFormatter
+                                              .digitsOnly,
                                         ],
                                         validator: validateMarksField,
                                         onChanged: (v) {
@@ -925,7 +979,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                         'Lab Marks',
                                         seeLabMarksCtrl,
                                         inputFormatters: [
-                                          FilteringTextInputFormatter.digitsOnly,
+                                          FilteringTextInputFormatter
+                                              .digitsOnly,
                                         ],
                                         validator: validateMarksField,
                                         onChanged: (v) {
@@ -941,7 +996,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                 const SizedBox(height: 8),
                                 const smcText(
                                   textToDisplay:
-                                      'Enter either Theory or Lab marks for SEE (not both).',
+                                  'Enter either Theory or Lab marks for SEE (not both).',
                                   textSize: 11,
                                   colorOfText: Color(0xFF8A96B2),
                                   maxLines: 2,
@@ -959,7 +1014,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                             decoration: BoxDecoration(
                               color: const Color(0xFFEFF4FF),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFD6E2FF)),
+                              border: Border.all(
+                                  color: const Color(0xFFD6E2FF)),
                             ),
                             child: Row(
                               children: [
@@ -996,17 +1052,22 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                             decoration: fieldDecor('Scheme *'),
                             items: schemeOptions
                                 .map(
-                                  (s) => DropdownMenuItem(
+                                  (s) =>
+                                  DropdownMenuItem(
                                     value: s,
                                     child: Text(
                                       s,
                                       style: const TextStyle(fontSize: 13),
                                     ),
                                   ),
-                                )
+                            )
                                 .toList(),
-                            onChanged: (v) => setModalState(() => selectedScheme = v),
-                            validator: (v) => (v == null || v.trim().isEmpty)
+                            onChanged: (v) =>
+                                setModalState(() => selectedScheme = v),
+                            validator: (v) =>
+                            (v == null || v
+                                .trim()
+                                .isEmpty)
                                 ? 'Please select scheme'
                                 : null,
                           ),
@@ -1016,39 +1077,50 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                             decoration: fieldDecor('Semester *'),
                             items: semesterOptions
                                 .map(
-                                  (s) => DropdownMenuItem(
+                                  (s) =>
+                                  DropdownMenuItem(
                                     value: s,
                                     child: Text(
                                       s,
                                       style: const TextStyle(fontSize: 13),
                                     ),
                                   ),
-                                )
+                            )
                                 .toList(),
-                            onChanged: (v) => setModalState(() => selectedSemester = v),
-                            validator: (v) => (v == null || v.trim().isEmpty)
+                            onChanged: (v) =>
+                                setModalState(() => selectedSemester = v),
+                            validator: (v) =>
+                            (v == null || v
+                                .trim()
+                                .isEmpty)
                                 ? 'Please select semester'
                                 : null,
                           ),
                           const SizedBox(height: 8),
                           DropdownButtonFormField<String>(
-                            value: courseTypes.any((ct) => ct.name == selectedCourseType)
+                            value: courseTypes.any((ct) =>
+                            ct.name == selectedCourseType)
                                 ? selectedCourseType
                                 : null,
                             decoration: fieldDecor('Course Type *'),
                             items: courseTypes
                                 .map(
-                                  (courseType) => DropdownMenuItem(
+                                  (courseType) =>
+                                  DropdownMenuItem(
                                     value: courseType.name,
                                     child: Text(
                                       _courseTypeDropdownLabel(courseType),
                                       style: const TextStyle(fontSize: 13),
                                     ),
                                   ),
-                                )
+                            )
                                 .toList(),
-                            onChanged: (v) => setModalState(() => selectedCourseType = v),
-                            validator: (v) => (v == null || v.trim().isEmpty)
+                            onChanged: (v) =>
+                                setModalState(() => selectedCourseType = v),
+                            validator: (v) =>
+                            (v == null || v
+                                .trim()
+                                .isEmpty)
                                 ? 'Please select course type'
                                 : null,
                           ),
@@ -1060,7 +1132,10 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                               hint: 'e.g. CS301',
                             ),
                             textCapitalization: TextCapitalization.characters,
-                            validator: (v) => (v == null || v.trim().isEmpty)
+                            validator: (v) =>
+                            (v == null || v
+                                .trim()
+                                .isEmpty)
                                 ? 'Course code is required'
                                 : null,
                           ),
@@ -1069,7 +1144,10 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                             controller: courseTitleCtrl,
                             decoration: fieldDecor('Course Title *'),
                             textCapitalization: TextCapitalization.words,
-                            validator: (v) => (v == null || v.trim().isEmpty)
+                            validator: (v) =>
+                            (v == null || v
+                                .trim()
+                                .isEmpty)
                                 ? 'Course title is required'
                                 : null,
                           ),
@@ -1082,7 +1160,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                               FilteringTextInputFormatter.digitsOnly,
                             ],
                             validator: (v) {
-                              if (v == null || v.trim().isEmpty) {
+                              if (v == null || v
+                                  .trim()
+                                  .isEmpty) {
                                 return 'Number of credits is required';
                               }
                               final n = int.tryParse(v.trim());
@@ -1146,7 +1226,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                 Future<void> saveCourse() async {
                   if (!formKey.currentState!.validate()) return;
 
-                  final int theoryMarks = parseNumericField(seeTheoryMarksCtrl.text);
+                  final int theoryMarks = parseNumericField(
+                      seeTheoryMarksCtrl.text);
                   final int labMarks = parseNumericField(seeLabMarksCtrl.text);
                   if (theoryMarks > 0 && labMarks > 0) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -1161,42 +1242,45 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
                   final bool? confirm = await showDialog<bool>(
                     context: ctx,
-                    builder: (dialogCtx) => AlertDialog(
-                      title: smcText(
-                        textToDisplay: isEditing ? 'Edit Course' : 'Create Course',
-                        textSize: 18,
-                        textBoldness: 4,
-                        colorOfText: ColorConst.textPrimary,
-                      ),
-                      content: smcText(
-                        textToDisplay: isEditing
-                            ? 'Are you sure you want to update this course?'
-                            : 'Are you sure you want to save this course?',
-                        textSize: 14,
-                        colorOfText: ColorConst.textSecondary,
-                        maxLines: 3,
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(dialogCtx, false),
-                          child: const smcText(
-                            textToDisplay: 'Cancel',
-                            textSize: 14,
-                            textBoldness: 3,
-                            colorOfText: ColorConst.textSecondary,
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(dialogCtx, true),
-                          child: const smcText(
-                            textToDisplay: 'Save',
-                            textSize: 14,
+                    builder: (dialogCtx) =>
+                        AlertDialog(
+                          title: smcText(
+                            textToDisplay: isEditing
+                                ? 'Edit Course'
+                                : 'Create Course',
+                            textSize: 18,
                             textBoldness: 4,
-                            colorOfText: ColorConst.primaryBlue,
+                            colorOfText: ColorConst.textPrimary,
                           ),
+                          content: smcText(
+                            textToDisplay: isEditing
+                                ? 'Are you sure you want to update this course?'
+                                : 'Are you sure you want to save this course?',
+                            textSize: 14,
+                            colorOfText: ColorConst.textSecondary,
+                            maxLines: 3,
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(dialogCtx, false),
+                              child: const smcText(
+                                textToDisplay: 'Cancel',
+                                textSize: 14,
+                                textBoldness: 3,
+                                colorOfText: ColorConst.textSecondary,
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(dialogCtx, true),
+                              child: const smcText(
+                                textToDisplay: 'Save',
+                                textSize: 14,
+                                textBoldness: 4,
+                                colorOfText: ColorConst.primaryBlue,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
                   );
                   if (confirm != true) return;
 
@@ -1206,8 +1290,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                     id: isEditing ? courseToEdit.id : '',
                     orgId: isEditing
                         ? (courseToEdit.orgId.isNotEmpty
-                            ? courseToEdit.orgId
-                            : scopedOrgId)
+                        ? courseToEdit.orgId
+                        : scopedOrgId)
                         : scopedOrgId,
                     batch: selectedScheme ?? '',
                     semester: selectedSemester ?? '',
@@ -1218,9 +1302,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                     courseType: selectedCourseType ?? '',
                     syllabus: isEditing ? courseToEdit.syllabus : '',
                     syllabusPdfUrl:
-                        isEditing ? courseToEdit.syllabusPdfUrl : '',
+                    isEditing ? courseToEdit.syllabusPdfUrl : '',
                     syllabusPdfName:
-                        isEditing ? courseToEdit.syllabusPdfName : '',
+                    isEditing ? courseToEdit.syllabusPdfName : '',
                     enrolledStudentIds: isEditing
                         ? courseToEdit.enrolledStudentIds
                         : const [],
@@ -1261,13 +1345,15 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         ),
                       ),
                     );
-                    if (isEditing && selectedCourseDetail?.id == courseToEdit.id) {
+                    if (isEditing &&
+                        selectedCourseDetail?.id == courseToEdit.id) {
                       _onCourseDetailUpdated(course);
                     }
                   } catch (e) {
                     if (!ctx.mounted) return;
                     setModalState(() => saving = false);
-                    final errorMsg = e.toString().replaceFirst('Exception: ', '');
+                    final errorMsg = e.toString().replaceFirst(
+                        'Exception: ', '');
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         backgroundColor: Colors.red.shade600,
@@ -1301,14 +1387,16 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   smcText(
-                                    textToDisplay: isEditing ? 'Edit Course' : 'Create Course',
+                                    textToDisplay: isEditing
+                                        ? 'Edit Course'
+                                        : 'Create Course',
                                     textSize: 18,
                                     textBoldness: 5,
                                     colorOfText: ColorConst.textPrimary,
                                   ),
                                   smcText(
                                     textToDisplay:
-                                        'Step ${currentStep + 1} of $totalSteps',
+                                    'Step ${currentStep + 1} of $totalSteps',
                                     textSize: 12,
                                     colorOfText: ColorConst.textSecondary,
                                   ),
@@ -1335,10 +1423,12 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                               onPressed: saving
                                   ? null
                                   : (currentStep == 0
-                                      ? () => Navigator.pop(ctx)
-                                      : _onBack),
+                                  ? () => Navigator.pop(ctx)
+                                  : _onBack),
                               child: smcText(
-                                textToDisplay: currentStep == 0 ? 'Cancel' : 'Back',
+                                textToDisplay: currentStep == 0
+                                    ? 'Cancel'
+                                    : 'Back',
                                 textSize: 14,
                                 textBoldness: 4,
                                 colorOfText: ColorConst.textSecondary,
@@ -1351,8 +1441,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                 onPressed: saving
                                     ? null
                                     : (currentStep == totalSteps - 1
-                                        ? saveCourse
-                                        : _onNext),
+                                    ? saveCourse
+                                    : _onNext),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: ColorConst.primaryBlue,
                                   shape: RoundedRectangleBorder(
@@ -1361,15 +1451,15 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                 ),
                                 child: saving
                                     ? const CircularProgressIndicator(
-                                        color: Colors.white,
-                                      )
+                                  color: Colors.white,
+                                )
                                     : smcText(
-                                        textToDisplay: currentStep == totalSteps - 1
-                                            ? (isEditing ? 'Save' : 'Create')
-                                            : 'Next',
-                                        textSize: 15,
-                                        colorOfText: Colors.white,
-                                      ),
+                                  textToDisplay: currentStep == totalSteps - 1
+                                      ? (isEditing ? 'Save' : 'Create')
+                                      : 'Next',
+                                  textSize: 15,
+                                  colorOfText: Colors.white,
+                                ),
                               ),
                             ),
                           ],
@@ -1393,32 +1483,35 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   Future<void> _deleteCourseWithConfirmation(CourseModel course) async {
     final bool? confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const smcText(
-          textToDisplay: 'Delete Course',
-          textSize: 18,
-          textBoldness: 5,
-        ),
-        content: smcText(
-          textToDisplay:
-              'Are you sure you want to delete ${course.courseCode} - ${course.courseTitle}?',
-          textSize: 14,
-          colorOfText: ColorConst.textSecondary,
-          maxLines: 3,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+      builder: (ctx) =>
+          AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20)),
+            title: const smcText(
+              textToDisplay: 'Delete Course',
+              textSize: 18,
+              textBoldness: 5,
+            ),
+            content: smcText(
+              textToDisplay:
+              'Are you sure you want to delete ${course.courseCode} - ${course
+                  .courseTitle}?',
+              textSize: 14,
+              colorOfText: ColorConst.textSecondary,
+              maxLines: 3,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Delete'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
     );
 
     if (confirm != true) {
@@ -1466,32 +1559,33 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   void onSupport() {
     showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const smcText(
-          textToDisplay: 'Support',
-          textSize: 18,
-          textBoldness: 4,
-          colorOfText: ColorConst.textPrimary,
-        ),
-        content: const smcText(
-          textToDisplay:
-          'For faculty or student placement, contact your organisation administrator.',
-          textSize: 14,
-          colorOfText: ColorConst.textSecondary,
-          maxLines: 5,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const smcText(
-              textToDisplay: 'Close',
-              textSize: 14,
-              textBoldness: 3,
-              colorOfText: ColorConst.primaryBlue,
+      builder: (ctx) =>
+          AlertDialog(
+            title: const smcText(
+              textToDisplay: 'Support',
+              textSize: 18,
+              textBoldness: 4,
+              colorOfText: ColorConst.textPrimary,
             ),
+            content: const smcText(
+              textToDisplay:
+              'For faculty or student placement, contact your organisation administrator.',
+              textSize: 14,
+              colorOfText: ColorConst.textSecondary,
+              maxLines: 5,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const smcText(
+                  textToDisplay: 'Close',
+                  textSize: 14,
+                  textBoldness: 3,
+                  colorOfText: ColorConst.primaryBlue,
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -1582,7 +1676,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                 left: 20,
                 right: 20,
                 top: 20,
-                bottom: MediaQuery.paddingOf(ctx).bottom + 20,
+                bottom: MediaQuery
+                    .paddingOf(ctx)
+                    .bottom + 20,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -1598,7 +1694,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                   const SizedBox(height: 4),
                   smcText(
                     textToDisplay:
-                    'Role: ${mapping.roleId}  ·  Current dept: ${mapping.deptId.isEmpty ? '—' : mapping.deptId}',
+                    'Role: ${mapping.roleId}  ·  Current dept: ${mapping.deptId
+                        .isEmpty ? '—' : mapping.deptId}',
                     textSize: 13,
                     colorOfText: ColorConst.textSecondary,
                     maxLines: 2,
@@ -1617,14 +1714,15 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         isExpanded: true,
                         items: departments
                             .map(
-                              (d) => DropdownMenuItem<String>(
-                            value: d.deptId,
-                            child: Text(
-                              d.deptName.isEmpty
-                                  ? d.deptId
-                                  : '${d.deptName} (${d.deptId})',
-                            ),
-                          ),
+                              (d) =>
+                              DropdownMenuItem<String>(
+                                value: d.deptId,
+                                child: Text(
+                                  d.deptName.isEmpty
+                                      ? d.deptId
+                                      : '${d.deptName} (${d.deptId})',
+                                ),
+                              ),
                         )
                             .toList(),
                         onChanged: (id) {
@@ -1695,12 +1793,15 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
   // ── Create/Edit Student bottom sheet ──────────────────────────
 
-  Future<void> openCreateStudentSheet({StudentModel? studentToEdit, bool isViewOnly = false}) async {
+  Future<void> openCreateStudentSheet(
+      {StudentModel? studentToEdit, bool isViewOnly = false}) async {
     final formKey = GlobalKey<FormState>();
 
     // Basic Profile
-    final studentIdCtrl = TextEditingController(text: studentToEdit?.studentId ?? '');
-    final fullNameCtrl = TextEditingController(text: studentToEdit?.fullName ?? '');
+    final studentIdCtrl = TextEditingController(
+        text: studentToEdit?.studentId ?? '');
+    final fullNameCtrl = TextEditingController(
+        text: studentToEdit?.fullName ?? '');
     String? selectedGender = studentToEdit?.gender;
     final studentBatchOptions = batches.map((b) => b.name).toList();
     String? selectedStudentBatch = studentToEdit?.batch;
@@ -1714,19 +1815,22 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       selectedCurrentSemester = null;
     }
     DateTime? selectedDob;
-    if (studentToEdit?.dateOfBirth != null && studentToEdit!.dateOfBirth.isNotEmpty) {
+    if (studentToEdit?.dateOfBirth != null &&
+        studentToEdit!.dateOfBirth.isNotEmpty) {
       try {
         selectedDob = DateTime.parse(studentToEdit.dateOfBirth);
       } catch (_) {}
     }
     final dobCtrl = TextEditingController(
       text: selectedDob != null
-          ? '${selectedDob.day.toString().padLeft(2, '0')}/${selectedDob.month.toString().padLeft(2, '0')}/${selectedDob.year}'
+          ? '${selectedDob.day.toString().padLeft(2, '0')}/${selectedDob.month
+          .toString().padLeft(2, '0')}/${selectedDob.year}'
           : '',
     );
 
     // Identity / Category
-    final aadhaarCtrl = TextEditingController(text: studentToEdit?.aadhaarNumber ?? '');
+    final aadhaarCtrl = TextEditingController(
+        text: studentToEdit?.aadhaarNumber ?? '');
     String? selectedCategory = studentToEdit?.category;
     String? selectedNationality = studentToEdit?.nationality;
     String? selectedBloodGroup = studentToEdit?.bloodGroup;
@@ -1736,16 +1840,24 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     final emailCtrl = TextEditingController(text: studentToEdit?.email ?? '');
 
     // Address
-    final permanentAddrCtrl = TextEditingController(text: studentToEdit?.permanentAddress ?? '');
-    final correspondenceAddrCtrl = TextEditingController(text: studentToEdit?.correspondenceAddress ?? '');
+    final permanentAddrCtrl = TextEditingController(
+        text: studentToEdit?.permanentAddress ?? '');
+    final correspondenceAddrCtrl = TextEditingController(
+        text: studentToEdit?.correspondenceAddress ?? '');
 
     // Emergency Contact
-    final emergNameCtrl = TextEditingController(text: studentToEdit?.emergencyContactName ?? '');
-    final emergRelationCtrl = TextEditingController(text: studentToEdit?.emergencyContactRelation ?? '');
-    final emergMobileCtrl = TextEditingController(text: studentToEdit?.emergencyContactMobile ?? '');
-    final fatherNameCtrl = TextEditingController(text: studentToEdit?.fatherName ?? '');
-    final motherNameCtrl = TextEditingController(text: studentToEdit?.motherName ?? '');
-    final guardianNameCtrl = TextEditingController(text: studentToEdit?.guardianName ?? '');
+    final emergNameCtrl = TextEditingController(
+        text: studentToEdit?.emergencyContactName ?? '');
+    final emergRelationCtrl = TextEditingController(
+        text: studentToEdit?.emergencyContactRelation ?? '');
+    final emergMobileCtrl = TextEditingController(
+        text: studentToEdit?.emergencyContactMobile ?? '');
+    final fatherNameCtrl = TextEditingController(
+        text: studentToEdit?.fatherName ?? '');
+    final motherNameCtrl = TextEditingController(
+        text: studentToEdit?.motherName ?? '');
+    final guardianNameCtrl = TextEditingController(
+        text: studentToEdit?.guardianName ?? '');
 
     bool saving = false;
     int currentStep = 0;
@@ -1761,838 +1873,912 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         final media = MediaQuery.of(ctx);
         final maxHeight = (media.size.height * 0.9).clamp(520.0, 820.0);
         return Dialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          insetPadding: const EdgeInsets.symmetric(
+              horizontal: 16, vertical: 16),
           backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24)),
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: 720, maxHeight: maxHeight),
             child: StatefulBuilder(
               builder: (ctx, setModalState) {
-            InputDecoration _fieldDecor(String label, {String? hint}) =>
-                InputDecoration(
-                  labelText: label,
-                  hintText: hint,
-                  labelStyle: const TextStyle(
-                    fontSize: 12,
-                    color: ColorConst.textSecondary,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: ColorConst.borderSoft),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: ColorConst.borderSoft),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(
-                      color: ColorConst.primaryBlue,
-                      width: 1.2,
-                    ),
-                  ),
-                  filled: true,
-                  fillColor: const Color(0xFFF9FAFD),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                );
-
-            Widget _sectionHeader(String title, IconData icon) => Padding(
-              padding: const EdgeInsets.only(top: 8, bottom: 4),
-              child: Row(
-                children: [
-                  Icon(icon, size: 14, color: ColorConst.primaryBlue),
-                  const SizedBox(width: 6),
-                  smcText(
-                    textToDisplay: title,
-                    textSize: 12,
-                    textBoldness: 4,
-                    colorOfText: ColorConst.primaryBlue,
-                  ),
-                ],
-              ),
-            );
-
-            Future<void> _saveStudent() async {
-              if (!formKey.currentState!.validate()) return;
-
-              if (studentToEdit == null) {
-                final bool? confirm = await showDialog<bool>(
-                  context: ctx,
-                  builder: (dialogCtx) => AlertDialog(
-                    title: const smcText(
-                      textToDisplay: 'Create Student',
-                      textSize: 18,
-                      textBoldness: 4,
-                      colorOfText: ColorConst.textPrimary,
-                    ),
-                    content: const smcText(
-                      textToDisplay:
-                          'Are you sure you want to save this student record?',
-                      textSize: 14,
-                      colorOfText: ColorConst.textSecondary,
-                      maxLines: 3,
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(dialogCtx, false),
-                        child: const smcText(
-                          textToDisplay: 'Cancel',
-                          textSize: 14,
-                          textBoldness: 3,
-                          colorOfText: ColorConst.textSecondary,
+                InputDecoration _fieldDecor(String label, {String? hint}) =>
+                    InputDecoration(
+                      labelText: label,
+                      hintText: hint,
+                      labelStyle: const TextStyle(
+                        fontSize: 12,
+                        color: ColorConst.textSecondary,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(
+                            color: ColorConst.borderSoft),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(
+                            color: ColorConst.borderSoft),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(
+                          color: ColorConst.primaryBlue,
+                          width: 1.2,
                         ),
                       ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(dialogCtx, true),
-                        child: const smcText(
-                          textToDisplay: 'Save',
-                          textSize: 14,
-                          textBoldness: 4,
-                          colorOfText: ColorConst.primaryBlue,
-                        ),
+                      filled: true,
+                      fillColor: const Color(0xFFF9FAFD),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
                       ),
-                    ],
-                  ),
-                );
-                if (confirm != true) return;
-              }
-
-              setModalState(() => saving = true);
-
-              if (photographBytes != null) {
-                final ref = FirebaseStorage.instance
-                    .ref()
-                    .child('student_photos')
-                    .child(
-                      '${studentIdCtrl.text.trim().toUpperCase()}_${DateTime.now().millisecondsSinceEpoch}.jpg',
                     );
-                await ref.putData(
-                  photographBytes!,
-                  SettableMetadata(contentType: 'image/jpeg'),
-                );
-                photographUrl = await ref.getDownloadURL();
-              }
 
-              final mobile = mobileCtrl.text.trim();
-              final student = StudentModel(
-                documentId: studentToEdit?.documentId,
-                studentId: studentIdCtrl.text.trim().toUpperCase(),
-                fullName: fullNameCtrl.text.trim(),
-                gender: selectedGender ?? '',
-                dateOfBirth: selectedDob?.toIso8601String().split('T')[0] ?? '',
-                photographUrl: photographUrl ?? '',
-                batch: selectedStudentBatch ?? '',
-                currentSemester: selectedCurrentSemester ?? '',
-                aadhaarNumber: aadhaarCtrl.text.trim(),
-                category: selectedCategory ?? '',
-                nationality: selectedNationality ?? '',
-                bloodGroup: selectedBloodGroup ?? '',
-                uuid: StudentModel.normalizeUuid(mobile),
-                mobile: mobile,
-                email: emailCtrl.text.trim().toLowerCase(),
-                permanentAddress: permanentAddrCtrl.text.trim(),
-                correspondenceAddress: correspondenceAddrCtrl.text.trim(),
-                emergencyContactName: emergNameCtrl.text.trim(),
-                emergencyContactRelation: emergRelationCtrl.text.trim(),
-                emergencyContactMobile: emergMobileCtrl.text.trim(),
-                fatherName: fatherNameCtrl.text.trim(),
-                motherName: motherNameCtrl.text.trim(),
-                guardianName: guardianNameCtrl.text.trim(),
-                orgId: scopedOrgId,
-                deptId: scopedDeptId,
-                createdOn: studentToEdit?.createdOn ??
-                    DateTime.now().toIso8601String(),
-              );
-
-              try {
-                if (studentToEdit != null) {
-                  await studentService.updateStudent(
-                    documentId: studentToEdit.documentId!,
-                    updated: student,
-                  );
-                } else {
-                  await studentService.createStudent(student);
-          await userMasterService.syncFromStudent(student);
-                }
-                if (!ctx.mounted) return;
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    backgroundColor: Colors.green.shade600,
-                    content: smcText(
-                      textToDisplay:
-                          'Student ${studentToEdit == null ? 'added' : 'updated'} successfully.',
-                      textSize: 14,
-                      colorOfText: Colors.white,
-                    ),
-                  ),
-                );
-                await refresh();
-              } catch (e) {
-                if (!ctx.mounted) return;
-                setModalState(() => saving = false);
-                final errorMsg = e.toString().replaceFirst('Exception: ', '');
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    backgroundColor: Colors.red.shade600,
-                    content: smcText(
-                      textToDisplay: 'Error: $errorMsg',
-                      textSize: 13,
-                      colorOfText: Colors.white,
-                      maxLines: 3,
-                    ),
-                  ),
-                );
-              }
-            }
-
-            void _onNext() {
-              if (currentStep >= totalSteps - 1) return;
-              if (!formKey.currentState!.validate()) return;
-              if (currentStep == 0 &&
-                  photographBytes == null &&
-                  (photographUrl == null || photographUrl!.trim().isEmpty)) {
-                setModalState(() {
-                  photographError = 'Photograph is required';
-                });
-                return;
-              }
-              if (currentStep == 1 &&
-                  (selectedBloodGroup == null ||
-                      selectedBloodGroup!.trim().isEmpty)) {
-                setModalState(() {
-                  bloodGroupError = 'Please select blood group';
-                });
-                return;
-              }
-              setModalState(() {
-                photographError = null;
-                bloodGroupError = null;
-                currentStep += 1;
-              });
-            }
-
-            void _onBack() {
-              if (currentStep <= 0) return;
-              setModalState(() {
-                currentStep -= 1;
-              });
-            }
-
-            Widget _buildPhotographPreview() {
-              if (photographBytes != null) {
-                return Column(
-                  children: [
-                    const SizedBox(height: 10),
-                    Center(
-                      child: Container(
-                        width: 280,
-                        height: 420,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: ColorConst.borderSoft),
-                          color: const Color(0xFFF7F9FF),
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: Image.memory(
-                          photographBytes!,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              }
-
-              final String normalizedUrl =
-                  normalizeProfilePhotoUrl(photographUrl ?? '');
-              if (normalizedUrl.isEmpty) {
-                return const SizedBox.shrink();
-              }
-
-              return Column(
-                children: [
-                  const SizedBox(height: 10),
-                  Center(
-                    child: ProfilePhotoAvatar(
-                      photoUrl: normalizedUrl,
-                      previewWidth: 280,
-                      previewHeight: 420,
-                    ),
-                  ),
-                ],
-              );
-            }
-
-            Widget _buildStepContent() {
-              switch (currentStep) {
-                case 0:
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _sectionHeader(
-                        'Basic Profile Information',
-                        Icons.person_outline_rounded,
-                      ),
-                      TextFormField(
-                        controller: studentIdCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor(
-                          'Student ID (USN) *',
-                          hint: 'e.g. 1AB20CS001',
-                        ),
-                        textCapitalization: TextCapitalization.characters,
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Student ID is required'
-                            : null,
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: fullNameCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor('Full Name *'),
-                        textCapitalization: TextCapitalization.words,
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Full name is required'
-                            : null,
-                      ),
-                      const SizedBox(height: 8),
-                      DropdownButtonFormField<String>(
-                        value: selectedGender,
-                        decoration: _fieldDecor('Gender *'),
-                        items: ['Male', 'Female', 'Other']
-                            .map(
-                              (g) => DropdownMenuItem(
-                                value: g,
-                                child: Text(
-                                  g,
-                                  style: const TextStyle(fontSize: 13),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: isViewOnly
-                            ? null
-                            : (v) =>
-                                setModalState(() => selectedGender = v),
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Please select gender'
-                            : null,
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: dobCtrl,
-                        readOnly: true,
-                        decoration: _fieldDecor('Date of Birth *').copyWith(
-                          suffixIcon: const Icon(
-                            Icons.calendar_today_outlined,
-                            size: 16,
-                          ),
-                        ),
-                        onTap: isViewOnly
-                            ? null
-                            : () async {
-                                final picked = await showDatePicker(
-                                  context: ctx,
-                                  initialDate: DateTime(2005),
-                                  firstDate: DateTime(1990),
-                                  lastDate: DateTime.now(),
-                                );
-                                if (picked != null) {
-                                  setModalState(() {
-                                    selectedDob = picked;
-                                    dobCtrl.text =
-                                        '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
-                                  });
-                                }
-                              },
-                        validator: (_) => selectedDob == null
-                            ? 'Date of birth is required'
-                            : null,
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                Widget _sectionHeader(String title, IconData icon) =>
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8, bottom: 4),
+                      child: Row(
                         children: [
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              value: selectedStudentBatch,
-                              decoration: _fieldDecor('Batch *'),
-                              items: studentBatchOptions
-                                  .map(
-                                    (batch) => DropdownMenuItem(
-                                      value: batch,
-                                      child: Text(
-                                        batch,
-                                        style: const TextStyle(fontSize: 13),
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: isViewOnly
-                                  ? null
-                                  : (v) => setModalState(
-                                        () => selectedStudentBatch = v,
-                                      ),
-                              validator: (v) => (v == null || v.trim().isEmpty)
-                                  ? 'Please select batch'
-                                  : null,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              value: selectedCurrentSemester,
-                              decoration: _fieldDecor('Current Semester'),
-                              items: StudentModel.semesterOptions
-                                  .map(
-                                    (semester) => DropdownMenuItem(
-                                      value: semester,
-                                      child: Text(
-                                        semester,
-                                        style: const TextStyle(fontSize: 13),
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: isViewOnly
-                                  ? null
-                                  : (v) => setModalState(
-                                        () => selectedCurrentSemester = v,
-                                      ),
-                            ),
+                          Icon(icon, size: 14, color: ColorConst.primaryBlue),
+                          const SizedBox(width: 6),
+                          smcText(
+                            textToDisplay: title,
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: ColorConst.primaryBlue,
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      GestureDetector(
-                        onTap: isViewOnly
-                            ? null
-                            : () async {
-                                final picker = ImagePicker();
-                                final picked = await picker.pickImage(
-                                  source: ImageSource.gallery,
-                                  imageQuality: 70,
-                                );
-                                if (picked != null) {
-                                  final bytes = await picked.readAsBytes();
-                                  setModalState(() {
-                                    photographBytes = bytes;
-                                    photographError = null;
-                                  });
-                                }
-                              },
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF0F4FF),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: ColorConst.borderSoft),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.photo_camera_outlined,
-                                size: 16,
+                    );
+
+                Future<void> _saveStudent() async {
+                  if (!formKey.currentState!.validate()) return;
+
+                  if (studentToEdit == null) {
+                    final bool? confirm = await showDialog<bool>(
+                      context: ctx,
+                      builder: (dialogCtx) =>
+                          AlertDialog(
+                            title: const smcText(
+                              textToDisplay: 'Create Student',
+                              textSize: 18,
+                              textBoldness: 4,
+                              colorOfText: ColorConst.textPrimary,
+                            ),
+                            content: const smcText(
+                              textToDisplay:
+                              'Are you sure you want to save this student record?',
+                              textSize: 14,
+                              colorOfText: ColorConst.textSecondary,
+                              maxLines: 3,
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.pop(dialogCtx, false),
+                                child: const smcText(
+                                  textToDisplay: 'Cancel',
+                                  textSize: 14,
+                                  textBoldness: 3,
+                                  colorOfText: ColorConst.textSecondary,
+                                ),
                               ),
-                              const SizedBox(width: 8),
-                              Text(
-                                isViewOnly ? 'Photograph' : 'Upload Photograph',
-                                style: const TextStyle(fontSize: 12),
+                              TextButton(
+                                onPressed: () => Navigator.pop(dialogCtx, true),
+                                child: const smcText(
+                                  textToDisplay: 'Save',
+                                  textSize: 14,
+                                  textBoldness: 4,
+                                  colorOfText: ColorConst.primaryBlue,
+                                ),
                               ),
                             ],
                           ),
+                    );
+                    if (confirm != true) return;
+                  }
+
+                  setModalState(() => saving = true);
+
+                  if (photographBytes != null) {
+                    final ref = FirebaseStorage.instance
+                        .ref()
+                        .child('student_photos')
+                        .child(
+                      '${studentIdCtrl.text.trim().toUpperCase()}_${DateTime
+                          .now()
+                          .millisecondsSinceEpoch}.jpg',
+                    );
+                    await ref.putData(
+                      photographBytes!,
+                      SettableMetadata(contentType: 'image/jpeg'),
+                    );
+                    photographUrl = await ref.getDownloadURL();
+                  }
+
+                  final mobile = mobileCtrl.text.trim();
+                  final student = StudentModel(
+                    documentId: studentToEdit?.documentId,
+                    studentId: studentIdCtrl.text.trim().toUpperCase(),
+                    fullName: fullNameCtrl.text.trim(),
+                    gender: selectedGender ?? '',
+                    dateOfBirth: selectedDob?.toIso8601String().split('T')[0] ??
+                        '',
+                    photographUrl: photographUrl ?? '',
+                    batch: selectedStudentBatch ?? '',
+                    currentSemester: selectedCurrentSemester ?? '',
+                    aadhaarNumber: aadhaarCtrl.text.trim(),
+                    category: selectedCategory ?? '',
+                    nationality: selectedNationality ?? '',
+                    bloodGroup: selectedBloodGroup ?? '',
+                    uuid: StudentModel.normalizeUuid(mobile),
+                    mobile: mobile,
+                    email: emailCtrl.text.trim().toLowerCase(),
+                    permanentAddress: permanentAddrCtrl.text.trim(),
+                    correspondenceAddress: correspondenceAddrCtrl.text.trim(),
+                    emergencyContactName: emergNameCtrl.text.trim(),
+                    emergencyContactRelation: emergRelationCtrl.text.trim(),
+                    emergencyContactMobile: emergMobileCtrl.text.trim(),
+                    fatherName: fatherNameCtrl.text.trim(),
+                    motherName: motherNameCtrl.text.trim(),
+                    guardianName: guardianNameCtrl.text.trim(),
+                    orgId: scopedOrgId,
+                    deptId: scopedDeptId,
+                    createdOn: studentToEdit?.createdOn ??
+                        DateTime.now().toIso8601String(),
+                  );
+
+                  try {
+                    if (studentToEdit != null) {
+                      await studentService.updateStudent(
+                        documentId: studentToEdit.documentId!,
+                        updated: student,
+                      );
+                    } else {
+                      await studentService.createStudent(student);
+                      await userMasterService.syncFromStudent(student);
+                    }
+                    if (!ctx.mounted) return;
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        backgroundColor: Colors.green.shade600,
+                        content: smcText(
+                          textToDisplay:
+                          'Student ${studentToEdit == null
+                              ? 'added'
+                              : 'updated'} successfully.',
+                          textSize: 14,
+                          colorOfText: Colors.white,
                         ),
                       ),
-                      if (photographError != null) ...[
-                        const SizedBox(height: 6),
-                        smcText(
-                          textToDisplay: photographError!,
-                          textSize: 12,
-                          colorOfText: const Color(0xFFC62828),
+                    );
+                    await refresh();
+                  } catch (e) {
+                    if (!ctx.mounted) return;
+                    setModalState(() => saving = false);
+                    final errorMsg = e.toString().replaceFirst(
+                        'Exception: ', '');
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        backgroundColor: Colors.red.shade600,
+                        content: smcText(
+                          textToDisplay: 'Error: $errorMsg',
+                          textSize: 13,
+                          colorOfText: Colors.white,
+                          maxLines: 3,
+                        ),
+                      ),
+                    );
+                  }
+                }
+
+                void _onNext() {
+                  if (currentStep >= totalSteps - 1) return;
+                  if (!formKey.currentState!.validate()) return;
+                  if (currentStep == 0 &&
+                      photographBytes == null &&
+                      (photographUrl == null ||
+                          photographUrl!.trim().isEmpty)) {
+                    setModalState(() {
+                      photographError = 'Photograph is required';
+                    });
+                    return;
+                  }
+                  if (currentStep == 1 &&
+                      (selectedBloodGroup == null ||
+                          selectedBloodGroup!.trim().isEmpty)) {
+                    setModalState(() {
+                      bloodGroupError = 'Please select blood group';
+                    });
+                    return;
+                  }
+                  setModalState(() {
+                    photographError = null;
+                    bloodGroupError = null;
+                    currentStep += 1;
+                  });
+                }
+
+                void _onBack() {
+                  if (currentStep <= 0) return;
+                  setModalState(() {
+                    currentStep -= 1;
+                  });
+                }
+
+                Widget _buildPhotographPreview() {
+                  if (photographBytes != null) {
+                    return Column(
+                      children: [
+                        const SizedBox(height: 10),
+                        Center(
+                          child: Container(
+                            width: 280,
+                            height: 420,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: ColorConst.borderSoft),
+                              color: const Color(0xFFF7F9FF),
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: Image.memory(
+                              photographBytes!,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
                         ),
                       ],
-                      _buildPhotographPreview(),
-                    ],
-                  );
-                case 1:
+                    );
+                  }
+
+                  final String normalizedUrl =
+                  normalizeProfilePhotoUrl(photographUrl ?? '');
+                  if (normalizedUrl.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+
                   return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _sectionHeader(
-                        'Identity & Category',
-                        Icons.verified_user_outlined,
-                      ),
-                      TextFormField(
-                        controller: aadhaarCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor('Aadhaar / Govt ID'),
-                        keyboardType: TextInputType.number,
-                      ),
-                      const SizedBox(height: 6),
-                      DropdownButtonFormField<String>(
-                        value: selectedCategory,
-                        decoration: _fieldDecor('Category *'),
-                        items: ['Gen', 'OBC', 'SC', 'ST']
-                            .map(
-                              (c) => DropdownMenuItem(
-                                value: c,
-                                child: Text(
-                                  c,
-                                  style: const TextStyle(fontSize: 13),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: isViewOnly
-                            ? null
-                            : (v) => setModalState(() => selectedCategory = v),
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Please select category'
-                            : null,
-                      ),
-                      const SizedBox(height: 6),
-                      DropdownButtonFormField<String>(
-                        value: selectedNationality,
-                        decoration: _fieldDecor('Nationality *'),
-                        items: ['Indian', 'NRI', 'Foreigner']
-                            .map(
-                              (n) => DropdownMenuItem(
-                                value: n,
-                                child: Text(
-                                  n,
-                                  style: const TextStyle(fontSize: 13),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: isViewOnly
-                            ? null
-                            : (v) =>
-                                setModalState(() => selectedNationality = v),
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Please select nationality'
-                            : null,
-                      ),
-                      const SizedBox(height: 6),
-                      const Padding(
-                        padding: EdgeInsets.only(left: 4, bottom: 4),
-                        child: smcText(
-                          textToDisplay: 'Blood Group *',
-                          textSize: 12,
-                          colorOfText: ColorConst.textSecondary,
+                      const SizedBox(height: 10),
+                      Center(
+                        child: ProfilePhotoAvatar(
+                          photoUrl: normalizedUrl,
+                          previewWidth: 280,
+                          previewHeight: 420,
                         ),
                       ),
-                      Wrap(
-                        spacing: 4,
-                        runSpacing: 0,
+                    ],
+                  );
+                }
+
+                Widget _buildStepContent() {
+                  switch (currentStep) {
+                    case 0:
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          'A+',
-                          'A-',
-                          'B+',
-                          'B-',
-                          'O+',
-                          'O-',
-                          'AB+',
-                          'AB-'
-                        ].map((bg) {
-                          return Row(
-                            mainAxisSize: MainAxisSize.min,
+                          _sectionHeader(
+                            'Basic Profile Information',
+                            Icons.person_outline_rounded,
+                          ),
+                          TextFormField(
+                            controller: studentIdCtrl,
+                            readOnly: isViewOnly,
+                            decoration: _fieldDecor(
+                              'Student ID (USN) *',
+                              hint: 'e.g. 1AB20CS001',
+                            ),
+                            textCapitalization: TextCapitalization.characters,
+                            validator: (v) =>
+                            (v == null || v
+                                .trim()
+                                .isEmpty)
+                                ? 'Student ID is required'
+                                : null,
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: fullNameCtrl,
+                            readOnly: isViewOnly,
+                            decoration: _fieldDecor('Full Name *'),
+                            textCapitalization: TextCapitalization.words,
+                            validator: (v) =>
+                            (v == null || v
+                                .trim()
+                                .isEmpty)
+                                ? 'Full name is required'
+                                : null,
+                          ),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            value: selectedGender,
+                            decoration: _fieldDecor('Gender *'),
+                            items: ['Male', 'Female', 'Other']
+                                .map(
+                                  (g) =>
+                                  DropdownMenuItem(
+                                    value: g,
+                                    child: Text(
+                                      g,
+                                      style: const TextStyle(fontSize: 13),
+                                    ),
+                                  ),
+                            )
+                                .toList(),
+                            onChanged: isViewOnly
+                                ? null
+                                : (v) =>
+                                setModalState(() => selectedGender = v),
+                            validator: (v) =>
+                            (v == null || v
+                                .trim()
+                                .isEmpty)
+                                ? 'Please select gender'
+                                : null,
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: dobCtrl,
+                            readOnly: true,
+                            decoration: _fieldDecor('Date of Birth *').copyWith(
+                              suffixIcon: const Icon(
+                                Icons.calendar_today_outlined,
+                                size: 16,
+                              ),
+                            ),
+                            onTap: isViewOnly
+                                ? null
+                                : () async {
+                              final picked = await showDatePicker(
+                                context: ctx,
+                                initialDate: DateTime(2005),
+                                firstDate: DateTime(1990),
+                                lastDate: DateTime.now(),
+                              );
+                              if (picked != null) {
+                                setModalState(() {
+                                  selectedDob = picked;
+                                  dobCtrl.text =
+                                  '${picked.day.toString().padLeft(
+                                      2, '0')}/${picked.month
+                                      .toString()
+                                      .padLeft(2, '0')}/${picked.year}';
+                                });
+                              }
+                            },
+                            validator: (_) =>
+                            selectedDob == null
+                                ? 'Date of birth is required'
+                                : null,
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Radio<String>(
-                                value: bg,
-                                groupValue: selectedBloodGroup,
-                                materialTapTargetSize:
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  value: selectedStudentBatch,
+                                  decoration: _fieldDecor('Batch *'),
+                                  items: studentBatchOptions
+                                      .map(
+                                        (batch) =>
+                                        DropdownMenuItem(
+                                          value: batch,
+                                          child: Text(
+                                            batch,
+                                            style: const TextStyle(
+                                                fontSize: 13),
+                                          ),
+                                        ),
+                                  )
+                                      .toList(),
+                                  onChanged: isViewOnly
+                                      ? null
+                                      : (v) =>
+                                      setModalState(
+                                            () => selectedStudentBatch = v,
+                                      ),
+                                  validator: (v) =>
+                                  (v == null || v
+                                      .trim()
+                                      .isEmpty)
+                                      ? 'Please select batch'
+                                      : null,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  value: selectedCurrentSemester,
+                                  decoration: _fieldDecor('Current Semester'),
+                                  items: StudentModel.semesterOptions
+                                      .map(
+                                        (semester) =>
+                                        DropdownMenuItem(
+                                          value: semester,
+                                          child: Text(
+                                            semester,
+                                            style: const TextStyle(
+                                                fontSize: 13),
+                                          ),
+                                        ),
+                                  )
+                                      .toList(),
+                                  onChanged: isViewOnly
+                                      ? null
+                                      : (v) =>
+                                      setModalState(
+                                            () => selectedCurrentSemester = v,
+                                      ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          GestureDetector(
+                            onTap: isViewOnly
+                                ? null
+                                : () async {
+                              final picker = ImagePicker();
+                              final picked = await picker.pickImage(
+                                source: ImageSource.gallery,
+                                imageQuality: 70,
+                              );
+                              if (picked != null) {
+                                final bytes = await picked.readAsBytes();
+                                setModalState(() {
+                                  photographBytes = bytes;
+                                  photographError = null;
+                                });
+                              }
+                            },
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF0F4FF),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                    color: ColorConst.borderSoft),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.photo_camera_outlined,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    isViewOnly
+                                        ? 'Photograph'
+                                        : 'Upload Photograph',
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          if (photographError != null) ...[
+                            const SizedBox(height: 6),
+                            smcText(
+                              textToDisplay: photographError!,
+                              textSize: 12,
+                              colorOfText: const Color(0xFFC62828),
+                            ),
+                          ],
+                          _buildPhotographPreview(),
+                        ],
+                      );
+                    case 1:
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _sectionHeader(
+                            'Identity & Category',
+                            Icons.verified_user_outlined,
+                          ),
+                          TextFormField(
+                            controller: aadhaarCtrl,
+                            readOnly: isViewOnly,
+                            decoration: _fieldDecor('Aadhaar / Govt ID'),
+                            keyboardType: TextInputType.number,
+                          ),
+                          const SizedBox(height: 6),
+                          DropdownButtonFormField<String>(
+                            value: selectedCategory,
+                            decoration: _fieldDecor('Category *'),
+                            items: ['Gen', 'OBC', 'SC', 'ST']
+                                .map(
+                                  (c) =>
+                                  DropdownMenuItem(
+                                    value: c,
+                                    child: Text(
+                                      c,
+                                      style: const TextStyle(fontSize: 13),
+                                    ),
+                                  ),
+                            )
+                                .toList(),
+                            onChanged: isViewOnly
+                                ? null
+                                : (v) =>
+                                setModalState(() => selectedCategory = v),
+                            validator: (v) =>
+                            (v == null || v
+                                .trim()
+                                .isEmpty)
+                                ? 'Please select category'
+                                : null,
+                          ),
+                          const SizedBox(height: 6),
+                          DropdownButtonFormField<String>(
+                            value: selectedNationality,
+                            decoration: _fieldDecor('Nationality *'),
+                            items: ['Indian', 'NRI', 'Foreigner']
+                                .map(
+                                  (n) =>
+                                  DropdownMenuItem(
+                                    value: n,
+                                    child: Text(
+                                      n,
+                                      style: const TextStyle(fontSize: 13),
+                                    ),
+                                  ),
+                            )
+                                .toList(),
+                            onChanged: isViewOnly
+                                ? null
+                                : (v) =>
+                                setModalState(() => selectedNationality = v),
+                            validator: (v) =>
+                            (v == null || v
+                                .trim()
+                                .isEmpty)
+                                ? 'Please select nationality'
+                                : null,
+                          ),
+                          const SizedBox(height: 6),
+                          const Padding(
+                            padding: EdgeInsets.only(left: 4, bottom: 4),
+                            child: smcText(
+                              textToDisplay: 'Blood Group *',
+                              textSize: 12,
+                              colorOfText: ColorConst.textSecondary,
+                            ),
+                          ),
+                          Wrap(
+                            spacing: 4,
+                            runSpacing: 0,
+                            children: [
+                              'A+',
+                              'A-',
+                              'B+',
+                              'B-',
+                              'O+',
+                              'O-',
+                              'AB+',
+                              'AB-'
+                            ].map((bg) {
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Radio<String>(
+                                    value: bg,
+                                    groupValue: selectedBloodGroup,
+                                    materialTapTargetSize:
                                     MaterialTapTargetSize.shrinkWrap,
-                                activeColor: ColorConst.primaryBlue,
-                                onChanged: isViewOnly
-                                    ? null
-                                    : (v) => setModalState(
-                                          () {
+                                    activeColor: ColorConst.primaryBlue,
+                                    onChanged: isViewOnly
+                                        ? null
+                                        : (v) =>
+                                        setModalState(
+                                              () {
                                             selectedBloodGroup = v;
                                             bloodGroupError = null;
                                           },
                                         ),
-                              ),
-                              smcText(
-                                textToDisplay: bg,
-                                textSize: 12,
-                                colorOfText: ColorConst.textPrimary,
-                              ),
-                              const SizedBox(width: 4),
+                                  ),
+                                  smcText(
+                                    textToDisplay: bg,
+                                    textSize: 12,
+                                    colorOfText: ColorConst.textPrimary,
+                                  ),
+                                  const SizedBox(width: 4),
+                                ],
+                              );
+                            }).toList(),
+                          ),
+                          if (bloodGroupError != null) ...[
+                            const SizedBox(height: 4),
+                            smcText(
+                              textToDisplay: bloodGroupError!,
+                              textSize: 12,
+                              colorOfText: const Color(0xFFC62828),
+                            ),
+                          ],
+                          _sectionHeader(
+                            'Contact Details',
+                            Icons.contact_phone_outlined,
+                          ),
+                          TextFormField(
+                            controller: mobileCtrl,
+                            readOnly: isViewOnly,
+                            decoration: _fieldDecor('Mobile Number *'),
+                            keyboardType: TextInputType.phone,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(10),
                             ],
-                          );
-                        }).toList(),
-                      ),
-                      if (bloodGroupError != null) ...[
-                        const SizedBox(height: 4),
-                        smcText(
-                          textToDisplay: bloodGroupError!,
-                          textSize: 12,
-                          colorOfText: const Color(0xFFC62828),
-                        ),
-                      ],
-                      _sectionHeader(
-                        'Contact Details',
-                        Icons.contact_phone_outlined,
-                      ),
-                      TextFormField(
-                        controller: mobileCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor('Mobile Number *'),
-                        keyboardType: TextInputType.phone,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(10),
-                        ],
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) {
-                            return 'Mobile number is required';
-                          }
-                          if (v.trim().length != 10) {
-                            return 'Enter valid 10-digit mobile number';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 6),
-                      TextFormField(
-                        controller: emailCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor('Email Address *'),
-                        keyboardType: TextInputType.emailAddress,
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) {
-                            return 'Email is required';
-                          }
-                          final emailRegex =
+                            validator: (v) {
+                              if (v == null || v
+                                  .trim()
+                                  .isEmpty) {
+                                return 'Mobile number is required';
+                              }
+                              if (v
+                                  .trim()
+                                  .length != 10) {
+                                return 'Enter valid 10-digit mobile number';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 6),
+                          TextFormField(
+                            controller: emailCtrl,
+                            readOnly: isViewOnly,
+                            decoration: _fieldDecor('Email Address *'),
+                            keyboardType: TextInputType.emailAddress,
+                            validator: (v) {
+                              if (v == null || v
+                                  .trim()
+                                  .isEmpty) {
+                                return 'Email is required';
+                              }
+                              final emailRegex =
                               RegExp(r'^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$');
-                          if (!emailRegex.hasMatch(v.trim())) {
-                            return 'Enter a valid email address';
-                          }
-                          return null;
-                        },
-                      ),
-                      _buildPhotographPreview(),
-                    ],
-                  );
-                default:
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _sectionHeader('Address', Icons.home_outlined),
-                      TextFormField(
-                        controller: permanentAddrCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor('Permanent Address'),
-                        maxLines: 1,
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Permanent address is required'
-                            : null,
-                      ),
-                      const SizedBox(height: 6),
-                      TextFormField(
-                        controller: correspondenceAddrCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor('Correspondence Address'),
-                        maxLines: 1,
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Correspondence address is required'
-                            : null,
-                      ),
-                      _sectionHeader(
-                        'Family Details',
-                        Icons.family_restroom_outlined,
-                      ),
-                      TextFormField(
-                        controller: fatherNameCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor('Father Name'),
-                        textCapitalization: TextCapitalization.words,
-                      ),
-                      const SizedBox(height: 6),
-                      TextFormField(
-                        controller: motherNameCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor('Mother Name'),
-                        textCapitalization: TextCapitalization.words,
-                      ),
-                      const SizedBox(height: 6),
-                      TextFormField(
-                        controller: guardianNameCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor('Guardian Name'),
-                        textCapitalization: TextCapitalization.words,
-                      ),
-                      _sectionHeader(
-                        'Emergency Contact (Parent/Guardian)',
-                        Icons.emergency_outlined,
-                      ),
-                      TextFormField(
-                        controller: emergNameCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor('Contact Person Name'),
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Contact person name is required'
-                            : null,
-                      ),
-                      const SizedBox(height: 6),
-                      TextFormField(
-                        controller: emergRelationCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor('Relation'),
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Relation is required'
-                            : null,
-                      ),
-                      const SizedBox(height: 6),
-                      TextFormField(
-                        controller: emergMobileCtrl,
-                        readOnly: isViewOnly,
-                        decoration: _fieldDecor('Emergency Mobile'),
-                        keyboardType: TextInputType.phone,
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Emergency mobile is required'
-                            : null,
-                      ),
-                      _buildPhotographPreview(),
-                    ],
-                  );
-              }
-            }
+                              if (!emailRegex.hasMatch(v.trim())) {
+                                return 'Enter a valid email address';
+                              }
+                              return null;
+                            },
+                          ),
+                          _buildPhotographPreview(),
+                        ],
+                      );
+                    default:
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _sectionHeader('Address', Icons.home_outlined),
+                          TextFormField(
+                            controller: permanentAddrCtrl,
+                            readOnly: isViewOnly,
+                            decoration: _fieldDecor('Permanent Address'),
+                            maxLines: 1,
+                            validator: (v) =>
+                            (v == null || v
+                                .trim()
+                                .isEmpty)
+                                ? 'Permanent address is required'
+                                : null,
+                          ),
+                          const SizedBox(height: 6),
+                          TextFormField(
+                            controller: correspondenceAddrCtrl,
+                            readOnly: isViewOnly,
+                            decoration: _fieldDecor('Correspondence Address'),
+                            maxLines: 1,
+                            validator: (v) =>
+                            (v == null || v
+                                .trim()
+                                .isEmpty)
+                                ? 'Correspondence address is required'
+                                : null,
+                          ),
+                          _sectionHeader(
+                            'Family Details',
+                            Icons.family_restroom_outlined,
+                          ),
+                          TextFormField(
+                            controller: fatherNameCtrl,
+                            readOnly: isViewOnly,
+                            decoration: _fieldDecor('Father Name'),
+                            textCapitalization: TextCapitalization.words,
+                          ),
+                          const SizedBox(height: 6),
+                          TextFormField(
+                            controller: motherNameCtrl,
+                            readOnly: isViewOnly,
+                            decoration: _fieldDecor('Mother Name'),
+                            textCapitalization: TextCapitalization.words,
+                          ),
+                          const SizedBox(height: 6),
+                          TextFormField(
+                            controller: guardianNameCtrl,
+                            readOnly: isViewOnly,
+                            decoration: _fieldDecor('Guardian Name'),
+                            textCapitalization: TextCapitalization.words,
+                          ),
+                          _sectionHeader(
+                            'Emergency Contact (Parent/Guardian)',
+                            Icons.emergency_outlined,
+                          ),
+                          TextFormField(
+                            controller: emergNameCtrl,
+                            readOnly: isViewOnly,
+                            decoration: _fieldDecor('Contact Person Name'),
+                            validator: (v) =>
+                            (v == null || v
+                                .trim()
+                                .isEmpty)
+                                ? 'Contact person name is required'
+                                : null,
+                          ),
+                          const SizedBox(height: 6),
+                          TextFormField(
+                            controller: emergRelationCtrl,
+                            readOnly: isViewOnly,
+                            decoration: _fieldDecor('Relation'),
+                            validator: (v) =>
+                            (v == null || v
+                                .trim()
+                                .isEmpty)
+                                ? 'Relation is required'
+                                : null,
+                          ),
+                          const SizedBox(height: 6),
+                          TextFormField(
+                            controller: emergMobileCtrl,
+                            readOnly: isViewOnly,
+                            decoration: _fieldDecor('Emergency Mobile'),
+                            keyboardType: TextInputType.phone,
+                            validator: (v) =>
+                            (v == null || v
+                                .trim()
+                                .isEmpty)
+                                ? 'Emergency mobile is required'
+                                : null,
+                          ),
+                          _buildPhotographPreview(),
+                        ],
+                      );
+                  }
+                }
 
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 18,
-                right: 18,
-                top: 14,
-                bottom: media.viewInsets.bottom + 12,
-              ),
-              child: Form(
-                key: formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+                return Padding(
+                  padding: EdgeInsets.only(
+                    left: 18,
+                    right: 18,
+                    top: 14,
+                    bottom: media.viewInsets.bottom + 12,
+                  ),
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              smcText(
-                                textToDisplay: isViewOnly
-                                    ? 'Student Details'
-                                    : (studentToEdit == null
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  smcText(
+                                    textToDisplay: isViewOnly
+                                        ? 'Student Details'
+                                        : (studentToEdit == null
                                         ? 'Create Student'
                                         : 'Edit Student'),
-                                textSize: 18,
-                                textBoldness: 5,
-                                colorOfText: ColorConst.textPrimary,
-                              ),
-                              smcText(
-                                textToDisplay:
+                                    textSize: 18,
+                                    textBoldness: 5,
+                                    colorOfText: ColorConst.textPrimary,
+                                  ),
+                                  smcText(
+                                    textToDisplay:
                                     'Step ${currentStep + 1} of $totalSteps',
-                                textSize: 12,
-                                colorOfText: ColorConst.textSecondary,
+                                    textSize: 12,
+                                    colorOfText: ColorConst.textSecondary,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close_rounded, size: 20),
+                              color: ColorConst.textSecondary,
+                              onPressed: () => Navigator.pop(ctx),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            child: _buildStepContent(),
+                          ),
+                        ),
+
+                        if (!isViewOnly) ...[
+                          const SizedBox(height: 14),
+                          Row(
+                            children: [
+                              TextButton(
+                                onPressed: currentStep == 0 ? null : _onBack,
+                                child: const smcText(
+                                  textToDisplay: 'Back',
+                                  textSize: 14,
+                                  textBoldness: 4,
+                                  colorOfText: ColorConst.textSecondary,
+                                ),
+                              ),
+                              const Spacer(),
+                              SizedBox(
+                                height: 40,
+                                child: ElevatedButton(
+                                  onPressed: saving
+                                      ? null
+                                      : (currentStep == totalSteps - 1
+                                      ? _saveStudent
+                                      : _onNext),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: ColorConst.primaryBlue,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                  child: saving
+                                      ? const CircularProgressIndicator(
+                                    color: Colors.white,
+                                  )
+                                      : smcText(
+                                    textToDisplay:
+                                    currentStep == totalSteps - 1
+                                        ? (studentToEdit == null
+                                        ? 'Save Student'
+                                        : 'Update Student')
+                                        : 'Next',
+                                    textSize: 15,
+                                    colorOfText: Colors.white,
+                                  ),
+                                ),
                               ),
                             ],
                           ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close_rounded, size: 20),
-                          color: ColorConst.textSecondary,
-                          onPressed: () => Navigator.pop(ctx),
-                        ),
+                        ] else
+                          ...[
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                TextButton(
+                                  onPressed: currentStep == 0 ? null : _onBack,
+                                  child: const smcText(
+                                    textToDisplay: 'Back',
+                                    textSize: 14,
+                                    textBoldness: 4,
+                                    colorOfText: ColorConst.textSecondary,
+                                  ),
+                                ),
+                                const Spacer(),
+                                TextButton(
+                                  onPressed:
+                                  currentStep == totalSteps - 1
+                                      ? null
+                                      : _onNext,
+                                  child: const smcText(
+                                    textToDisplay: 'Next',
+                                    textSize: 14,
+                                    textBoldness: 4,
+                                    colorOfText: ColorConst.primaryBlue,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        child: _buildStepContent(),
-                      ),
-                    ),
-
-                    if (!isViewOnly) ...[
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          TextButton(
-                            onPressed: currentStep == 0 ? null : _onBack,
-                            child: const smcText(
-                              textToDisplay: 'Back',
-                              textSize: 14,
-                              textBoldness: 4,
-                              colorOfText: ColorConst.textSecondary,
-                            ),
-                          ),
-                          const Spacer(),
-                          SizedBox(
-                            height: 40,
-                            child: ElevatedButton(
-                              onPressed: saving
-                                  ? null
-                                  : (currentStep == totalSteps - 1
-                                      ? _saveStudent
-                                      : _onNext),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: ColorConst.primaryBlue,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
-                              child: saving
-                                  ? const CircularProgressIndicator(
-                                      color: Colors.white,
-                                    )
-                                  : smcText(
-                                      textToDisplay:
-                                          currentStep == totalSteps - 1
-                                              ? (studentToEdit == null
-                                                  ? 'Save Student'
-                                                  : 'Update Student')
-                                              : 'Next',
-                                      textSize: 15,
-                                      colorOfText: Colors.white,
-                                    ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ] else ...[
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          TextButton(
-                            onPressed: currentStep == 0 ? null : _onBack,
-                            child: const smcText(
-                              textToDisplay: 'Back',
-                              textSize: 14,
-                              textBoldness: 4,
-                              colorOfText: ColorConst.textSecondary,
-                            ),
-                          ),
-                          const Spacer(),
-                          TextButton(
-                            onPressed:
-                                currentStep == totalSteps - 1 ? null : _onNext,
-                            child: const smcText(
-                              textToDisplay: 'Next',
-                              textSize: 14,
-                              textBoldness: 4,
-                              colorOfText: ColorConst.primaryBlue,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            );
+                  ),
+                );
               },
             ),
           ),
@@ -2603,27 +2789,33 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
   // ── Create/Edit Faculty bottom sheet ──────────────────────────
 
-  Future<void> openCreateFacultySheet({FacultyModel? facultyToEdit, bool isViewOnly = false}) async {
+  Future<void> openCreateFacultySheet(
+      {FacultyModel? facultyToEdit, bool isViewOnly = false}) async {
     final formKey = GlobalKey<FormState>();
 
     // Controllers — Basic Profile
-    final facultyIdCtrl = TextEditingController(text: facultyToEdit?.facultyId ?? '');
-    final fullNameCtrl = TextEditingController(text: facultyToEdit?.fullName ?? '');
+    final facultyIdCtrl = TextEditingController(
+        text: facultyToEdit?.facultyId ?? '');
+    final fullNameCtrl = TextEditingController(
+        text: facultyToEdit?.fullName ?? '');
     String? selectedGender = facultyToEdit?.gender;
     DateTime? selectedDob;
-    if (facultyToEdit?.dateOfBirth != null && facultyToEdit!.dateOfBirth.isNotEmpty) {
+    if (facultyToEdit?.dateOfBirth != null &&
+        facultyToEdit!.dateOfBirth.isNotEmpty) {
       try {
         selectedDob = DateTime.parse(facultyToEdit.dateOfBirth);
       } catch (_) {}
     }
     final dobCtrl = TextEditingController(
       text: selectedDob != null
-          ? '${selectedDob.day.toString().padLeft(2, '0')}/${selectedDob.month.toString().padLeft(2, '0')}/${selectedDob.year}'
+          ? '${selectedDob.day.toString().padLeft(2, '0')}/${selectedDob.month
+          .toString().padLeft(2, '0')}/${selectedDob.year}'
           : '',
     );
 
     // Compliance
-    final aadhaarCtrl = TextEditingController(text: facultyToEdit?.aadhaarNumber ?? '');
+    final aadhaarCtrl = TextEditingController(
+        text: facultyToEdit?.aadhaarNumber ?? '');
     final panCtrl = TextEditingController(text: facultyToEdit?.panNumber ?? '');
 
     // Contact
@@ -2631,13 +2823,18 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     final emailCtrl = TextEditingController(text: facultyToEdit?.email ?? '');
 
     // Address
-    final permanentAddrCtrl = TextEditingController(text: facultyToEdit?.permanentAddress ?? '');
-    final currentAddrCtrl = TextEditingController(text: facultyToEdit?.currentAddress ?? '');
+    final permanentAddrCtrl = TextEditingController(
+        text: facultyToEdit?.permanentAddress ?? '');
+    final currentAddrCtrl = TextEditingController(
+        text: facultyToEdit?.currentAddress ?? '');
 
     // Emergency Contact
-    final emergNameCtrl = TextEditingController(text: facultyToEdit?.emergencyContactName ?? '');
-    final emergRelationCtrl = TextEditingController(text: facultyToEdit?.emergencyContactRelation ?? '');
-    final emergMobileCtrl = TextEditingController(text: facultyToEdit?.emergencyContactMobile ?? '');
+    final emergNameCtrl = TextEditingController(
+        text: facultyToEdit?.emergencyContactName ?? '');
+    final emergRelationCtrl = TextEditingController(
+        text: facultyToEdit?.emergencyContactRelation ?? '');
+    final emergMobileCtrl = TextEditingController(
+        text: facultyToEdit?.emergencyContactMobile ?? '');
 
     bool saving = false;
     int currentStep = 0;
@@ -2684,34 +2881,40 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                   ),
                 );
 
-            Widget _sectionHeader(String title, IconData icon) => Padding(
-              padding: const EdgeInsets.only(top: 10, bottom: 6),
-              child: Row(
-                children: [
-                  Icon(icon, size: 14, color: ColorConst.primaryBlue),
-                  const SizedBox(width: 6),
-                  smcText(
-                    textToDisplay: title,
-                    textSize: 12,
-                    textBoldness: 4,
-                    colorOfText: ColorConst.primaryBlue,
+            Widget _sectionHeader(String title, IconData icon) =>
+                Padding(
+                  padding: const EdgeInsets.only(top: 10, bottom: 6),
+                  child: Row(
+                    children: [
+                      Icon(icon, size: 14, color: ColorConst.primaryBlue),
+                      const SizedBox(width: 6),
+                      smcText(
+                        textToDisplay: title,
+                        textSize: 12,
+                        textBoldness: 4,
+                        colorOfText: ColorConst.primaryBlue,
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            );
+                );
 
             // ── dialog body ────────────────────────────────────
             return Dialog(
-              insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              insetPadding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 12),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
               child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxWidth, maxHeight: maxHeight),
+                constraints: BoxConstraints(
+                    maxWidth: maxWidth, maxHeight: maxHeight),
                 child: Padding(
                   padding: EdgeInsets.only(
                     left: 16,
                     right: 16,
                     top: 16,
-                    bottom: MediaQuery.viewInsetsOf(ctx).bottom + 12,
+                    bottom: MediaQuery
+                        .viewInsetsOf(ctx)
+                        .bottom + 12,
                   ),
                   child: Form(
                     key: formKey,
@@ -2721,676 +2924,710 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
 
-                      // ── title row ─────────────────────────
-                      Row(
-                        children: [
-                          Expanded(
-                            child: smcText(
-                              textToDisplay: isViewOnly
-                                  ? 'Faculty Details'
-                                  : (facultyToEdit == null
-                                        ? 'Create Faculty'
-                                        : 'Edit Faculty'),
-                              textSize: 18,
-                              textBoldness: 5,
-                              colorOfText: ColorConst.textPrimary,
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.close_rounded, size: 20),
-                            color: ColorConst.textSecondary,
-                            onPressed: () => Navigator.pop(ctx),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      if (!isViewOnly)
-                        Row(
-                          children: List.generate(3, (index) {
-                            final bool active = index == currentStep;
-                            final bool completed = index < currentStep;
-                            return Expanded(
-                              child: Container(
-                                margin: EdgeInsets.only(
-                                  right: index == 2 ? 0 : 8,
-                                ),
-                                height: 6,
-                                decoration: BoxDecoration(
-                                  color: active || completed
-                                      ? ColorConst.primaryBlue
-                                      : const Color(0xFFDCE2F4),
-                                  borderRadius: BorderRadius.circular(4),
+                          // ── title row ─────────────────────────
+                          Row(
+                            children: [
+                              Expanded(
+                                child: smcText(
+                                  textToDisplay: isViewOnly
+                                      ? 'Faculty Details'
+                                      : (facultyToEdit == null
+                                      ? 'Create Faculty'
+                                      : 'Edit Faculty'),
+                                  textSize: 18,
+                                  textBoldness: 5,
+                                  colorOfText: ColorConst.textPrimary,
                                 ),
                               ),
-                            );
-                          }),
-                        ),
-                      if (!isViewOnly) const SizedBox(height: 6),
-                      if (!isViewOnly)
-                        smcText(
-                          textToDisplay:
-                              'Step ${currentStep + 1} of 3',
-                          textSize: 12,
-                          colorOfText: const Color(0xFF7D87A3),
-                        ),
-                      if (!isViewOnly) const SizedBox(height: 8),
-
-                      Builder(
-                        builder: (_) {
-                          Widget buildFacultyPhotographPreview() {
-                            if (photographBytes != null) {
-                              return Column(
-                                children: [
-                                  const SizedBox(height: 10),
-                                  Center(
-                                    child: Container(
-                                      width: 280,
-                                      height: 420,
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(
-                                          color: ColorConst.borderSoft,
-                                        ),
-                                        color: const Color(0xFFF7F9FF),
-                                      ),
-                                      clipBehavior: Clip.antiAlias,
-                                      child: Image.memory(
-                                        photographBytes!,
-                                        fit: BoxFit.cover,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              );
-                            }
-
-                            final String existingPhotoUrl =
-                                (photographUrl ?? '').trim();
-                            if (existingPhotoUrl.isEmpty) {
-                              return const SizedBox.shrink();
-                            }
-
-                            return Column(
-                              children: [
-                                const SizedBox(height: 10),
-                                Center(
+                              IconButton(
+                                icon: const Icon(Icons.close_rounded, size: 20),
+                                color: ColorConst.textSecondary,
+                                onPressed: () => Navigator.pop(ctx),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          if (!isViewOnly)
+                            Row(
+                              children: List.generate(3, (index) {
+                                final bool active = index == currentStep;
+                                final bool completed = index < currentStep;
+                                return Expanded(
                                   child: Container(
-                                    width: 280,
-                                    height: 420,
+                                    margin: EdgeInsets.only(
+                                      right: index == 2 ? 0 : 8,
+                                    ),
+                                    height: 6,
                                     decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(14),
-                                      border: Border.all(
-                                        color: ColorConst.borderSoft,
-                                      ),
-                                      color: const Color(0xFFF7F9FF),
-                                    ),
-                                    clipBehavior: Clip.antiAlias,
-                                    child: Image.network(
-                                      existingPhotoUrl,
-                                      fit: BoxFit.cover,
-                                      errorBuilder:
-                                          (context, error, stackTrace) =>
-                                              const Center(
-                                                child: Icon(
-                                                  Icons
-                                                      .broken_image_outlined,
-                                                  color: ColorConst
-                                                      .textSecondary,
-                                                ),
-                                              ),
+                                      color: active || completed
+                                          ? ColorConst.primaryBlue
+                                          : const Color(0xFFDCE2F4),
+                                      borderRadius: BorderRadius.circular(4),
                                     ),
                                   ),
-                                ),
-                              ],
-                            );
-                          }
+                                );
+                              }),
+                            ),
+                          if (!isViewOnly) const SizedBox(height: 6),
+                          if (!isViewOnly)
+                            smcText(
+                              textToDisplay:
+                              'Step ${currentStep + 1} of 3',
+                              textSize: 12,
+                              colorOfText: const Color(0xFF7D87A3),
+                            ),
+                          if (!isViewOnly) const SizedBox(height: 8),
 
-                          Widget stepOne() {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _sectionHeader(
-                                  'Basic Profile Information',
-                                  Icons.person_outline_rounded,
-                                ),
-                                TextFormField(
-                                  controller: facultyIdCtrl,
-                                  readOnly: isViewOnly,
-                                  decoration: _fieldDecor(
-                                    'Faculty / Employee ID *',
-                                    hint: 'e.g. FAC-2024-001',
-                                  ),
-                                  textCapitalization:
-                                      TextCapitalization.characters,
-                                ),
-                                const SizedBox(height: 8),
-                                TextFormField(
-                                  controller: fullNameCtrl,
-                                  readOnly: isViewOnly,
-                                  decoration: _fieldDecor('Full Name *'),
-                                  textCapitalization:
-                                      TextCapitalization.words,
-                                ),
-                                const SizedBox(height: 8),
-                                DropdownButtonFormField<String>(
-                                  value: selectedGender,
-                                  decoration: _fieldDecor(
-                                    'Gender *',
-                                    hint: 'Select gender',
-                                  ),
-                                  borderRadius: BorderRadius.circular(10),
-                                  items: const [
-                                    'Male',
-                                    'Female',
-                                    'Other',
-                                    'Prefer not to say',
-                                  ]
-                                      .map(
-                                        (g) => DropdownMenuItem(
-                                          value: g,
-                                          child: Text(
-                                            g,
-                                            style: const TextStyle(
-                                              fontSize: 13,
+                          Builder(
+                            builder: (_) {
+                              Widget buildFacultyPhotographPreview() {
+                                if (photographBytes != null) {
+                                  return Column(
+                                    children: [
+                                      const SizedBox(height: 10),
+                                      Center(
+                                        child: Container(
+                                          width: 280,
+                                          height: 420,
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(
+                                                14),
+                                            border: Border.all(
+                                              color: ColorConst.borderSoft,
+                                            ),
+                                            color: const Color(0xFFF7F9FF),
+                                          ),
+                                          clipBehavior: Clip.antiAlias,
+                                          child: Image.memory(
+                                            photographBytes!,
+                                            fit: BoxFit.cover,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }
+
+                                final String existingPhotoUrl =
+                                (photographUrl ?? '').trim();
+                                if (existingPhotoUrl.isEmpty) {
+                                  return const SizedBox.shrink();
+                                }
+
+                                return Column(
+                                  children: [
+                                    const SizedBox(height: 10),
+                                    Center(
+                                      child: Container(
+                                        width: 280,
+                                        height: 420,
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(
+                                              14),
+                                          border: Border.all(
+                                            color: ColorConst.borderSoft,
+                                          ),
+                                          color: const Color(0xFFF7F9FF),
+                                        ),
+                                        clipBehavior: Clip.antiAlias,
+                                        child: Image.network(
+                                          existingPhotoUrl,
+                                          fit: BoxFit.cover,
+                                          errorBuilder:
+                                              (context, error, stackTrace) =>
+                                          const Center(
+                                            child: Icon(
+                                              Icons
+                                                  .broken_image_outlined,
+                                              color: ColorConst
+                                                  .textSecondary,
                                             ),
                                           ),
                                         ),
-                                      )
-                                      .toList(),
-                                  onChanged: isViewOnly
-                                      ? null
-                                      : (v) {
-                                          setModalState(
-                                            () => selectedGender = v,
-                                          );
-                                        },
-                                ),
-                                const SizedBox(height: 8),
-                                TextFormField(
-                                  controller: dobCtrl,
-                                  readOnly: true,
-                                  decoration: _fieldDecor(
-                                    'Date of Birth *',
-                                  ).copyWith(
-                                    suffixIcon: const Icon(
-                                      Icons.calendar_today_outlined,
-                                      size: 16,
-                                      color: ColorConst.textSecondary,
-                                    ),
-                                  ),
-                                  onTap: isViewOnly
-                                      ? null
-                                      : () async {
-                                          final picked = await showDatePicker(
-                                            context: ctx,
-                                            initialDate: DateTime(1990),
-                                            firstDate: DateTime(1940),
-                                            lastDate: DateTime.now().subtract(
-                                              const Duration(days: 365 * 18),
-                                            ),
-                                            helpText: 'Select Date of Birth',
-                                          );
-                                          if (picked != null) {
-                                            setModalState(() {
-                                              selectedDob = picked;
-                                              dobCtrl.text =
-                                                  '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
-                                            });
-                                          }
-                                        },
-                                ),
-                                const SizedBox(height: 8),
-                                GestureDetector(
-                                  onTap: isViewOnly
-                                      ? null
-                                      : () async {
-                                          final picker = ImagePicker();
-                                          final picked =
-                                              await picker.pickImage(
-                                                source: ImageSource.gallery,
-                                                imageQuality: 70,
-                                                maxWidth: 600,
-                                              );
-                                          if (picked != null) {
-                                            final bytes =
-                                                await picked.readAsBytes();
-                                            setModalState(() {
-                                              photographBytes = bytes;
-                                            });
-                                          }
-                                        },
-                                  child: Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF0F4FF),
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(
-                                        color: ColorConst.borderSoft,
                                       ),
                                     ),
-                                    child: Row(
-                                      children: [
-                                        const Icon(
-                                          Icons.photo_camera_outlined,
+                                  ],
+                                );
+                              }
+
+                              Widget stepOne() {
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _sectionHeader(
+                                      'Basic Profile Information',
+                                      Icons.person_outline_rounded,
+                                    ),
+                                    TextFormField(
+                                      controller: facultyIdCtrl,
+                                      readOnly: isViewOnly,
+                                      decoration: _fieldDecor(
+                                        'Faculty / Employee ID *',
+                                        hint: 'e.g. FAC-2024-001',
+                                      ),
+                                      textCapitalization:
+                                      TextCapitalization.characters,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TextFormField(
+                                      controller: fullNameCtrl,
+                                      readOnly: isViewOnly,
+                                      decoration: _fieldDecor('Full Name *'),
+                                      textCapitalization:
+                                      TextCapitalization.words,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    DropdownButtonFormField<String>(
+                                      value: selectedGender,
+                                      decoration: _fieldDecor(
+                                        'Gender *',
+                                        hint: 'Select gender',
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                      items: const [
+                                        'Male',
+                                        'Female',
+                                        'Other',
+                                        'Prefer not to say',
+                                      ]
+                                          .map(
+                                            (g) =>
+                                            DropdownMenuItem(
+                                              value: g,
+                                              child: Text(
+                                                g,
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                ),
+                                              ),
+                                            ),
+                                      )
+                                          .toList(),
+                                      onChanged: isViewOnly
+                                          ? null
+                                          : (v) {
+                                        setModalState(
+                                              () => selectedGender = v,
+                                        );
+                                      },
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TextFormField(
+                                      controller: dobCtrl,
+                                      readOnly: true,
+                                      decoration: _fieldDecor(
+                                        'Date of Birth *',
+                                      ).copyWith(
+                                        suffixIcon: const Icon(
+                                          Icons.calendar_today_outlined,
                                           size: 16,
-                                          color: ColorConst.primaryBlue,
+                                          color: ColorConst.textSecondary,
                                         ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          isViewOnly
-                                              ? 'Photograph'
-                                              : 'Upload Photograph *',
-                                          style: const TextStyle(fontSize: 12),
+                                      ),
+                                      onTap: isViewOnly
+                                          ? null
+                                          : () async {
+                                        final picked = await showDatePicker(
+                                          context: ctx,
+                                          initialDate: DateTime(1990),
+                                          firstDate: DateTime(1940),
+                                          lastDate: DateTime.now().subtract(
+                                            const Duration(days: 365 * 18),
+                                          ),
+                                          helpText: 'Select Date of Birth',
+                                        );
+                                        if (picked != null) {
+                                          setModalState(() {
+                                            selectedDob = picked;
+                                            dobCtrl.text =
+                                            '${picked.day.toString().padLeft(
+                                                2, '0')}/${picked.month
+                                                .toString().padLeft(
+                                                2, '0')}/${picked.year}';
+                                          });
+                                        }
+                                      },
+                                    ),
+                                    const SizedBox(height: 8),
+                                    GestureDetector(
+                                      onTap: isViewOnly
+                                          ? null
+                                          : () async {
+                                        final picker = ImagePicker();
+                                        final picked =
+                                        await picker.pickImage(
+                                          source: ImageSource.gallery,
+                                          imageQuality: 70,
+                                          maxWidth: 600,
+                                        );
+                                        if (picked != null) {
+                                          final bytes =
+                                          await picked.readAsBytes();
+                                          setModalState(() {
+                                            photographBytes = bytes;
+                                          });
+                                        }
+                                      },
+                                      child: Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF0F4FF),
+                                          borderRadius: BorderRadius.circular(
+                                              10),
+                                          border: Border.all(
+                                            color: ColorConst.borderSoft,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.photo_camera_outlined,
+                                              size: 16,
+                                              color: ColorConst.primaryBlue,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              isViewOnly
+                                                  ? 'Photograph'
+                                                  : 'Upload Photograph *',
+                                              style: const TextStyle(
+                                                  fontSize: 12),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    buildFacultyPhotographPreview(),
+                                  ],
+                                );
+                              }
+
+                              Widget stepTwo() {
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _sectionHeader(
+                                      'Compliance (Aadhaar / PAN)',
+                                      Icons.verified_user_outlined,
+                                    ),
+                                    TextFormField(
+                                      controller: aadhaarCtrl,
+                                      readOnly: isViewOnly,
+                                      decoration: _fieldDecor(
+                                        'Aadhaar Number',
+                                      ),
+                                      keyboardType: TextInputType.number,
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly,
+                                        LengthLimitingTextInputFormatter(12),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TextFormField(
+                                      controller: panCtrl,
+                                      readOnly: isViewOnly,
+                                      decoration: _fieldDecor('PAN Number'),
+                                      textCapitalization:
+                                      TextCapitalization.characters,
+                                      inputFormatters: [
+                                        LengthLimitingTextInputFormatter(10),
+                                      ],
+                                    ),
+                                    _sectionHeader(
+                                      'Contact Details',
+                                      Icons.contact_phone_outlined,
+                                    ),
+                                    TextFormField(
+                                      controller: mobileCtrl,
+                                      readOnly: isViewOnly,
+                                      decoration: _fieldDecor(
+                                        'Mobile Number *',
+                                      ),
+                                      keyboardType: TextInputType.phone,
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly,
+                                        LengthLimitingTextInputFormatter(10),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TextFormField(
+                                      controller: emailCtrl,
+                                      readOnly: isViewOnly,
+                                      decoration: _fieldDecor(
+                                        'Email Address *',
+                                      ),
+                                      keyboardType: TextInputType.emailAddress,
+                                    ),
+                                  ],
+                                );
+                              }
+
+                              Widget stepThree() {
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _sectionHeader(
+                                      'Address',
+                                      Icons.home_outlined,
+                                    ),
+                                    TextFormField(
+                                      controller: permanentAddrCtrl,
+                                      readOnly: isViewOnly,
+                                      decoration: _fieldDecor(
+                                        'Permanent Address *',
+                                      ),
+                                      maxLines: 1,
+                                      textCapitalization:
+                                      TextCapitalization.sentences,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TextFormField(
+                                      controller: currentAddrCtrl,
+                                      readOnly: isViewOnly,
+                                      decoration: _fieldDecor(
+                                        'Current Address *',
+                                      ),
+                                      maxLines: 1,
+                                      textCapitalization:
+                                      TextCapitalization.sentences,
+                                    ),
+                                    _sectionHeader(
+                                      'Emergency Contact',
+                                      Icons.emergency_outlined,
+                                    ),
+                                    TextFormField(
+                                      controller: emergNameCtrl,
+                                      readOnly: isViewOnly,
+                                      decoration: _fieldDecor(
+                                        'Contact Person Name *',
+                                      ),
+                                      textCapitalization:
+                                      TextCapitalization.words,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TextFormField(
+                                      controller: emergRelationCtrl,
+                                      readOnly: isViewOnly,
+                                      decoration: _fieldDecor(
+                                        'Relation *',
+                                        hint: 'e.g. Spouse, Parent, Sibling',
+                                      ),
+                                      textCapitalization:
+                                      TextCapitalization.words,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TextFormField(
+                                      controller: emergMobileCtrl,
+                                      readOnly: isViewOnly,
+                                      decoration: _fieldDecor(
+                                        'Emergency Mobile *',
+                                      ),
+                                      keyboardType: TextInputType.phone,
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly,
+                                        LengthLimitingTextInputFormatter(10),
+                                      ],
+                                    ),
+                                  ],
+                                );
+                              }
+
+                              Widget buildStepContent() {
+                                if (currentStep == 0) return stepOne();
+                                if (currentStep == 1) return stepTwo();
+                                return stepThree();
+                              }
+
+                              bool validateStep(int step,
+                                  {bool showError = true}) {
+                                String? error;
+                                if (step == 0) {
+                                  if (facultyIdCtrl.text
+                                      .trim()
+                                      .isEmpty) {
+                                    error = 'Faculty ID is required';
+                                  } else if (fullNameCtrl.text
+                                      .trim()
+                                      .isEmpty) {
+                                    error = 'Full name is required';
+                                  } else if (selectedGender == null ||
+                                      selectedGender!.trim().isEmpty) {
+                                    error = 'Gender is required';
+                                  } else if (selectedDob == null) {
+                                    error = 'Date of birth is required';
+                                  } else if (photographBytes == null &&
+                                      (photographUrl ?? '')
+                                          .trim()
+                                          .isEmpty) {
+                                    error = 'Photograph is required';
+                                  }
+                                } else if (step == 1) {
+                                  final String mobile = mobileCtrl.text.trim();
+                                  final String email = emailCtrl.text.trim();
+                                  final String aadhaar = aadhaarCtrl.text
+                                      .trim();
+                                  final String pan = panCtrl.text.trim();
+                                  if (mobile.isEmpty) {
+                                    error = 'Mobile number is required';
+                                  } else if (mobile.length != 10) {
+                                    error =
+                                    'Enter valid 10-digit mobile number';
+                                  } else if (email.isEmpty) {
+                                    error = 'Email is required';
+                                  } else if (!RegExp(
+                                    r'^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$',
+                                  ).hasMatch(email)) {
+                                    error = 'Enter a valid email address';
+                                  } else if (aadhaar.isNotEmpty &&
+                                      aadhaar.length != 12) {
+                                    error = 'Aadhaar must be 12 digits';
+                                  } else if (pan.isNotEmpty &&
+                                      !RegExp(
+                                        r'^[A-Z]{5}[0-9]{4}[A-Z]{1}$',
+                                      ).hasMatch(pan.toUpperCase())) {
+                                    error = 'Invalid PAN (e.g. ABCDE1234F)';
+                                  }
+                                } else {
+                                  final String permanentAddress =
+                                  permanentAddrCtrl.text.trim();
+                                  final String currentAddress =
+                                  currentAddrCtrl.text.trim();
+                                  final String emergencyName =
+                                  emergNameCtrl.text.trim();
+                                  final String emergencyRelation =
+                                  emergRelationCtrl.text.trim();
+                                  final String emergencyMobile =
+                                  emergMobileCtrl.text.trim();
+                                  if (permanentAddress.isEmpty) {
+                                    error = 'Permanent address is required';
+                                  } else if (currentAddress.isEmpty) {
+                                    error = 'Current address is required';
+                                  } else if (emergencyName.isEmpty) {
+                                    error =
+                                    'Emergency contact name is required';
+                                  } else if (emergencyRelation.isEmpty) {
+                                    error = 'Emergency relation is required';
+                                  } else if (emergencyMobile.isEmpty) {
+                                    error = 'Emergency mobile is required';
+                                  } else if (emergencyMobile.length != 10) {
+                                    error = 'Enter valid 10-digit number';
+                                  }
+                                }
+                                if (error != null && showError) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      backgroundColor: Colors.red.shade600,
+                                      content: smcText(
+                                        textToDisplay: error,
+                                        textSize: 13,
+                                        colorOfText: Colors.white,
+                                      ),
+                                    ),
+                                  );
+                                  return false;
+                                }
+                                return error == null;
+                              }
+
+                              Future<void> saveFaculty() async {
+                                if (!validateStep(0, showError: true) ||
+                                    !validateStep(1, showError: true) ||
+                                    !validateStep(2, showError: true)) {
+                                  return;
+                                }
+                                setModalState(() => saving = true);
+
+                                if (photographBytes != null) {
+                                  final ref = FirebaseStorage.instance
+                                      .ref()
+                                      .child('faculty_photos')
+                                      .child(
+                                    '${facultyIdCtrl.text
+                                        .trim()
+                                        .toUpperCase()}_${DateTime
+                                        .now()
+                                        .millisecondsSinceEpoch}.jpg',
+                                  );
+                                  await ref.putData(
+                                    photographBytes!,
+                                    SettableMetadata(contentType: 'image/jpeg'),
+                                  );
+                                  photographUrl = await ref.getDownloadURL();
+                                }
+
+                                final faculty = FacultyModel(
+                                  documentId: facultyToEdit?.documentId,
+                                  facultyId: facultyIdCtrl.text
+                                      .trim()
+                                      .toUpperCase(),
+                                  fullName: fullNameCtrl.text.trim(),
+                                  gender: selectedGender ?? '',
+                                  dateOfBirth: selectedDob != null
+                                      ? '${selectedDob!.year}-${selectedDob!
+                                      .month.toString().padLeft(
+                                      2, '0')}-${selectedDob!
+                                      .day
+                                      .toString()
+                                      .padLeft(2, '0')}'
+                                      : '',
+                                  aadhaarNumber: aadhaarCtrl.text.trim(),
+                                  panNumber: panCtrl.text.trim().toUpperCase(),
+                                  mobile: mobileCtrl.text.trim(),
+                                  email: emailCtrl.text.trim().toLowerCase(),
+                                  permanentAddress: permanentAddrCtrl.text
+                                      .trim(),
+                                  currentAddress: currentAddrCtrl.text.trim(),
+                                  emergencyContactName: emergNameCtrl.text
+                                      .trim(),
+                                  emergencyContactRelation:
+                                  emergRelationCtrl.text.trim(),
+                                  emergencyContactMobile:
+                                  emergMobileCtrl.text.trim(),
+                                  orgId: scopedOrgId,
+                                  deptId: scopedDeptId,
+                                  photographUrl: photographUrl ?? '',
+                                  createdAt:
+                                  facultyToEdit?.createdAt ??
+                                      DateTime.now().toIso8601String(),
+                                );
+
+                                try {
+                                  if (facultyToEdit != null) {
+                                    await facultyService.updateFaculty(
+                                      documentId: facultyToEdit.documentId!,
+                                      updated: faculty,
+                                    );
+                                  } else {
+                                    await facultyService.createFaculty(faculty);
+                                    await userMasterService.syncFromFaculty(
+                                        faculty);
+                                  }
+                                  if (!ctx.mounted) return;
+                                  Navigator.pop(ctx);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      backgroundColor: Colors.green.shade600,
+                                      content: smcText(
+                                        textToDisplay:
+                                        '${faculty.fullName} ${facultyToEdit ==
+                                            null
+                                            ? 'added'
+                                            : 'updated'} successfully.',
+                                        textSize: 14,
+                                        colorOfText: Colors.white,
+                                      ),
+                                    ),
+                                  );
+                                  await refresh();
+                                } catch (e) {
+                                  if (!ctx.mounted) return;
+                                  setModalState(() => saving = false);
+                                  final errorMsg = e.toString().replaceFirst(
+                                    'Exception: ',
+                                    '',
+                                  );
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      backgroundColor: Colors.red.shade600,
+                                      content: smcText(
+                                        textToDisplay: 'Error: $errorMsg',
+                                        textSize: 13,
+                                        colorOfText: Colors.white,
+                                        maxLines: 3,
+                                      ),
+                                    ),
+                                  );
+                                }
+                              }
+
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  buildStepContent(),
+                                  const SizedBox(height: 16),
+                                  if (!isViewOnly)
+                                    Row(
+                                      children: [
+                                        TextButton(
+                                          onPressed: saving
+                                              ? null
+                                              : () {
+                                            if (currentStep == 0) {
+                                              Navigator.pop(ctx);
+                                              return;
+                                            }
+                                            setModalState(() {
+                                              currentStep -= 1;
+                                            });
+                                          },
+                                          child: Text(
+                                            currentStep == 0
+                                                ? 'Cancel'
+                                                : 'Back',
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        SizedBox(
+                                          height: 44,
+                                          child: ElevatedButton(
+                                            onPressed: saving
+                                                ? null
+                                                : () async {
+                                              if (currentStep < 2) {
+                                                if (!validateStep(
+                                                  currentStep,
+                                                )) {
+                                                  return;
+                                                }
+                                                setModalState(() {
+                                                  currentStep += 1;
+                                                });
+                                                return;
+                                              }
+                                              await saveFaculty();
+                                            },
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor:
+                                              ColorConst.primaryBlue,
+                                              disabledBackgroundColor:
+                                              ColorConst.primaryBlue
+                                                  .withOpacity(0.6),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                BorderRadius.circular(14),
+                                              ),
+                                            ),
+                                            child: saving
+                                                ? const SizedBox(
+                                              width: 22,
+                                              height: 22,
+                                              child:
+                                              CircularProgressIndicator(
+                                                strokeWidth: 2.5,
+                                                color: Colors.white,
+                                              ),
+                                            )
+                                                : smcText(
+                                              textToDisplay:
+                                              currentStep == 2
+                                                  ? (facultyToEdit == null
+                                                  ? 'Create'
+                                                  : 'Update')
+                                                  : 'Next',
+                                              textSize: 14,
+                                              textBoldness: 4,
+                                              colorOfText: Colors.white,
+                                            ),
+                                          ),
                                         ),
                                       ],
                                     ),
-                                  ),
-                                ),
-                                buildFacultyPhotographPreview(),
-                              ],
-                            );
-                          }
-
-                          Widget stepTwo() {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _sectionHeader(
-                                  'Compliance (Aadhaar / PAN)',
-                                  Icons.verified_user_outlined,
-                                ),
-                                TextFormField(
-                                  controller: aadhaarCtrl,
-                                  readOnly: isViewOnly,
-                                  decoration: _fieldDecor(
-                                    'Aadhaar Number',
-                                  ),
-                                  keyboardType: TextInputType.number,
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.digitsOnly,
-                                    LengthLimitingTextInputFormatter(12),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                TextFormField(
-                                  controller: panCtrl,
-                                  readOnly: isViewOnly,
-                                  decoration: _fieldDecor('PAN Number'),
-                                  textCapitalization:
-                                      TextCapitalization.characters,
-                                  inputFormatters: [
-                                    LengthLimitingTextInputFormatter(10),
-                                  ],
-                                ),
-                                _sectionHeader(
-                                  'Contact Details',
-                                  Icons.contact_phone_outlined,
-                                ),
-                                TextFormField(
-                                  controller: mobileCtrl,
-                                  readOnly: isViewOnly,
-                                  decoration: _fieldDecor(
-                                    'Mobile Number *',
-                                  ),
-                                  keyboardType: TextInputType.phone,
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.digitsOnly,
-                                    LengthLimitingTextInputFormatter(10),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                TextFormField(
-                                  controller: emailCtrl,
-                                  readOnly: isViewOnly,
-                                  decoration: _fieldDecor(
-                                    'Email Address *',
-                                  ),
-                                  keyboardType: TextInputType.emailAddress,
-                                ),
-                              ],
-                            );
-                          }
-
-                          Widget stepThree() {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _sectionHeader(
-                                  'Address',
-                                  Icons.home_outlined,
-                                ),
-                                TextFormField(
-                                  controller: permanentAddrCtrl,
-                                  readOnly: isViewOnly,
-                                  decoration: _fieldDecor(
-                                    'Permanent Address *',
-                                  ),
-                                  maxLines: 1,
-                                  textCapitalization:
-                                      TextCapitalization.sentences,
-                                ),
-                                const SizedBox(height: 8),
-                                TextFormField(
-                                  controller: currentAddrCtrl,
-                                  readOnly: isViewOnly,
-                                  decoration: _fieldDecor(
-                                    'Current Address *',
-                                  ),
-                                  maxLines: 1,
-                                  textCapitalization:
-                                      TextCapitalization.sentences,
-                                ),
-                                _sectionHeader(
-                                  'Emergency Contact',
-                                  Icons.emergency_outlined,
-                                ),
-                                TextFormField(
-                                  controller: emergNameCtrl,
-                                  readOnly: isViewOnly,
-                                  decoration: _fieldDecor(
-                                    'Contact Person Name *',
-                                  ),
-                                  textCapitalization:
-                                      TextCapitalization.words,
-                                ),
-                                const SizedBox(height: 8),
-                                TextFormField(
-                                  controller: emergRelationCtrl,
-                                  readOnly: isViewOnly,
-                                  decoration: _fieldDecor(
-                                    'Relation *',
-                                    hint: 'e.g. Spouse, Parent, Sibling',
-                                  ),
-                                  textCapitalization:
-                                      TextCapitalization.words,
-                                ),
-                                const SizedBox(height: 8),
-                                TextFormField(
-                                  controller: emergMobileCtrl,
-                                  readOnly: isViewOnly,
-                                  decoration: _fieldDecor(
-                                    'Emergency Mobile *',
-                                  ),
-                                  keyboardType: TextInputType.phone,
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.digitsOnly,
-                                    LengthLimitingTextInputFormatter(10),
-                                  ],
-                                ),
-                              ],
-                            );
-                          }
-
-                          Widget buildStepContent() {
-                            if (currentStep == 0) return stepOne();
-                            if (currentStep == 1) return stepTwo();
-                            return stepThree();
-                          }
-
-                          bool validateStep(int step, {bool showError = true}) {
-                            String? error;
-                            if (step == 0) {
-                              if (facultyIdCtrl.text.trim().isEmpty) {
-                                error = 'Faculty ID is required';
-                              } else if (fullNameCtrl.text.trim().isEmpty) {
-                                error = 'Full name is required';
-                              } else if (selectedGender == null ||
-                                  selectedGender!.trim().isEmpty) {
-                                error = 'Gender is required';
-                              } else if (selectedDob == null) {
-                                error = 'Date of birth is required';
-                              } else if (photographBytes == null &&
-                                  (photographUrl ?? '').trim().isEmpty) {
-                                error = 'Photograph is required';
-                              }
-                            } else if (step == 1) {
-                              final String mobile = mobileCtrl.text.trim();
-                              final String email = emailCtrl.text.trim();
-                              final String aadhaar = aadhaarCtrl.text.trim();
-                              final String pan = panCtrl.text.trim();
-                              if (mobile.isEmpty) {
-                                error = 'Mobile number is required';
-                              } else if (mobile.length != 10) {
-                                error =
-                                    'Enter valid 10-digit mobile number';
-                              } else if (email.isEmpty) {
-                                error = 'Email is required';
-                              } else if (!RegExp(
-                                r'^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$',
-                              ).hasMatch(email)) {
-                                error = 'Enter a valid email address';
-                              } else if (aadhaar.isNotEmpty &&
-                                  aadhaar.length != 12) {
-                                error = 'Aadhaar must be 12 digits';
-                              } else if (pan.isNotEmpty &&
-                                  !RegExp(
-                                    r'^[A-Z]{5}[0-9]{4}[A-Z]{1}$',
-                                  ).hasMatch(pan.toUpperCase())) {
-                                error = 'Invalid PAN (e.g. ABCDE1234F)';
-                              }
-                            } else {
-                              final String permanentAddress =
-                                  permanentAddrCtrl.text.trim();
-                              final String currentAddress =
-                                  currentAddrCtrl.text.trim();
-                              final String emergencyName =
-                                  emergNameCtrl.text.trim();
-                              final String emergencyRelation =
-                                  emergRelationCtrl.text.trim();
-                              final String emergencyMobile =
-                                  emergMobileCtrl.text.trim();
-                              if (permanentAddress.isEmpty) {
-                                error = 'Permanent address is required';
-                              } else if (currentAddress.isEmpty) {
-                                error = 'Current address is required';
-                              } else if (emergencyName.isEmpty) {
-                                error = 'Emergency contact name is required';
-                              } else if (emergencyRelation.isEmpty) {
-                                error = 'Emergency relation is required';
-                              } else if (emergencyMobile.isEmpty) {
-                                error = 'Emergency mobile is required';
-                              } else if (emergencyMobile.length != 10) {
-                                error = 'Enter valid 10-digit number';
-                              }
-                            }
-                            if (error != null && showError) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  backgroundColor: Colors.red.shade600,
-                                  content: smcText(
-                                    textToDisplay: error,
-                                    textSize: 13,
-                                    colorOfText: Colors.white,
-                                  ),
-                                ),
+                                  const SizedBox(height: 8),
+                                ],
                               );
-                              return false;
-                            }
-                            return error == null;
-                          }
-
-                          Future<void> saveFaculty() async {
-                            if (!validateStep(0, showError: true) ||
-                                !validateStep(1, showError: true) ||
-                                !validateStep(2, showError: true)) {
-                              return;
-                            }
-                            setModalState(() => saving = true);
-
-                            if (photographBytes != null) {
-                              final ref = FirebaseStorage.instance
-                                  .ref()
-                                  .child('faculty_photos')
-                                  .child(
-                                    '${facultyIdCtrl.text.trim().toUpperCase()}_${DateTime.now().millisecondsSinceEpoch}.jpg',
-                                  );
-                              await ref.putData(
-                                photographBytes!,
-                                SettableMetadata(contentType: 'image/jpeg'),
-                              );
-                              photographUrl = await ref.getDownloadURL();
-                            }
-
-                            final faculty = FacultyModel(
-                              documentId: facultyToEdit?.documentId,
-                              facultyId: facultyIdCtrl.text.trim().toUpperCase(),
-                              fullName: fullNameCtrl.text.trim(),
-                              gender: selectedGender ?? '',
-                              dateOfBirth: selectedDob != null
-                                  ? '${selectedDob!.year}-${selectedDob!.month.toString().padLeft(2, '0')}-${selectedDob!.day.toString().padLeft(2, '0')}'
-                                  : '',
-                              aadhaarNumber: aadhaarCtrl.text.trim(),
-                              panNumber: panCtrl.text.trim().toUpperCase(),
-                              mobile: mobileCtrl.text.trim(),
-                              email: emailCtrl.text.trim().toLowerCase(),
-                              permanentAddress: permanentAddrCtrl.text.trim(),
-                              currentAddress: currentAddrCtrl.text.trim(),
-                              emergencyContactName: emergNameCtrl.text.trim(),
-                              emergencyContactRelation:
-                                  emergRelationCtrl.text.trim(),
-                              emergencyContactMobile:
-                                  emergMobileCtrl.text.trim(),
-                              orgId: scopedOrgId,
-                              deptId: scopedDeptId,
-                              photographUrl: photographUrl ?? '',
-                              createdAt:
-                                  facultyToEdit?.createdAt ??
-                                  DateTime.now().toIso8601String(),
-                            );
-
-                            try {
-                              if (facultyToEdit != null) {
-                                await facultyService.updateFaculty(
-                                  documentId: facultyToEdit.documentId!,
-                                  updated: faculty,
-                                );
-                              } else {
-                                await facultyService.createFaculty(faculty);
-                                await userMasterService.syncFromFaculty(faculty);
-                              }
-                              if (!ctx.mounted) return;
-                              Navigator.pop(ctx);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  backgroundColor: Colors.green.shade600,
-                                  content: smcText(
-                                    textToDisplay:
-                                        '${faculty.fullName} ${facultyToEdit == null ? 'added' : 'updated'} successfully.',
-                                    textSize: 14,
-                                    colorOfText: Colors.white,
-                                  ),
-                                ),
-                              );
-                              await refresh();
-                            } catch (e) {
-                              if (!ctx.mounted) return;
-                              setModalState(() => saving = false);
-                              final errorMsg = e.toString().replaceFirst(
-                                'Exception: ',
-                                '',
-                              );
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  backgroundColor: Colors.red.shade600,
-                                  content: smcText(
-                                    textToDisplay: 'Error: $errorMsg',
-                                    textSize: 13,
-                                    colorOfText: Colors.white,
-                                    maxLines: 3,
-                                  ),
-                                ),
-                              );
-                            }
-                          }
-
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              buildStepContent(),
-                              const SizedBox(height: 16),
-                              if (!isViewOnly)
-                                Row(
-                                  children: [
-                                    TextButton(
-                                      onPressed: saving
-                                          ? null
-                                          : () {
-                                              if (currentStep == 0) {
-                                                Navigator.pop(ctx);
-                                                return;
-                                              }
-                                              setModalState(() {
-                                                currentStep -= 1;
-                                              });
-                                            },
-                                      child: Text(
-                                        currentStep == 0
-                                            ? 'Cancel'
-                                            : 'Back',
-                                      ),
-                                    ),
-                                    const Spacer(),
-                                    SizedBox(
-                                      height: 44,
-                                      child: ElevatedButton(
-                                        onPressed: saving
-                                            ? null
-                                            : () async {
-                                                if (currentStep < 2) {
-                                                  if (!validateStep(
-                                                    currentStep,
-                                                  )) {
-                                                    return;
-                                                  }
-                                                  setModalState(() {
-                                                    currentStep += 1;
-                                                  });
-                                                  return;
-                                                }
-                                                await saveFaculty();
-                                              },
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor:
-                                              ColorConst.primaryBlue,
-                                          disabledBackgroundColor:
-                                              ColorConst.primaryBlue
-                                                  .withOpacity(0.6),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(14),
-                                          ),
-                                        ),
-                                        child: saving
-                                            ? const SizedBox(
-                                                width: 22,
-                                                height: 22,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                      strokeWidth: 2.5,
-                                                      color: Colors.white,
-                                                    ),
-                                              )
-                                            : smcText(
-                                                textToDisplay:
-                                                    currentStep == 2
-                                                    ? (facultyToEdit == null
-                                                          ? 'Create'
-                                                          : 'Update')
-                                                    : 'Next',
-                                                textSize: 14,
-                                                textBoldness: 4,
-                                                colorOfText: Colors.white,
-                                              ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              const SizedBox(height: 8),
-                            ],
-                          );
-                        },
-                      ),
+                            },
+                          ),
                         ],
                       ),
                     ),
@@ -3405,10 +3642,11 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   }
 
 
-
   Widget _buildSidebarProfileAvatar({required double radius}) {
     final String name = widget.adminName;
-    final String initial = name.trim().isEmpty
+    final String initial = name
+        .trim()
+        .isEmpty
         ? 'A'
         : name.trim().substring(0, 1).toUpperCase();
     final String photoUrl = normalizeProfilePhotoUrl(adminPhotoUrl);
@@ -3422,11 +3660,13 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
   // ── Build ─────────────────────────────────────────────────────
 
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
       body: SafeArea(
+
         child: Row(
           children: [
             // ── Side nav ────────────────────────────────────────
@@ -3442,7 +3682,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                 padding: const EdgeInsets.all(12),
                 child: Column(
                   crossAxisAlignment:
-                      sidebarExpanded ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+                  sidebarExpanded
+                      ? CrossAxisAlignment.start
+                      : CrossAxisAlignment.center,
                   children: [
                     if (sidebarExpanded)
                       Padding(
@@ -3456,7 +3698,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   smcText(
-                                    textToDisplay: widget.adminName.trim().isEmpty
+                                    textToDisplay: widget.adminName
+                                        .trim()
+                                        .isEmpty
                                         ? 'Department Admin'
                                         : widget.adminName,
                                     textSize: 14,
@@ -3477,32 +3721,36 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                               icon: const Icon(Icons.chevron_left_rounded),
                               tooltip: 'Collapse menu',
                               color: ColorConst.textSecondary,
-                              onPressed: () => setState(() => sidebarExpanded = false),
+                              onPressed: () =>
+                                  setState(() => sidebarExpanded = false),
                             ),
                           ],
                         ),
                       )
-                    else ...[
-                      _buildSidebarProfileAvatar(radius: 24),
-                      IconButton(
-                        icon: const Icon(Icons.chevron_right_rounded),
-                        tooltip: 'Expand menu',
-                        color: ColorConst.primaryBlue,
-                        onPressed: () => setState(() => sidebarExpanded = true),
-                      ),
-                    ],
+                    else
+                      ...[
+                        _buildSidebarProfileAvatar(radius: 24),
+                        IconButton(
+                          icon: const Icon(Icons.chevron_right_rounded),
+                          tooltip: 'Expand menu',
+                          color: ColorConst.primaryBlue,
+                          onPressed: () =>
+                              setState(() => sidebarExpanded = true),
+                        ),
+                      ],
                     const SizedBox(height: 8),
                     _menuTile(
                       title: 'Dashboard',
                       icon: Icons.dashboard_outlined,
                       isSelected: selectedMenuIndex == 0,
                       sidebarExpanded: sidebarExpanded,
-                      onTap: () => setState(() {
-                        selectedMenuIndex = 0;
-                        selectedStudentDetail = null;
-                        selectedFacultyDetail = null;
-                        selectedCourseDetail = null;
-                      }),
+                      onTap: () =>
+                          setState(() {
+                            selectedMenuIndex = 0;
+                            selectedStudentDetail = null;
+                            selectedFacultyDetail = null;
+                            selectedCourseDetail = null;
+                          }),
                     ),
                     const SizedBox(height: 8),
                     _menuTile(
@@ -3510,11 +3758,12 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       icon: Icons.school_outlined,
                       isSelected: selectedMenuIndex == 1,
                       sidebarExpanded: sidebarExpanded,
-                      onTap: () => setState(() {
-                        selectedMenuIndex = 1;
-                        selectedFacultyDetail = null;
-                        selectedCourseDetail = null;
-                      }),
+                      onTap: () =>
+                          setState(() {
+                            selectedMenuIndex = 1;
+                            selectedFacultyDetail = null;
+                            selectedCourseDetail = null;
+                          }),
                     ),
                     const SizedBox(height: 8),
                     _menuTile(
@@ -3522,12 +3771,13 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       icon: Icons.people_alt_outlined,
                       isSelected: selectedMenuIndex == 2,
                       sidebarExpanded: sidebarExpanded,
-                      onTap: () => setState(() {
-                        selectedMenuIndex = 2;
-                        selectedStudentDetail = null;
-                        selectedFacultyDetail = null;
-                        selectedCourseDetail = null;
-                      }),
+                      onTap: () =>
+                          setState(() {
+                            selectedMenuIndex = 2;
+                            selectedStudentDetail = null;
+                            selectedFacultyDetail = null;
+                            selectedCourseDetail = null;
+                          }),
                     ),
                     const SizedBox(height: 8),
                     _menuTile(
@@ -3535,12 +3785,13 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       icon: Icons.people_alt_outlined,
                       isSelected: selectedMenuIndex == 3,
                       sidebarExpanded: sidebarExpanded,
-                      onTap: () => setState(() {
-                        selectedMenuIndex = 3;
-                        selectedStudentDetail = null;
-                        selectedFacultyDetail = null;
-                        selectedCourseDetail = null;
-                      }),
+                      onTap: () =>
+                          setState(() {
+                            selectedMenuIndex = 3;
+                            selectedStudentDetail = null;
+                            selectedFacultyDetail = null;
+                            selectedCourseDetail = null;
+                          }),
                     ),
                     const SizedBox(height: 8),
                     _menuTile(
@@ -3548,12 +3799,13 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       icon: Icons.supervisor_account_outlined,
                       isSelected: selectedMenuIndex == 4,
                       sidebarExpanded: sidebarExpanded,
-                      onTap: () => setState(() {
-                        selectedMenuIndex = 4;
-                        selectedStudentDetail = null;
-                        selectedFacultyDetail = null;
-                        selectedCourseDetail = null;
-                      }),
+                      onTap: () =>
+                          setState(() {
+                            selectedMenuIndex = 4;
+                            selectedStudentDetail = null;
+                            selectedFacultyDetail = null;
+                            selectedCourseDetail = null;
+                          }),
                     ),
                     const SizedBox(height: 8),
                     _menuTile(
@@ -3561,12 +3813,13 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       icon: Icons.manage_accounts_outlined,
                       isSelected: selectedMenuIndex == 5,
                       sidebarExpanded: sidebarExpanded,
-                      onTap: () => setState(() {
-                        selectedMenuIndex = 5;
-                        selectedStudentDetail = null;
-                        selectedFacultyDetail = null;
-                        selectedCourseDetail = null;
-                      }),
+                      onTap: () =>
+                          setState(() {
+                            selectedMenuIndex = 5;
+                            selectedStudentDetail = null;
+                            selectedFacultyDetail = null;
+                            selectedCourseDetail = null;
+                          }),
                     ),
                     const SizedBox(height: 8),
                     _menuTile(
@@ -3574,12 +3827,13 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       icon: Icons.calendar_month_outlined,
                       isSelected: selectedMenuIndex == 6,
                       sidebarExpanded: sidebarExpanded,
-                      onTap: () => setState(() {
-                        selectedMenuIndex = 6;
-                        selectedStudentDetail = null;
-                        selectedFacultyDetail = null;
-                        selectedCourseDetail = null;
-                      }),
+                      onTap: () =>
+                          setState(() {
+                            selectedMenuIndex = 6;
+                            selectedStudentDetail = null;
+                            selectedFacultyDetail = null;
+                            selectedCourseDetail = null;
+                          }),
                     ),
                     const SizedBox(height: 8),
                     _menuTile(
@@ -3589,12 +3843,13 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
                       isSelected: selectedMenuIndex == 7,
                       sidebarExpanded: sidebarExpanded,
-                      onTap: () => setState(() {
-                        selectedMenuIndex = 7;
-                        selectedStudentDetail = null;
-                        selectedFacultyDetail = null;
-                        selectedCourseDetail = null;
-                      }),
+                      onTap: () =>
+                          setState(() {
+                            selectedMenuIndex = 7;
+                            selectedStudentDetail = null;
+                            selectedFacultyDetail = null;
+                            selectedCourseDetail = null;
+                          }),
                     ),
                     const SizedBox(height: 8),
                     _menuTile(
@@ -3647,6 +3902,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     );
   }
 
+
   Widget _buildSelectedView() {
     switch (selectedMenuIndex) {
       case 1:
@@ -3684,6 +3940,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
     return counts;
   }
+
   Map<String, int> get courseBatchCount {
     final Map<String, int> counts = {};
 
@@ -3702,7 +3959,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
     for (final faculty in facultyList) {
       final gender =
-          faculty.gender.trim().isEmpty ? 'Unknown' : faculty.gender.trim();
+      faculty.gender
+          .trim()
+          .isEmpty ? 'Unknown' : faculty.gender.trim();
       counts[gender] = (counts[gender] ?? 0) + 1;
     }
 
@@ -3712,8 +3971,10 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   void _openAnnouncementDialog([AnnouncementModel? existing]) {
     final formKey = GlobalKey<FormState>();
     final titleController = TextEditingController(text: existing?.title ?? '');
-    final descriptionController = TextEditingController(text: existing?.description ?? '');
-    String selectedCategory = existing?.category ?? AnnouncementModel.categories.first;
+    final descriptionController = TextEditingController(
+        text: existing?.description ?? '');
+    String selectedCategory = existing?.category ??
+        AnnouncementModel.categories.first;
     DateTime selectedPublishDate = existing?.publishDate ?? DateTime.now();
     List<String> selectedSchemes = List.from(existing?.targetSchemes ?? []);
     Uint8List? newAttachmentBytes;
@@ -3726,9 +3987,12 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
             return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
               title: smcText(
-                textToDisplay: '${existing == null ? 'Create' : 'Edit'} Announcement',
+                textToDisplay: '${existing == null
+                    ? 'Create'
+                    : 'Edit'} Announcement',
                 textSize: 18,
                 textBoldness: 5,
               ),
@@ -3749,7 +4013,10 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                               borderRadius: BorderRadius.circular(10),
                             ),
                           ),
-                          validator: (value) => (value?.trim().isEmpty ?? true) ? 'Title is required' : null,
+                          validator: (value) =>
+                          (value
+                              ?.trim()
+                              .isEmpty ?? true) ? 'Title is required' : null,
                         ),
                         const SizedBox(height: 16),
                         TextFormField(
@@ -3761,7 +4028,12 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                             ),
                           ),
                           maxLines: 4,
-                          validator: (value) => (value?.trim().isEmpty ?? true) ? 'Description is required' : null,
+                          validator: (value) =>
+                          (value
+                              ?.trim()
+                              .isEmpty ?? true)
+                              ? 'Description is required'
+                              : null,
                         ),
                         const SizedBox(height: 16),
                         DropdownButtonFormField<String>(
@@ -3773,12 +4045,18 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                             ),
                           ),
                           items: AnnouncementModel.categories
-                              .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
+                              .map((cat) =>
+                              DropdownMenuItem(value: cat, child: Text(cat)))
                               .toList(),
-                          onChanged: (val) => setDialogState(() => selectedCategory = val!),
+                          onChanged: (val) =>
+                              setDialogState(() => selectedCategory = val!),
                         ),
                         const SizedBox(height: 16),
-                        const smcText(textToDisplay: 'Target Audience (Batches):', textSize: 12, colorOfText: ColorConst.textSecondary, textBoldness: 4),
+                        const smcText(
+                            textToDisplay: 'Target Audience (Batches):',
+                            textSize: 12,
+                            colorOfText: ColorConst.textSecondary,
+                            textBoldness: 4),
                         const SizedBox(height: 8),
                         Wrap(
                           spacing: 8,
@@ -3787,7 +4065,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                             FilterChip(
                               label: const Text('All Students'),
                               selected: selectedSchemes.isEmpty,
-                              onSelected: (_) => setDialogState(() => selectedSchemes = []),
+                              onSelected: (_) =>
+                                  setDialogState(() => selectedSchemes = []),
                             ),
                             ...schemes.map((scheme) {
                               return FilterChip(
@@ -3816,7 +4095,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                               lastDate: DateTime(2030),
                             );
                             if (picked != null) {
-                              setDialogState(() => selectedPublishDate = picked);
+                              setDialogState(() =>
+                              selectedPublishDate = picked);
                             }
                           },
                           child: InputDecorator(
@@ -3827,61 +4107,90 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                               ),
                               suffixIcon: const Icon(Icons.calendar_today),
                             ),
-                            child: Text('${selectedPublishDate.day}/${selectedPublishDate.month}/${selectedPublishDate.year}'),
+                            child: Text('${selectedPublishDate
+                                .day}/${selectedPublishDate
+                                .month}/${selectedPublishDate.year}'),
                           ),
                         ),
                         const SizedBox(height: 16),
-                        const smcText(textToDisplay: 'Attachment (PDF/Image, optional):', textSize: 12, colorOfText: ColorConst.textSecondary, textBoldness: 4),
+                        const smcText(
+                            textToDisplay: 'Attachment (PDF/Image, optional):',
+                            textSize: 12,
+                            colorOfText: ColorConst.textSecondary,
+                            textBoldness: 4),
                         const SizedBox(height: 8),
-                        if (existing?.attachmentUrl.isNotEmpty == true && newAttachmentBytes == null)
+                        if (existing?.attachmentUrl.isNotEmpty == true &&
+                            newAttachmentBytes == null)
                           Row(
                             children: [
-                              const Icon(Icons.attach_file, color: ColorConst.primaryBlue),
+                              const Icon(Icons.attach_file,
+                                  color: ColorConst.primaryBlue),
                               const SizedBox(width: 8),
-                              smcText(textToDisplay: existing?.attachmentName ?? 'Attachment', textSize: 12),
+                              smcText(textToDisplay: existing?.attachmentName ??
+                                  'Attachment', textSize: 12),
                               const Spacer(),
                               TextButton.icon(
-                                icon: const Icon(Icons.close, color: Colors.red),
-                                label: const Text('Remove', style: TextStyle(color: Colors.red)),
-                                onPressed: () => setDialogState(() {
-                                  newAttachmentBytes = Uint8List(0);
-                                  newAttachmentName = '';
-                                }),
+                                icon: const Icon(
+                                    Icons.close, color: Colors.red),
+                                label: const Text('Remove',
+                                    style: TextStyle(color: Colors.red)),
+                                onPressed: () =>
+                                    setDialogState(() {
+                                      newAttachmentBytes = Uint8List(0);
+                                      newAttachmentName = '';
+                                    }),
                               ),
                             ],
                           ),
-                        if (newAttachmentBytes != null && newAttachmentBytes!.isNotEmpty)
+                        if (newAttachmentBytes != null &&
+                            newAttachmentBytes!.isNotEmpty)
                           Row(
                             children: [
-                              const Icon(Icons.attach_file, color: ColorConst.primaryBlue),
+                              const Icon(Icons.attach_file,
+                                  color: ColorConst.primaryBlue),
                               const SizedBox(width: 8),
-                              smcText(textToDisplay: newAttachmentName ?? 'New Attachment', textSize: 12),
+                              smcText(textToDisplay: newAttachmentName ??
+                                  'New Attachment', textSize: 12),
                               const Spacer(),
                               TextButton.icon(
-                                icon: const Icon(Icons.close, color: Colors.red),
-                                label: const Text('Remove', style: TextStyle(color: Colors.red)),
-                                onPressed: () => setDialogState(() {
-                                  newAttachmentBytes = null;
-                                  newAttachmentName = null;
-                                }),
+                                icon: const Icon(
+                                    Icons.close, color: Colors.red),
+                                label: const Text('Remove',
+                                    style: TextStyle(color: Colors.red)),
+                                onPressed: () =>
+                                    setDialogState(() {
+                                      newAttachmentBytes = null;
+                                      newAttachmentName = null;
+                                    }),
                               ),
                             ],
                           ),
-                        if ((newAttachmentBytes == null || newAttachmentBytes!.isEmpty) && (existing?.attachmentUrl.isEmpty ?? true))
+                        if ((newAttachmentBytes == null ||
+                            newAttachmentBytes!.isEmpty) && (existing
+                            ?.attachmentUrl.isEmpty ?? true))
                           ElevatedButton.icon(
                             icon: const Icon(Icons.upload_file),
                             label: const Text('Select File'),
                             style: ElevatedButton.styleFrom(
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
                             ),
                             onPressed: () async {
-                              final result = await FilePicker.platform.pickFiles(
+                              final result = await FilePicker.platform
+                                  .pickFiles(
                                 type: FileType.custom,
-                                allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+                                allowedExtensions: [
+                                  'pdf',
+                                  'jpg',
+                                  'jpeg',
+                                  'png'
+                                ],
                               );
-                              if (result != null && result.files.first.bytes != null) {
+                              if (result != null &&
+                                  result.files.first.bytes != null) {
                                 setDialogState(() {
-                                  newAttachmentBytes = result.files.first.bytes!;
+                                  newAttachmentBytes =
+                                  result.files.first.bytes!;
                                   newAttachmentName = result.files.first.name;
                                 });
                               }
@@ -3906,79 +4215,93 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                   onPressed: uploading
                       ? null
                       : () async {
-                          if (formKey.currentState!.validate()) {
-                            try {
-                              setDialogState(() => uploading = true);
-                              String attachmentUrl = existing?.attachmentUrl ?? '';
-                              String attachmentName = existing?.attachmentName ?? '';
+                    if (formKey.currentState!.validate()) {
+                      try {
+                        setDialogState(() => uploading = true);
+                        String attachmentUrl = existing?.attachmentUrl ?? '';
+                        String attachmentName = existing?.attachmentName ?? '';
 
-                              // Handle attachment
-                              if (newAttachmentBytes != null && newAttachmentBytes!.isNotEmpty) {
-                                // Upload new
-                                if (newAttachmentName != null && newAttachmentName!.isNotEmpty) {
-                                  attachmentUrl = await announcementService.uploadAttachment(
-                                    fileName: newAttachmentName!,
-                                    bytes: newAttachmentBytes!,
-                                    orgId: scopedOrgId,
-                                  );
-                                  attachmentName = newAttachmentName!;
-                                }
-                              } else if (newAttachmentBytes != null && newAttachmentBytes!.isEmpty) {
-                                // Remove
-                                attachmentUrl = '';
-                                attachmentName = '';
-                              }
-
-                              final announcement = AnnouncementModel(
-                                id: existing?.id ?? '',
-                                orgId: scopedOrgId,
-                                deptId: scopedDeptId,
-                                title: titleController.text.trim(),
-                                description: descriptionController.text.trim(),
-                                category: selectedCategory,
-                                targetSchemes: selectedSchemes,
-                                publishDate: selectedPublishDate,
-                                attachmentUrl: attachmentUrl,
-                                attachmentName: attachmentName,
-                                createdAt: existing?.createdAt ?? DateTime.now(),
-                                updatedAt: DateTime.now(),
-                              );
-
-                              if (existing == null) {
-                                await announcementService.createAnnouncement(announcement);
-                              } else {
-                                await announcementService.updateAnnouncement(announcement);
-                              }
-
-                              if (ctx.mounted) Navigator.pop(ctx);
-                            } catch (e) {
-                              if (ctx.mounted) {
-                                ScaffoldMessenger.of(ctx).showSnackBar(
-                                  SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-                                );
-                              }
-                              setDialogState(() => uploading = false);
-                            }
+                        // Handle attachment
+                        if (newAttachmentBytes != null &&
+                            newAttachmentBytes!.isNotEmpty) {
+                          // Upload new
+                          if (newAttachmentName != null &&
+                              newAttachmentName!.isNotEmpty) {
+                            attachmentUrl =
+                            await announcementService.uploadAttachment(
+                              fileName: newAttachmentName!,
+                              bytes: newAttachmentBytes!,
+                              orgId: scopedOrgId,
+                            );
+                            attachmentName = newAttachmentName!;
                           }
-                        },
+                        } else if (newAttachmentBytes != null &&
+                            newAttachmentBytes!.isEmpty) {
+                          // Remove
+                          attachmentUrl = '';
+                          attachmentName = '';
+                        }
+
+                        final announcement = AnnouncementModel(
+                          id: existing?.id ?? '',
+                          orgId: scopedOrgId,
+                          deptId: scopedDeptId,
+                          title: titleController.text.trim(),
+                          description: descriptionController.text.trim(),
+                          category: selectedCategory,
+                          targetSchemes: selectedSchemes,
+                          publishDate: selectedPublishDate,
+                          attachmentUrl: attachmentUrl,
+                          attachmentName: attachmentName,
+                          createdAt: existing?.createdAt ?? DateTime.now(),
+                          updatedAt: DateTime.now(),
+                        );
+
+                        if (existing == null) {
+                          await announcementService.createAnnouncement(
+                              announcement);
+                        } else {
+                          await announcementService.updateAnnouncement(
+                              announcement);
+                        }
+
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      } catch (e) {
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(content: Text('Error: $e'),
+                                backgroundColor: Colors.red),
+                          );
+                        }
+                        setDialogState(() => uploading = false);
+                      }
+                    }
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: ColorConst.primaryBlue,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
                   ),
                   child: uploading
                       ? const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            ),
-                            SizedBox(width: 8),
-                            smcText(textToDisplay: 'Saving...', textSize: 14, colorOfText: Colors.white),
-                          ],
-                        )
-                      : const smcText(textToDisplay: 'Save', textSize: 14, textBoldness: 4, colorOfText: Colors.white),
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      ),
+                      SizedBox(width: 8),
+                      smcText(textToDisplay: 'Saving...',
+                          textSize: 14,
+                          colorOfText: Colors.white),
+                    ],
+                  )
+                      : const smcText(textToDisplay: 'Save',
+                      textSize: 14,
+                      textBoldness: 4,
+                      colorOfText: Colors.white),
                 ),
               ],
             );
@@ -3993,8 +4316,10 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: smcText(textToDisplay: announcement.title, textSize: 18, textBoldness: 5),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20)),
+          title: smcText(
+              textToDisplay: announcement.title, textSize: 18, textBoldness: 5),
           content: SizedBox(
             width: 600,
             child: SingleChildScrollView(
@@ -4005,7 +4330,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
                           color: const Color(0xFFEFF4FF),
                           borderRadius: BorderRadius.circular(999),
@@ -4018,19 +4344,36 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         ),
                       ),
                       const SizedBox(width: 16),
-                      smcText(textToDisplay: 'Published: ${announcement.publishDate.day}/${announcement.publishDate.month}/${announcement.publishDate.year}', textSize: 12),
+                      smcText(
+                          textToDisplay: 'Published: ${announcement.publishDate
+                              .day}/${announcement.publishDate
+                              .month}/${announcement.publishDate.year}',
+                          textSize: 12),
                     ],
                   ),
                   const SizedBox(height: 16),
-                  const smcText(textToDisplay: 'Target Audience:', textSize: 12, textBoldness: 4, colorOfText: ColorConst.textSecondary),
+                  const smcText(textToDisplay: 'Target Audience:',
+                      textSize: 12,
+                      textBoldness: 4,
+                      colorOfText: ColorConst.textSecondary),
                   const SizedBox(height: 4),
-                  smcText(textToDisplay: announcement.targetSchemes.isEmpty ? 'All Students' : announcement.targetSchemes.map((id) => schemes.firstWhere((s) => s.id == id, orElse: () => SettingsItem(id: id, name: id)).name).join(', '), textSize: 12),
+                  smcText(textToDisplay: announcement.targetSchemes.isEmpty
+                      ? 'All Students'
+                      : announcement.targetSchemes.map((id) =>
+                  schemes
+                      .firstWhere((s) => s.id == id, orElse: () =>
+                      SettingsItem(id: id, name: id))
+                      .name).join(', '), textSize: 12),
                   const SizedBox(height: 16),
                   const Divider(),
                   const SizedBox(height: 16),
-                  const smcText(textToDisplay: 'Description:', textSize: 12, textBoldness: 4, colorOfText: ColorConst.textSecondary),
+                  const smcText(textToDisplay: 'Description:',
+                      textSize: 12,
+                      textBoldness: 4,
+                      colorOfText: ColorConst.textSecondary),
                   const SizedBox(height: 8),
-                  smcText(textToDisplay: announcement.description, textSize: 12),
+                  smcText(
+                      textToDisplay: announcement.description, textSize: 12),
                   if (announcement.attachmentUrl.isNotEmpty) ...[
                     const SizedBox(height: 16),
                     InkWell(
@@ -4042,7 +4385,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       },
                       child: Row(
                         children: [
-                          const Icon(Icons.attach_file, color: ColorConst.primaryBlue),
+                          const Icon(
+                              Icons.attach_file, color: ColorConst.primaryBlue),
                           const SizedBox(width: 8),
                           smcText(
                             textToDisplay: announcement.attachmentName,
@@ -4060,7 +4404,10 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const smcText(textToDisplay: 'Close', textSize: 14, textBoldness: 3, colorOfText: ColorConst.textSecondary),
+              child: const smcText(textToDisplay: 'Close',
+                  textSize: 14,
+                  textBoldness: 3,
+                  colorOfText: ColorConst.textSecondary),
             ),
           ],
         );
@@ -4073,13 +4420,21 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const smcText(textToDisplay: 'Delete Announcement', textSize: 18, textBoldness: 5),
-          content: smcText(textToDisplay: 'Are you sure you want to delete "${announcement.title}"?', textSize: 14),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20)),
+          title: const smcText(textToDisplay: 'Delete Announcement',
+              textSize: 18,
+              textBoldness: 5),
+          content: smcText(
+              textToDisplay: 'Are you sure you want to delete "${announcement
+                  .title}"?', textSize: 14),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const smcText(textToDisplay: 'Cancel', textSize: 14, textBoldness: 3, colorOfText: ColorConst.textSecondary),
+              child: const smcText(textToDisplay: 'Cancel',
+                  textSize: 14,
+                  textBoldness: 3,
+                  colorOfText: ColorConst.textSecondary),
             ),
             TextButton(
               style: TextButton.styleFrom(foregroundColor: Colors.red),
@@ -4090,12 +4445,15 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                 } catch (e) {
                   if (ctx.mounted) {
                     ScaffoldMessenger.of(ctx).showSnackBar(
-                      SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                      SnackBar(content: Text('Error: $e'),
+                          backgroundColor: Colors.red),
                     );
                   }
                 }
               },
-              child: const smcText(textToDisplay: 'Delete', textSize: 14, colorOfText: Colors.red),
+              child: const smcText(textToDisplay: 'Delete',
+                  textSize: 14,
+                  colorOfText: Colors.red),
             ),
           ],
         );
@@ -4136,7 +4494,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       alignment: Alignment.center,
-                      child: const Icon(Icons.announcement_outlined, color: ColorConst.primaryBlue),
+                      child: const Icon(Icons.announcement_outlined,
+                          color: ColorConst.primaryBlue),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -4160,7 +4519,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                     ),
                     ElevatedButton.icon(
                       onPressed: () => _openAnnouncementDialog(),
-                      icon: const Icon(Icons.add, size: 18, color: Colors.white),
+                      icon: const Icon(
+                          Icons.add, size: 18, color: Colors.white),
                       label: const smcText(
                         textToDisplay: 'Create',
                         textSize: 14,
@@ -4169,9 +4529,11 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: ColorConst.primaryBlue,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
                         elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
                       ),
                     ),
                   ],
@@ -4180,185 +4542,201 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                 Expanded(
                   child: announcements.isEmpty
                       ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.inbox_outlined, size: 48, color: Colors.grey.shade300),
-                              const SizedBox(height: 16),
-                              smcText(
-                                textToDisplay: 'No announcements found.',
-                                textSize: 14,
-                                colorOfText: ColorConst.textSecondary,
-                              ),
-                            ],
-                          ),
-                        )
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.inbox_outlined, size: 48,
+                            color: Colors.grey.shade300),
+                        const SizedBox(height: 16),
+                        smcText(
+                          textToDisplay: 'No announcements found.',
+                          textSize: 14,
+                          colorOfText: ColorConst.textSecondary,
+                        ),
+                      ],
+                    ),
+                  )
                       : SingleChildScrollView(
-                          scrollDirection: Axis.vertical,
-                          child: Container(
-                            width: double.infinity,
-                            child: DataTable(
-                              headingRowHeight: 50,
-                              dataRowMinHeight: 52,
-                              dataRowMaxHeight: 58,
-                              horizontalMargin: 0,
-                              columnSpacing: 0,
-                              dividerThickness: 1,
-                              border: TableBorder.all(color: const Color(0xFFE3EAF8), width: 1),
-                              headingRowColor: MaterialStateProperty.all(const Color(0xFFF4F7FF)),
-                              columns: const [
-                                DataColumn(
-                                  label: SizedBox(
-                                    width: 60,
-                                    child: Center(
-                                      child: smcText(
-                                        textToDisplay: 'S.No',
-                                        textSize: 12,
-                                        textBoldness: 4,
-                                        colorOfText: Color(0xFF5C6B8B),
-                                      ),
-                                    ),
-                                  ),
+                    scrollDirection: Axis.vertical,
+                    child: Container(
+                      width: double.infinity,
+                      child: DataTable(
+                        headingRowHeight: 50,
+                        dataRowMinHeight: 52,
+                        dataRowMaxHeight: 58,
+                        horizontalMargin: 0,
+                        columnSpacing: 0,
+                        dividerThickness: 1,
+                        border: TableBorder.all(color: const Color(0xFFE3EAF8),
+                            width: 1),
+                        headingRowColor: MaterialStateProperty.all(const Color(
+                            0xFFF4F7FF)),
+                        columns: const [
+                          DataColumn(
+                            label: SizedBox(
+                              width: 60,
+                              child: Center(
+                                child: smcText(
+                                  textToDisplay: 'S.No',
+                                  textSize: 12,
+                                  textBoldness: 4,
+                                  colorOfText: Color(0xFF5C6B8B),
                                 ),
-                                DataColumn(
-                                  label: Expanded(
-                                    child: Padding(
-                                      padding: EdgeInsets.only(left: 16),
-                                      child: Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: smcText(
-                                          textToDisplay: 'TITLE',
-                                          textSize: 12,
-                                          textBoldness: 4,
-                                          colorOfText: Color(0xFF5C6B8B),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                DataColumn(
-                                  label: SizedBox(
-                                    width: 140,
-                                    child: Center(
-                                      child: smcText(
-                                        textToDisplay: 'CATEGORY',
-                                        textSize: 12,
-                                        textBoldness: 4,
-                                        colorOfText: Color(0xFF5C6B8B),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                DataColumn(
-                                  label: SizedBox(
-                                    width: 120,
-                                    child: Center(
-                                      child: smcText(
-                                        textToDisplay: 'PUBLISHED DATE',
-                                        textSize: 12,
-                                        textBoldness: 4,
-                                        colorOfText: Color(0xFF5C6B8B),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                DataColumn(
-                                  label: SizedBox(
-                                    width: 100,
-                                    child: Center(
-                                      child: smcText(
-                                        textToDisplay: 'ACTIONS',
-                                        textSize: 12,
-                                        textBoldness: 4,
-                                        colorOfText: Color(0xFF5C6B8B),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                              rows: announcements.asMap().entries.map((entry) {
-                                final int index = entry.key;
-                                final announcement = entry.value;
-                                final int serialNo = index + 1;
-                                final date = announcement.publishDate;
-                                final dateStr = '${date.day}/${date.month}/${date.year}';
-                                return DataRow(
-                                  cells: [
-                                    DataCell(
-                                      Center(
-                                        child: smcText(
-                                          textToDisplay: '$serialNo',
-                                          textSize: 12,
-                                          colorOfText: const Color(0xFF2E3954),
-                                        ),
-                                      ),
-                                    ),
-                                    DataCell(
-                                      Padding(
-                                        padding: const EdgeInsets.only(left: 16),
-                                        child: Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: smcText(
-                                            textToDisplay: announcement.title,
-                                            textSize: 12,
-                                            colorOfText: const Color(0xFF2E3954),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    DataCell(
-                                      Center(
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFEFF4FF),
-                                            borderRadius: BorderRadius.circular(999),
-                                          ),
-                                          child: smcText(
-                                            textToDisplay: announcement.category,
-                                            textSize: 11,
-                                            textBoldness: 3,
-                                            colorOfText: const Color(0xFF3558DA),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    DataCell(
-                                      Center(
-                                        child: smcText(
-                                          textToDisplay: dateStr,
-                                          textSize: 12,
-                                          colorOfText: const Color(0xFF2E3954),
-                                        ),
-                                      ),
-                                    ),
-                                    DataCell(
-                                      Center(
-                                        child: PopupMenuButton<String>(
-                                          icon: const Icon(Icons.more_vert_rounded, size: 18, color: Color(0xFF8A96B2)),
-                                          onSelected: (val) {
-                                            if (val == 'view') {
-                                              _viewAnnouncementDialog(announcement);
-                                            } else if (val == 'edit') {
-                                              _openAnnouncementDialog(announcement);
-                                            } else if (val == 'delete') {
-                                              _deleteAnnouncementDialog(announcement);
-                                            }
-                                          },
-                                          itemBuilder: (context) => [
-                                            const PopupMenuItem(value: 'view', child: Text('View')),
-                                            const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                                            const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red))),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              }).toList(),
+                              ),
                             ),
                           ),
-                        ),
+                          DataColumn(
+                            label: Expanded(
+                              child: Padding(
+                                padding: EdgeInsets.only(left: 16),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: smcText(
+                                    textToDisplay: 'TITLE',
+                                    textSize: 12,
+                                    textBoldness: 4,
+                                    colorOfText: Color(0xFF5C6B8B),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          DataColumn(
+                            label: SizedBox(
+                              width: 140,
+                              child: Center(
+                                child: smcText(
+                                  textToDisplay: 'CATEGORY',
+                                  textSize: 12,
+                                  textBoldness: 4,
+                                  colorOfText: Color(0xFF5C6B8B),
+                                ),
+                              ),
+                            ),
+                          ),
+                          DataColumn(
+                            label: SizedBox(
+                              width: 120,
+                              child: Center(
+                                child: smcText(
+                                  textToDisplay: 'PUBLISHED DATE',
+                                  textSize: 12,
+                                  textBoldness: 4,
+                                  colorOfText: Color(0xFF5C6B8B),
+                                ),
+                              ),
+                            ),
+                          ),
+                          DataColumn(
+                            label: SizedBox(
+                              width: 100,
+                              child: Center(
+                                child: smcText(
+                                  textToDisplay: 'ACTIONS',
+                                  textSize: 12,
+                                  textBoldness: 4,
+                                  colorOfText: Color(0xFF5C6B8B),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                        rows: announcements
+                            .asMap()
+                            .entries
+                            .map((entry) {
+                          final int index = entry.key;
+                          final announcement = entry.value;
+                          final int serialNo = index + 1;
+                          final date = announcement.publishDate;
+                          final dateStr = '${date.day}/${date.month}/${date
+                              .year}';
+                          return DataRow(
+                            cells: [
+                              DataCell(
+                                Center(
+                                  child: smcText(
+                                    textToDisplay: '$serialNo',
+                                    textSize: 12,
+                                    colorOfText: const Color(0xFF2E3954),
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 16),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: smcText(
+                                      textToDisplay: announcement.title,
+                                      textSize: 12,
+                                      colorOfText: const Color(0xFF2E3954),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Center(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 5),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFEFF4FF),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: smcText(
+                                      textToDisplay: announcement.category,
+                                      textSize: 11,
+                                      textBoldness: 3,
+                                      colorOfText: const Color(0xFF3558DA),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Center(
+                                  child: smcText(
+                                    textToDisplay: dateStr,
+                                    textSize: 12,
+                                    colorOfText: const Color(0xFF2E3954),
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Center(
+                                  child: PopupMenuButton<String>(
+                                    icon: const Icon(
+                                        Icons.more_vert_rounded, size: 18,
+                                        color: Color(0xFF8A96B2)),
+                                    onSelected: (val) {
+                                      if (val == 'view') {
+                                        _viewAnnouncementDialog(announcement);
+                                      } else if (val == 'edit') {
+                                        _openAnnouncementDialog(announcement);
+                                      } else if (val == 'delete') {
+                                        _deleteAnnouncementDialog(announcement);
+                                      }
+                                    },
+                                    itemBuilder: (context) =>
+                                    [
+                                      const PopupMenuItem(
+                                          value: 'view', child: Text('View')),
+                                      const PopupMenuItem(
+                                          value: 'edit', child: Text('Edit')),
+                                      const PopupMenuItem(value: 'delete',
+                                          child: Text('Delete',
+                                              style: TextStyle(
+                                                  color: Colors.red))),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -4370,97 +4748,304 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
   Widget _buildDashboardView() {
     final DepartmentMasterItem? dept = currentDepartment;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const smcText(
-                    textToDisplay: 'Department Overview',
-                    textSize: 16,
-                    textBoldness: 5,
-                    colorOfText: ColorConst.textPrimary,
-                  ),
-                  if (dept != null && dept.deptName.trim().isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    smcText(
-                      textToDisplay: dept.deptName.trim(),
-                      textSize: 14,
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+
+          // Header
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+
+                    const smcText(
+                      textToDisplay: 'Department Overview',
+                      textSize: 16,
                       textBoldness: 5,
                       colorOfText: ColorConst.textPrimary,
                     ),
+
+                    if (dept != null && dept.deptName.trim().isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      smcText(
+                        textToDisplay: dept.deptName.trim(),
+                        textSize: 14,
+                        textBoldness: 5,
+                        colorOfText: ColorConst.textPrimary,
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-            TextButton.icon(
-              onPressed: openEditCurrentDepartmentSheet,
-              icon: const Icon(
-                Icons.edit_outlined,
-                size: 18,
-                color: ColorConst.primaryBlue,
+
+              TextButton.icon(
+                onPressed: openEditCurrentDepartmentSheet,
+                icon: const Icon(
+                  Icons.edit_outlined,
+                  size: 18,
+                  color: ColorConst.primaryBlue,
+                ),
+                label: const smcText(
+                  textToDisplay: 'Edit Department',
+                  textSize: 13,
+                  textBoldness: 4,
+                  colorOfText: ColorConst.primaryBlue,
+                ),
               ),
-              label: const smcText(
-                textToDisplay: 'Edit Department',
-                textSize: 13,
-                textBoldness: 4,
-                colorOfText: ColorConst.primaryBlue,
-              ),
+            ],
+          ),
+
+          if (dept != null && dept.deptAccessCode.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            smcText(
+              textToDisplay:
+              'Registration access code: ${dept.deptAccessCode}',
+              textSize: 13,
+              colorOfText: ColorConst.textSecondary,
             ),
           ],
+
+          const SizedBox(height: 16),
+
+          SizedBox(
+            height: 280,
+            child: Row(
+              children: [
+
+                Expanded(
+                  flex: 2,
+                  child: _buildVisionMissionCard(),
+                ),
+
+                const SizedBox(width: 16),
+
+                Expanded(
+                  child: _buildDepartmentTopperCard(),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          SizedBox(
+            height: 220,
+            child: Row(
+              children: [
+
+                Expanded(child: _buildStudentStatCard()),
+
+                const SizedBox(width: 16),
+
+                Expanded(child: _buildFacultyStatCard()),
+
+                const SizedBox(width: 16),
+
+                Expanded(child: _buildCourseStatCard()),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          SizedBox(
+            height:320,
+            child: Row(
+              children: [
+
+                Expanded(
+                  child: _buildRecentNotificationCard(),
+                ),
+
+                const SizedBox(width: 16),
+
+                Expanded(
+                  child: _buildUpcomingEventsCard(),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+  Widget _buildRecentNotificationCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFE3EAF8),
         ),
-        if (dept != null && dept.deptAccessCode.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          smcText(
-            textToDisplay:
-                'Registration access code: ${dept.deptAccessCode}',
-            textSize: 13,
-            colorOfText: ColorConst.textSecondary,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+
+          const Row(
+            children: [
+
+              Icon(
+                Icons.notifications_active,
+                color: Colors.blue,
+              ),
+
+              SizedBox(width: 8),
+
+              Text(
+                "Recent Notifications",
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          _notificationTile(
+            "Faculty Meeting at 3 PM",
+
+          ),
+
+          _notificationTile(
+            "Internal Assessment starts on 9 July",
+          ),
+
+          _notificationTile(
+            "Examination on 20-25 July",
           ),
         ],
-        const SizedBox(height: 16),
-        Expanded(
-        child:Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      ),
+    );
+  }
 
-            Expanded(
-              flex: 1,
-              child: SizedBox(
-                height: 220,
-                child: _buildStudentStatCard(),
+  Widget _notificationTile(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+
+          const Icon(
+            Icons.circle,
+            size: 8,
+            color: Colors.blue,
+          ),
+
+          const SizedBox(width: 10),
+
+          Expanded(
+            child: Text(
+              text,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUpcomingEventsCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFE3EAF8),
+        ),
+      ),
+         child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+
+          const Row(
+            children: [
+
+              Icon(
+                Icons.event,
+                color: Colors.orange,
+              ),
+
+              SizedBox(width: 8),
+
+              Text(
+                "Upcoming Events",
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          _eventTile(
+            "Project Exam",
+            "21 July"
+          ),
+
+          _eventTile(
+            "Hackathon",
+            "20 Aug",
+          ),
+
+          _eventTile(
+            "Alumni Meet",
+            "30 Aug",
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _eventTile(String title, String date) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+
+          Container(
+            width: 55,
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              date,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.orange,
               ),
             ),
-              const SizedBox(width:16),
+          ),
 
-            Expanded(
-              flex: 1,
-              child: SizedBox(
-                height: 220,
-                child: _buildFacultyStatCard(),
-              ),
-            ),
-              const SizedBox(width:16),
-            Expanded(
-              flex: 1,
-              child: SizedBox(
-                height: 220,
-                child: _buildCourseStatCard(),
-              ),
-            ),
-                  ],
-                  )
-                  ),
-                  ],
-                  );
-            }
+          const SizedBox(width: 12),
 
-  Widget _buildStatCard({required String title, required String count, required IconData icon, required Color color}) {
+          Expanded(
+            child: Text(title),
+          ),
+        ],
+      ),
+    );
+  }
+  Widget _buildStatCard(
+      {required String title, required String count, required IconData icon, required Color color}) {
     return Container(
       child: Container(
         padding: const EdgeInsets.all(16),
@@ -4471,35 +5056,35 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         ),
         child: Center(
           child: Row(
-           children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: color, size: 24),
               ),
-              child: Icon(icon, color: color, size: 24),
-            ),
-            const SizedBox(width: 16),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                smcText(
-                  textToDisplay: title,
-                  textSize: 13,
-                  colorOfText: ColorConst.textSecondary,
-                ),
-                smcText(
-                  textToDisplay: count,
-                  textSize: 20,
-                  textBoldness: 5,
-                  colorOfText: ColorConst.textPrimary,
-                ),
-              ],
-            ),
-          ],
+              const SizedBox(width: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  smcText(
+                    textToDisplay: title,
+                    textSize: 13,
+                    colorOfText: ColorConst.textSecondary,
+                  ),
+                  smcText(
+                    textToDisplay: count,
+                    textSize: 20,
+                    textBoldness: 5,
+                    colorOfText: ColorConst.textPrimary,
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -4568,6 +5153,308 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildDepartmentTopperCard() {
+    if (studentList.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE3EAF8)),
+        ),
+        child: const Center(
+          child: Text("No Student Data"),
+        ),
+      );
+    }
+
+    final topper = studentList.reduce((a, b) {
+      final cgpaA = double.tryParse(a.cgpa) ?? 0.0;
+      final cgpaB = double.tryParse(b.cgpa) ?? 0.0;
+      return cgpaA >= cgpaB ? a : b;
+    });
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE3EAF8)),
+      ),
+      child: Column(
+        children: [
+
+          const Row(
+            children: [
+              Icon(
+                Icons.emoji_events,
+                color: Colors.amber,
+              ),
+              SizedBox(width: 8),
+              Text(
+                "Department Topper",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+
+          // const Spacer(),
+
+          ProfilePhotoAvatar(
+            photoUrl: normalizeProfilePhotoUrl(topper.photographUrl),
+            fallbackInitial: topper.fullName.isNotEmpty
+                ? topper.fullName[0].toUpperCase()
+                : "?",
+            radius: 36,
+          ),
+          const SizedBox(height: 12),
+
+          Text(
+            topper.fullName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          const SizedBox(height: 4),
+
+          Text(
+            topper.studentId,
+            style: const TextStyle(
+              color: Colors.grey,
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          Text(
+            "Semester : ${topper.currentSemester}",
+            style: const TextStyle(
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+
+          const SizedBox(height: 4),
+
+          Text(
+            "CGPA : ${topper.cgpa}",
+            style: const TextStyle(
+              color: Colors.green,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVisionMissionCard() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE3EAF8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+
+          Row(
+            children: const [
+              Icon(
+                Icons.flag_outlined,
+                color: ColorConst.primaryBlue,
+              ),
+              SizedBox(width: 8),
+              Text(
+                "Vision & Mission",
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+
+          const Text(
+            "Vision",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: ColorConst.primaryBlue,
+            ),
+          ),
+
+          const SizedBox(height: 6),
+
+          const Text(
+            "To become a center of excellence in technical education.",
+          ),
+
+          const SizedBox(height: 15),
+
+          const Text(
+            "Mission",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: ColorConst.primaryBlue,
+            ),
+          ),
+
+          const SizedBox(height: 6),
+
+          const Text(
+            "To provide quality education, research, and innovation.",
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCourseBatchCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFE3EAF8),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+
+          Row(
+            children: [
+
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.menu_book,
+                  color: Colors.orange,
+                ),
+              ),
+
+              const SizedBox(width: 16),
+
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+
+                  const Text(
+                    "Courses by Batch",
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+
+                  Text(
+                    courseList.length.toString(),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                ],
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          Expanded(
+            child: _buildCourseBatchChart(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStudentCategoryCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFE3EAF8),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+
+          Row(
+            children: [
+
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.purple.withOpacity(.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.groups,
+                  color: Colors.purple,
+                ),
+              ),
+
+              const SizedBox(width: 16),
+
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+
+                  const Text(
+                    "Students by Category",
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+
+                  Text(
+                    studentList.length.toString(),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                ],
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          Expanded(
+            child: _buildStudentCategoryChart(),
+          ),
+        ],
       ),
     );
   }
@@ -4700,7 +5587,6 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   }
 
   Widget _buildStudentVerticalChart() {
-
     final data =
     studentBatchCount.entries.toList();
 
@@ -4715,7 +5601,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
 
     final maxValue =
     data.map((e) => e.value)
-        .reduce((a,b)=>a>b?a:b);
+        .reduce((a, b) => a > b ? a : b);
 
     return Row(
       crossAxisAlignment:
@@ -4724,7 +5610,6 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       MainAxisAlignment.spaceEvenly,
 
       children: data.map((entry) {
-
         final height =
             (entry.value / maxValue) * 45;
 
@@ -4843,7 +5728,6 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   }
 
   Widget _buildCourseVerticalChart() {
-
     final data =
     courseBatchCount.entries.toList();
 
@@ -4864,7 +5748,6 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       crossAxisAlignment: CrossAxisAlignment.end,
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: data.map((entry) {
-
         final height =
             (entry.value / maxValue) * 45;
 
@@ -4905,66 +5788,170 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     );
   }
 
+  Widget _buildVerticalChart({
+    required Map<String, int> data,
+    required Color color,
+  }) {
+    if (data.isEmpty) {
+      return const Center(
+        child: Text(
+          "No Data Available",
+          style: TextStyle(
+            color: Colors.grey,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      );
+    }
+
+    final entries = data.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    final int maxValue =
+    entries.map((e) => e.value).reduce((a, b) => a > b ? a : b);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: entries.map((entry) {
+        const double maxBarHeight = 90;
+
+        final height = (entry.value / maxValue) * maxBarHeight;
+
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+
+                Text(
+                  entry.value.toString(),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+
+                const SizedBox(height: 4),
+
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 700),
+                  curve: Curves.easeOut,
+                  height: height,
+                  width: 26,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+
+                const SizedBox(height: 6),
+
+                Text(
+                  entry.key,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            )
+          ),
+        );
+      }).toList(),
+    );
+  }
+
   Widget _buildGraphCard({
     required String title,
     required int total,
-    required Map<String,int> data,
+    required Map<String, int> data,
     required Color color,
   }) {
+    final int maxValue =
+    data.values.isEmpty ? 1 : data.values.reduce((a, b) => a > b ? a : b);
 
-    final maxValue =
-    data.values.isEmpty
-        ? 1
-        : data.values.reduce(
-          (a,b)=>a>b?a:b,
-    );
+    final sortedEntries = data.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
           color: const Color(0xFFE3EAF8),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(.08),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
-        crossAxisAlignment:
-        CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
 
-          Text(
-            title,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
+          Row(
+            children: [
+
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: color.withOpacity(.12),
+                child: Icon(
+                  Icons.analytics,
+                  color: color,
+                  size: 18,
+                ),
+              ),
+
+              const SizedBox(width: 10),
+
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  total.toString(),
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
           ),
 
-          const SizedBox(height: 4),
-
-          Text(
-            "$total",
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
 
           Expanded(
-            child: Column(
-              children: data.entries.map((entry) {
-                return _buildBarRow(
-                  label: entry.key,
-                  value: entry.value,
-                  maxValue: maxValue,
-                  color: color,
-                );
-              }).toList(),
+            child: _buildVerticalChart(
+              data: data,
+              color: color,
             ),
           ),
+
         ],
       ),
     );
@@ -4976,56 +5963,204 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
     required int maxValue,
     required Color color,
   }) {
+    final double percent = value / maxValue;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Column(
-        crossAxisAlignment:
-        CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
 
           Row(
-            mainAxisAlignment:
-            MainAxisAlignment.spaceBetween,
             children: [
 
-              Text(label),
+              Expanded(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
 
-              Text(
-                value.toString(),
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  value.toString(),
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
           ),
 
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
 
-          Container(
-            height: 18,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade200,
-              borderRadius:
-              BorderRadius.circular(8),
-            ),
-            child: FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: value / maxValue,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius:
-                  BorderRadius.circular(8),
-                ),
-              ),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: LinearProgressIndicator(
+              value: percent,
+              minHeight: 8,
+              backgroundColor: Colors.grey.shade200,
+              valueColor: AlwaysStoppedAnimation(color),
             ),
           ),
         ],
       ),
     );
   }
+
+  Widget _buildStudentSemesterChart() {
+    if (semesterCount.isEmpty) {
+      return const Center(
+        child: Text("No Data"),
+      );
+    }
+
+    final entries = semesterCount.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    final int maxValue =
+    entries.map((e) => e.value).reduce((a, b) => a > b ? a : b);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: entries.map((entry) {
+        final double barHeight = (entry.value / maxValue) * 75;
+
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+
+                Text(
+                  entry.value.toString(),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(height: 6),
+
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 500),
+                  height: barHeight,
+                  decoration: BoxDecoration(
+                    color: Colors.blue,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                Text(
+                  entry.key,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildVerticalBarChart({
+    required Map<String, int> data,
+    required Color color,
+  }) {
+    if (data.isEmpty) {
+      return const Center(
+        child: Text("No Data"),
+      );
+    }
+
+    final entries = data.entries.toList();
+    final maxValue = entries
+        .map((e) => e.value)
+        .reduce((a, b) => a > b ? a : b);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: entries.map((entry) {
+        final double barHeight =
+            (entry.value / maxValue) * 70; // Same graph size
+
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 3),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+
+                Text(
+                  entry.value.toString(),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(height: 4),
+
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 500),
+                  width: 18,
+                  height: barHeight,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+
+                const SizedBox(height: 4),
+
+                Text(
+                  entry.key,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 10),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildStudentCategoryChart() {
+    return _buildVerticalBarChart(
+      data: categoryCount,
+      color: Colors.purple,
+    );
+  }
+
+  Widget _buildCourseBatchChart() {
+    return _buildVerticalBarChart(
+      data: batchCount,
+      color: Colors.orange,
+    );
+  }
+
 
   Widget _buildStudentsView() {
     if (selectedStudentDetail == null) {
@@ -6269,8 +7404,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                 child: Align(
                                   alignment: Alignment.centerLeft,
                                   child: smcText(
-                                    textToDisplay: selectedSettingsFilter == 0 
-                                        ? 'COURSE TYPE NAME' 
+                                    textToDisplay: selectedSettingsFilter == 0
+                                        ? 'COURSE TYPE NAME'
                                         : (selectedSettingsFilter == 1 ? 'BATCH NAME' : 'SCHEME NAME'),
                                     textSize: 12,
                                     textBoldness: 4,
@@ -6414,11 +7549,11 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         {'code': 'IPCC', 'name': 'Integrated Professional Core Course'},
         {'code': 'BSC', 'name': 'Bachelor of Science'},
       ];
-      
+
       // 1. Remove exact duplicates within the current collection first
       final seenCodes = <String>{};
       final duplicatesToRemove = <String>[];
-      
+
       for (var item in currentItems) {
         if (item.code != null) {
           if (seenCodes.contains(item.code)) {
@@ -6428,7 +7563,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
           }
         }
       }
-      
+
       if (duplicatesToRemove.isNotEmpty) {
         for (var id in duplicatesToRemove) {
           await settingsService.deleteItem('smcCourseType', id);
@@ -6455,7 +7590,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       // 1. Remove exact duplicates within the current collection first
       final seenNames = <String>{};
       final duplicatesToRemove = <String>[];
-      
+
       for (var item in currentItems) {
         if (seenNames.contains(item.name)) {
           duplicatesToRemove.add(item.id);
@@ -6463,7 +7598,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
           seenNames.add(item.name);
         }
       }
-      
+
       if (duplicatesToRemove.isNotEmpty) {
         for (var id in duplicatesToRemove) {
           await settingsService.deleteItem('smcBatchMaster', id);
@@ -6490,7 +7625,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       // 1. Remove exact duplicates within the current collection first
       final seenNames = <String>{};
       final duplicatesToRemove = <String>[];
-      
+
       for (var item in currentItems) {
         if (seenNames.contains(item.name)) {
           duplicatesToRemove.add(item.id);
@@ -6498,12 +7633,12 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
           seenNames.add(item.name);
         }
       }
-      
+
       if (duplicatesToRemove.isNotEmpty) {
         for (var id in duplicatesToRemove) {
           await settingsService.deleteItem('smcSchemaMaster', id);
         }
-        return; 
+        return;
       }
 
       // 2. Add missing defaults
@@ -6556,11 +7691,11 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
             TextField(
               controller: nameController,
               decoration: InputDecoration(
-                labelText: isCourseType 
-                    ? 'Course Type Full Name' 
+                labelText: isCourseType
+                    ? 'Course Type Full Name'
                     : (isBatch ? 'Batch Name' : (isScheme ? 'Scheme Name' : '$title Name')),
-                hintText: isCourseType 
-                    ? 'e.g. Professional Core Course' 
+                hintText: isCourseType
+                    ? 'e.g. Professional Core Course'
                     : (isBatch ? 'e.g. 2024-26' : (isScheme ? 'e.g. 2023' : 'Enter $title name')),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -6898,8 +8033,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                   height: 44,
                   child: DropdownButtonFormField<String>(
                     isExpanded: true,
-                    value: ['All Gender', 'Male', 'Female', 'Other'].contains(studentGenderFilter) 
-                        ? studentGenderFilter 
+                    value: ['All Gender', 'Male', 'Female', 'Other'].contains(studentGenderFilter)
+                        ? studentGenderFilter
                         : 'All Gender',
                     decoration: InputDecoration(
                       filled: true,
