@@ -15,6 +15,15 @@ import 'package:smartcampus/models/publication_model.dart';
 import 'package:smartcampus/services/publication_firestore_service.dart';
 import 'package:smartcampus/models/academic_record_model.dart';
 import 'package:smartcampus/services/academic_firestore_service.dart';
+import 'package:smartcampus/models/meeting_model.dart';
+import 'package:smartcampus/services/meeting_firestore_service.dart';
+import 'package:smartcampus/models/co_extra_activity_model.dart';
+import 'package:smartcampus/services/co_extra_activity_firestore_service.dart';
+import 'package:smartcampus/models/semester_performance_model.dart';
+import 'package:smartcampus/services/semester_performance_firestore_service.dart';
+import 'package:smartcampus/screens/faculty/faculty_class_management/class_attendance_firestore_service.dart';
+import 'package:smartcampus/screens/faculty/faculty_class_management/models/completed_class_record.dart';
+import 'package:smartcampus/screens/student/student_class_management/student_class_firestore_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -34,6 +43,8 @@ class PersonDetailPage extends StatefulWidget {
   final bool showLeadingAction;
   /// When false, hides the blue embedded header (e.g. student mobile profile tab).
   final bool showEmbeddedHeader;
+  /// Custom list of tab labels for the page
+  final List<String>? customTabLabels;
 
   const PersonDetailPage({
     super.key,
@@ -49,6 +60,7 @@ class PersonDetailPage extends StatefulWidget {
     this.onStudentProfileUpdated,
     this.showLeadingAction = true,
     this.showEmbeddedHeader = true,
+    this.customTabLabels,
   });
 
   @override
@@ -63,6 +75,10 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
   final AchievementFirestoreService _achievementService = AchievementFirestoreService();
   final PublicationFirestoreService _publicationService = PublicationFirestoreService();
   final AcademicFirestoreService _academicService = AcademicFirestoreService();
+  final MeetingFirestoreService _meetingService = MeetingFirestoreService();
+  final CoExtraActivityFirestoreService _coExtraActivityService = CoExtraActivityFirestoreService();
+  final SemesterPerformanceFirestoreService _semesterPerformanceService = SemesterPerformanceFirestoreService();
+  final ClassAttendanceFirestoreService _classAttendanceService = ClassAttendanceFirestoreService();
   Stream<List<CourseModel>>? _enrolledCoursesStream;
   final Map<String, Map<String, String>> _enrolledCourseMarks = {};
   final Map<String, String> _semesterSgpaBySemester = {};
@@ -161,7 +177,10 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
       final StudentModel? fresh =
           await _studentService.getStudentByDocumentId(documentId);
       if (fresh != null && mounted) {
-        _seedEnrolledCourseMarksFromStudent(fresh);
+        setState(() {
+          _studentProfileOverride = fresh;
+          _seedEnrolledCourseMarksFromStudent(fresh);
+        });
       }
     } finally {
       if (mounted) {
@@ -320,6 +339,9 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
   }
 
   List<String> get _tabLabels {
+    if (widget.customTabLabels != null) {
+      return widget.customTabLabels!;
+    }
     if (widget.isStudent) {
       return const [
         'Basic Details',
@@ -371,6 +393,63 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
     );
   }
 
+  Widget _buildOriginalAcademics() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const smcText(
+                textToDisplay: 'Academic Records',
+                textSize: 16,
+                textBoldness: 5,
+                colorOfText: ColorConst.textPrimary,
+              ),
+              ElevatedButton.icon(
+                onPressed: () => _openAcademicDialog(),
+                icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+                label: const smcText(
+                  textToDisplay: 'Add Academic Record',
+                  textSize: 13,
+                  textBoldness: 4,
+                  colorOfText: Colors.white,
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ColorConst.primaryBlue,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<List<AcademicRecordModel>>(
+            stream: _academicService.getAcademicRecordsForPerson(_uuid),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+
+              final records = snapshot.data ?? [];
+
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  return _buildAcademicTable(records, constraints.maxWidth);
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildSelectedView() {
     final String tab = _tabLabels[_selectedIndex.clamp(0, _tabLabels.length - 1)];
 
@@ -382,14 +461,761 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
       case 'Assigned Courses':
         return _buildAssignedCourses();
       case 'Academics':
+        return _buildOriginalAcademics();
+      case 'Academic Performance':
         return _buildAcademics();
       case 'Achievements':
         return _buildAchievements();
       case 'Publications':
         return _buildPublications();
+      case 'Meetings':
+        return _buildMeetings();
+      case 'Attendance':
+        return _buildAttendance();
+      case 'Co & Extra Activities':
+        return _buildCoExtraActivities();
+      case 'Academic Activities':
+        return _buildPlaceholder('Academic Activities');
       default:
         return _buildBasicDetails();
     }
+  }
+
+  Widget _buildPlaceholder(String title) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.construction_outlined, size: 64, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            smcText(
+              textToDisplay: '$title module is under construction.',
+              textSize: 14,
+              colorOfText: ColorConst.textSecondary,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMeetings() {
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const smcText(
+                  textToDisplay: 'Meetings',
+                  textSize: 16,
+                  textBoldness: 5,
+                  colorOfText: ColorConst.textPrimary,
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => _openMeetingDialog(),
+                  icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+                  label: const smcText(
+                    textToDisplay: 'Schedule Meeting',
+                    textSize: 13,
+                    textBoldness: 4,
+                    colorOfText: Colors.white,
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: ColorConst.primaryBlue,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Container(
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0F4FA),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: TabBar(
+                indicator: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4, offset: const Offset(0, 2)),
+                  ],
+                ),
+                labelColor: ColorConst.primaryBlue,
+                unselectedLabelColor: ColorConst.textSecondary,
+                labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                indicatorSize: TabBarIndicatorSize.tab,
+                tabs: const [
+                  Tab(text: 'Minutes of Meeting'),
+                  Tab(text: 'Parent Interaction'),
+                ],
+              ),
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                _buildMinutesOfMeetingTab(),
+                _buildPlaceholder('Parent Interaction'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMinutesOfMeetingTab() {
+    return StreamBuilder<List<MeetingModel>>(
+      stream: _meetingService.getMeetingsForStudent(_uuid),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+
+        final meetings = snapshot.data ?? [];
+
+        if (meetings.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(40),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.event_outlined, size: 64, color: Colors.grey.shade300),
+                  const SizedBox(height: 16),
+                  const smcText(
+                    textToDisplay: "No meetings scheduled yet. Click Schedule Meeting to add one.",
+                    textSize: 14,
+                    colorOfText: ColorConst.textSecondary,
+                    textAlign: TextAlign.center,
+                    maxLines: 3,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            return _buildMeetingTable(meetings, constraints.maxWidth);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildMeetingTable(List<MeetingModel> meetings, double tableWidth) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE3EAF8)),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: SingleChildScrollView(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: tableWidth - 40),
+                child: DataTable(
+                  showCheckboxColumn: false,
+                  headingRowHeight: 50,
+                  dataRowMinHeight: 52,
+                  dataRowMaxHeight: 58,
+                  horizontalMargin: 0,
+                  columnSpacing: 0,
+                  dividerThickness: 1,
+                  border: const TableBorder(
+                    horizontalInside: BorderSide(color: Color(0xFFE3EAF8)),
+                    verticalInside: BorderSide(color: Color(0xFFE3EAF8)),
+                    top: BorderSide(color: Color(0xFFE3EAF8)),
+                    bottom: BorderSide(color: Color(0xFFE3EAF8)),
+                    left: BorderSide(color: Color(0xFFE3EAF8)),
+                    right: BorderSide(color: Color(0xFFE3EAF8)),
+                  ),
+                  headingRowColor: MaterialStateProperty.all(const Color(0xFFF4F7FF)),
+                  columns: const [
+                    DataColumn(
+                      label: SizedBox(
+                        width: 50,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'S.No',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 120,
+                        child: Padding(
+                          padding: EdgeInsets.only(left: 8),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: smcText(
+                              textToDisplay: 'Date',
+                              textSize: 12,
+                              textBoldness: 4,
+                              colorOfText: Color(0xFF5C6B8B),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 100,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Time',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 200,
+                        child: Padding(
+                          padding: EdgeInsets.only(left: 8),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: smcText(
+                              textToDisplay: 'Purpose',
+                              textSize: 12,
+                              textBoldness: 4,
+                              colorOfText: Color(0xFF5C6B8B),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 250,
+                        child: Padding(
+                          padding: EdgeInsets.only(left: 8),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: smcText(
+                              textToDisplay: 'Meeting Minutes',
+                              textSize: 12,
+                              textBoldness: 4,
+                              colorOfText: Color(0xFF5C6B8B),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 120,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Actions',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  rows: meetings.asMap().entries.map((entry) {
+                    final int index = entry.key;
+                    final m = entry.value;
+                    return DataRow(
+                      cells: [
+                        DataCell(
+                          Center(
+                            child: smcText(
+                              textToDisplay: '${index + 1}',
+                              textSize: 12,
+                              colorOfText: const Color(0xFF2E3954),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: smcText(
+                                textToDisplay: _formatDisplayDate(m.date),
+                                textSize: 12,
+                                textBoldness: 4,
+                                colorOfText: const Color(0xFF2E3954),
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Center(
+                            child: smcText(
+                              textToDisplay: m.time,
+                              textSize: 12,
+                              colorOfText: const Color(0xFF2E3954),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: smcText(
+                                textToDisplay: m.purpose,
+                                textSize: 12,
+                                colorOfText: const Color(0xFF2E3954),
+                                maxLines: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: TextFormField(
+                              initialValue: m.minutes,
+                              decoration: const InputDecoration(
+                                border: InputBorder.none,
+                                hintText: 'Type points discussed...',
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(vertical: 4),
+                              ),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF2E3954),
+                              ),
+                              maxLines: 3,
+                              minLines: 1,
+                              onChanged: (value) async {
+                                final updatedMeeting = MeetingModel(
+                                  id: m.id,
+                                  uuid: m.uuid,
+                                  date: m.date,
+                                  time: m.time,
+                                  purpose: m.purpose,
+                                  minutes: value,
+                                  createdOn: m.createdOn,
+                                );
+                                await _meetingService.updateMeeting(m.id!, updatedMeeting);
+                              },
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Center(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.visibility_outlined, size: 18, color: ColorConst.primaryBlue),
+                                  onPressed: () => _viewMeeting(m),
+                                  tooltip: 'View',
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.green),
+                                  onPressed: () => _openMeetingDialog(meeting: m),
+                                  tooltip: 'Edit',
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
+                                  onPressed: () => _deleteMeeting(m),
+                                  tooltip: 'Delete',
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openMeetingDialog({MeetingModel? meeting}) async {
+    final bool isEdit = meeting != null;
+    final formKey = GlobalKey<FormState>();
+    final dateCtrl = TextEditingController(text: meeting?.date ?? '');
+    final timeCtrl = TextEditingController(text: meeting?.time ?? '');
+    final purposeCtrl = TextEditingController(text: meeting?.purpose ?? '');
+    bool saving = false;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 500),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: formKey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          smcText(
+                            textToDisplay: '${isEdit ? 'Edit' : 'Schedule'} Meeting',
+                            textSize: 18,
+                            textBoldness: 5,
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded),
+                            onPressed: () => Navigator.pop(ctx),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      TextFormField(
+                        controller: dateCtrl,
+                        readOnly: true,
+                        decoration: _dialogFieldDecor('Date *').copyWith(
+                          suffixIcon: const Icon(Icons.calendar_today_outlined, size: 16),
+                        ),
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: ctx,
+                            initialDate: DateTime.now(),
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2100),
+                          );
+                          if (picked != null) {
+                            setModalState(() => dateCtrl.text = picked.toIso8601String().split('T')[0]);
+                          }
+                        },
+                        validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: timeCtrl,
+                        decoration: _dialogFieldDecor('Time *', hint: 'e.g., 10:30 AM'),
+                        validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: purposeCtrl,
+                        maxLines: 3,
+                        decoration: _dialogFieldDecor('Purpose *'),
+                        validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 32),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: saving ? null : () async {
+                            if (!formKey.currentState!.validate()) return;
+                            setModalState(() => saving = true);
+                            try {
+                              final m = MeetingModel(
+                                id: meeting?.id,
+                                uuid: _uuid,
+                                date: dateCtrl.text,
+                                time: timeCtrl.text,
+                                purpose: purposeCtrl.text,
+                                minutes: meeting?.minutes ?? '',
+                                createdOn: meeting?.createdOn ?? DateTime.now(),
+                              );
+
+                              if (isEdit) {
+                                await _meetingService.updateMeeting(meeting.id!, m);
+                              } else {
+                                await _meetingService.addMeeting(m);
+                              }
+                              if (ctx.mounted) Navigator.pop(ctx);
+                            } catch (e) {
+                              setModalState(() => saving = false);
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                              }
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: ColorConst.primaryBlue,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          child: saving
+                              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : smcText(textToDisplay: isEdit ? 'Save Changes' : 'Schedule', textSize: 14, colorOfText: Colors.white, textBoldness: 5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _viewMeeting(MeetingModel meeting) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: smcText(textToDisplay: 'Meeting Details', textSize: 18, textBoldness: 5),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildDetailRow('Date', _formatDisplayDate(meeting.date)),
+              _buildDetailRow('Time', meeting.time),
+              _buildDetailRow('Purpose', meeting.purpose),
+              if (meeting.minutes.isNotEmpty)
+                  _buildDetailRow('Meeting Minutes', meeting.minutes),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  void _deleteMeeting(MeetingModel meeting) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Meeting'),
+        content: const Text('Are you sure you want to delete this meeting?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _meetingService.deleteMeeting(meeting.id!);
+    }
+  }
+
+  Widget _buildAttendance() {
+    if (!widget.isStudent) {
+      return const Center(
+        child: smcText(
+          textToDisplay: 'Attendance is only available for students!',
+          textSize: 14,
+          colorOfText: ColorConst.textSecondary,
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    final student = _studentModel;
+    final orgId = student.orgId;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+          child: const smcText(
+            textToDisplay: 'Attendance',
+            textSize: 16,
+            textBoldness: 5,
+            colorOfText: ColorConst.textPrimary,
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<List<CourseModel>>(
+            stream: _courseService.getCoursesForOrg(orgId: orgId),
+            builder: (context, coursesSnapshot) {
+              if (coursesSnapshot.connectionState == ConnectionState.waiting && !coursesSnapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final enrolledCourses = coursesSnapshot.data ?? [];
+
+              return StreamBuilder<List<CompletedClassRecord>>(
+                stream: _classAttendanceService.watchClassesForOrg(orgId: orgId),
+                builder: (context, classesSnapshot) {
+                  if (classesSnapshot.connectionState == ConnectionState.waiting && !classesSnapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  final classes = classesSnapshot.data ?? [];
+                  final studentClasses = StudentClassFirestoreService.filterCompletedForStudent(
+                    records: classes,
+                    student: student,
+                    enrolledCourses: enrolledCourses,
+                  );
+
+                  int totalClasses = 0;
+                  int presentClasses = 0;
+
+                  for (final cls in studentClasses) {
+                    final status = StudentClassFirestoreService.attendanceStatusForStudent(
+                      record: cls,
+                      student: student,
+                    );
+                    if (status != null) {
+                      totalClasses++;
+                      if (status == 'Present') {
+                        presentClasses++;
+                      }
+                    }
+                  }
+
+                  final double percentage = totalClasses == 0 ? 0.0 : (presentClasses / totalClasses) * 100;
+                  final String attendanceText = totalClasses == 0 ? 'No classes conducted yet' : '${percentage.toStringAsFixed(1)}%';
+
+                  return LayoutBuilder(
+                    builder: (context, constraints) {
+                      return Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFFE3EAF8)),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: DataTable(
+                              showCheckboxColumn: false,
+                              headingRowHeight: 50,
+                              dataRowMinHeight: 52,
+                              dataRowMaxHeight: 58,
+                              horizontalMargin: 0,
+                              columnSpacing: 0,
+                              dividerThickness: 1,
+                              border: const TableBorder(
+                                horizontalInside: BorderSide(color: Color(0xFFE3EAF8)),
+                                verticalInside: BorderSide(color: Color(0xFFE3EAF8)),
+                                top: BorderSide(color: Color(0xFFE3EAF8)),
+                                bottom: BorderSide(color: Color(0xFFE3EAF8)),
+                                left: BorderSide(color: Color(0xFFE3EAF8)),
+                                right: BorderSide(color: Color(0xFFE3EAF8)),
+                              ),
+                              headingRowColor: MaterialStateProperty.all(const Color(0xFFF4F7FF)),
+                              columns: const [
+                                DataColumn(
+                                  label: SizedBox(
+                                    width: 200,
+                                    child: Center(
+                                      child: smcText(
+                                        textToDisplay: 'Overall Attendance',
+                                        textSize: 12,
+                                        textBoldness: 4,
+                                        colorOfText: Color(0xFF5C6B8B),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                DataColumn(
+                                  label: Expanded(
+                                    child: Padding(
+                                      padding: EdgeInsets.only(left: 12),
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: smcText(
+                                          textToDisplay: 'Remark',
+                                          textSize: 12,
+                                          textBoldness: 4,
+                                          colorOfText: Color(0xFF5C6B8B),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              rows: [
+                                DataRow(
+                                  cells: [
+                                    DataCell(
+                                      Center(
+                                        child: smcText(
+                                          textToDisplay: attendanceText,
+                                          textSize: 14,
+                                          textBoldness: 5,
+                                          colorOfText: percentage >= 75
+                                              ? Colors.green
+                                              : percentage >= 60
+                                                  ? Colors.orange
+                                                  : Colors.red,
+                                        ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      Padding(
+                                        padding: const EdgeInsets.only(left: 12),
+                                        child: smcText(
+                                          textToDisplay: totalClasses == 0
+                                              ? 'Attendance will be calculated once classes are conducted'
+                                              : percentage >= 75
+                                                  ? 'Attendance is good!'
+                                                  : percentage >= 60
+                                                      ? 'Need to improve attendance'
+                                                      : 'Attendance is low; please attend more classes',
+                                          textSize: 12,
+                                          colorOfText: const Color(0xFF2E3954),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildBasicDetails() {
@@ -1758,6 +2584,21 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
     );
   }
 
+  Future<void> _initializeSemesters(List<SemesterPerformanceModel> existing) async {
+    final semesters = ['Semester I', 'Semester II', 'Semester III', 'Semester IV'];
+    for (final semester in semesters) {
+      final hasSemester = existing.any((e) => e.semester == semester);
+      if (!hasSemester) {
+        final newRecord = SemesterPerformanceModel(
+          uuid: _uuid,
+          semester: semester,
+          createdOn: DateTime.now(),
+        );
+        await _semesterPerformanceService.addSemesterPerformance(newRecord);
+      }
+    }
+  }
+
   Widget _buildAcademics() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1768,7 +2609,7 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const smcText(
-                textToDisplay: 'Academic Records',
+                textToDisplay: 'Academic Performance',
                 textSize: 16,
                 textBoldness: 5,
                 colorOfText: ColorConst.textPrimary,
@@ -1791,8 +2632,8 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
           ),
         ),
         Expanded(
-          child: StreamBuilder<List<AcademicRecordModel>>(
-            stream: _academicService.getAcademicRecordsForPerson(_uuid),
+          child: StreamBuilder<List<SemesterPerformanceModel>>(
+            stream: _semesterPerformanceService.getSemesterPerformanceForStudent(_uuid),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
                 return const Center(child: CircularProgressIndicator());
@@ -1801,39 +2642,398 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
                 return Center(child: Text('Error: ${snapshot.error}'));
               }
 
-              final records = snapshot.data ?? [];
+              var records = snapshot.data ?? [];
 
-              if (records.isEmpty) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(40),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.school_outlined, size: 64, color: Colors.grey.shade300),
-                        const SizedBox(height: 16),
-                        const smcText(
-                          textToDisplay: "No academic records recorded yet. Click Add Academic Record to add the student's accomplishments.",
-                          textSize: 14,
-                          colorOfText: ColorConst.textSecondary,
-                          textAlign: TextAlign.center,
-                          maxLines: 3,
-                        ),
-                      ],
-                    ),
-                  ),
-                );
+              // Initialize 4 semesters if missing
+              if (records.length < 4) {
+                _initializeSemesters(records);
+              }
+
+              // Ensure we have exactly 4 semesters in order
+              final semestersOrder = ['Semester I', 'Semester II', 'Semester III', 'Semester IV'];
+              final orderedRecords = <SemesterPerformanceModel>[];
+              for (final sem in semestersOrder) {
+                final record = records.firstWhere((e) => e.semester == sem,
+                    orElse: () => SemesterPerformanceModel(
+                          uuid: _uuid,
+                          semester: sem,
+                          createdOn: DateTime.now(),
+                        ));
+                orderedRecords.add(record);
               }
 
               return LayoutBuilder(
                 builder: (context, constraints) {
-                  return _buildAcademicTable(records, constraints.maxWidth);
+                  return _buildSemesterPerformanceTable(orderedRecords, constraints.maxWidth);
                 },
               );
             },
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSemesterPerformanceTable(List<SemesterPerformanceModel> records, double tableWidth) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE3EAF8)),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: SingleChildScrollView(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: tableWidth - 40),
+                child: DataTable(
+                  showCheckboxColumn: false,
+                  headingRowHeight: 50,
+                  dataRowMinHeight: 52,
+                  dataRowMaxHeight: 58,
+                  horizontalMargin: 0,
+                  columnSpacing: 0,
+                  dividerThickness: 1,
+                  border: const TableBorder(
+                    horizontalInside: BorderSide(color: Color(0xFFE3EAF8)),
+                    verticalInside: BorderSide(color: Color(0xFFE3EAF8)),
+                    top: BorderSide(color: Color(0xFFE3EAF8)),
+                    bottom: BorderSide(color: Color(0xFFE3EAF8)),
+                    left: BorderSide(color: Color(0xFFE3EAF8)),
+                    right: BorderSide(color: Color(0xFFE3EAF8)),
+                  ),
+                  headingRowColor: MaterialStateProperty.all(const Color(0xFFF4F7FF)),
+                  columns: const [
+                    DataColumn(
+                      label: SizedBox(
+                        width: 50,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'S.No',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 120,
+                        child: Padding(
+                          padding: EdgeInsets.only(left: 12),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: smcText(
+                              textToDisplay: 'Semester',
+                              textSize: 12,
+                              textBoldness: 4,
+                              colorOfText: Color(0xFF5C6B8B),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 100,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'SGPA',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 100,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'CGPA',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 100,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Backlogs',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 100,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Status',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 200,
+                        child: Padding(
+                          padding: EdgeInsets.only(left: 12),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: smcText(
+                              textToDisplay: 'Remarks',
+                              textSize: 12,
+                              textBoldness: 4,
+                              colorOfText: Color(0xFF5C6B8B),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  rows: records.asMap().entries.map((entry) {
+                    final int index = entry.key;
+                    final record = entry.value;
+                    return DataRow(
+                      cells: [
+                        DataCell(
+                          Center(
+                            child: smcText(
+                              textToDisplay: '${index + 1}',
+                              textSize: 12,
+                              colorOfText: const Color(0xFF2E3954),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Padding(
+                            padding: const EdgeInsets.only(left: 12),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: smcText(
+                                textToDisplay: record.semester,
+                                textSize: 12,
+                                colorOfText: const Color(0xFF2E3954),
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Center(
+                            child: SizedBox(
+                              width: 80,
+                              child: TextFormField(
+                                initialValue: record.sgpa == 0.0 ? '' : record.sgpa.toString(),
+                                decoration: const InputDecoration(
+                                  hintText: 'Enter SGPA',
+                                  hintStyle: TextStyle(fontSize: 12, color: Color(0xFF8A96B2)),
+                                  border: InputBorder.none,
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                ),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF2E3954),
+                                ),
+                                textAlign: TextAlign.center,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                onChanged: (value) {
+                                  if (record.id == null) return;
+                                  final sgpa = double.tryParse(value.trim()) ?? 0.0;
+                                  final updated = SemesterPerformanceModel(
+                                    id: record.id,
+                                    uuid: record.uuid,
+                                    semester: record.semester,
+                                    sgpa: sgpa,
+                                    cgpa: record.cgpa,
+                                    backlogs: record.backlogs,
+                                    status: record.status,
+                                    remarks: record.remarks,
+                                    createdOn: record.createdOn,
+                                  );
+                                  _semesterPerformanceService.updateSemesterPerformance(record.id!, updated);
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Center(
+                            child: SizedBox(
+                              width: 80,
+                              child: TextFormField(
+                                initialValue: record.cgpa == 0.0 ? '' : record.cgpa.toString(),
+                                decoration: const InputDecoration(
+                                  hintText: 'Enter CGPA',
+                                  hintStyle: TextStyle(fontSize: 12, color: Color(0xFF8A96B2)),
+                                  border: InputBorder.none,
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                ),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF2E3954),
+                                ),
+                                textAlign: TextAlign.center,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                onChanged: (value) {
+                                  if (record.id == null) return;
+                                  final cgpa = double.tryParse(value.trim()) ?? 0.0;
+                                  final updated = SemesterPerformanceModel(
+                                    id: record.id,
+                                    uuid: record.uuid,
+                                    semester: record.semester,
+                                    sgpa: record.sgpa,
+                                    cgpa: cgpa,
+                                    backlogs: record.backlogs,
+                                    status: record.status,
+                                    remarks: record.remarks,
+                                    createdOn: record.createdOn,
+                                  );
+                                  _semesterPerformanceService.updateSemesterPerformance(record.id!, updated);
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Center(
+                            child: SizedBox(
+                              width: 80,
+                              child: TextFormField(
+                                initialValue: record.backlogs.toString(),
+                                decoration: const InputDecoration(
+                                  hintText: 'Backlogs',
+                                  hintStyle: TextStyle(fontSize: 12, color: Color(0xFF8A96B2)),
+                                  border: InputBorder.none,
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                ),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF2E3954),
+                                ),
+                                textAlign: TextAlign.center,
+                                keyboardType: TextInputType.number,
+                                onChanged: (value) {
+                                  if (record.id == null) return;
+                                  final backlogs = (double.tryParse(value.trim()) ?? 0).toInt();
+                                  final updated = SemesterPerformanceModel(
+                                    id: record.id,
+                                    uuid: record.uuid,
+                                    semester: record.semester,
+                                    sgpa: record.sgpa,
+                                    cgpa: record.cgpa,
+                                    backlogs: backlogs,
+                                    status: record.status,
+                                    remarks: record.remarks,
+                                    createdOn: record.createdOn,
+                                  );
+                                  _semesterPerformanceService.updateSemesterPerformance(record.id!, updated);
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Center(
+                            child: SizedBox(
+                              width: 80,
+                              child: DropdownButtonFormField<String>(
+                                initialValue: record.status,
+                                decoration: const InputDecoration(
+                                  border: InputBorder.none,
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                ),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF2E3954),
+                                ),
+                                items: const ['Clear', 'Active']
+                                    .map((s) => DropdownMenuItem(
+                                          value: s,
+                                          child: smcText(
+                                            textToDisplay: s,
+                                            textSize: 12,
+                                            colorOfText: const Color(0xFF2E3954),
+                                          ),
+                                        ))
+                                    .toList(),
+                                onChanged: (value) {
+                                  if (record.id == null || value == null) return;
+                                  final updated = SemesterPerformanceModel(
+                                    id: record.id,
+                                    uuid: record.uuid,
+                                    semester: record.semester,
+                                    sgpa: record.sgpa,
+                                    cgpa: record.cgpa,
+                                    backlogs: record.backlogs,
+                                    status: value,
+                                    remarks: record.remarks,
+                                    createdOn: record.createdOn,
+                                  );
+                                  _semesterPerformanceService.updateSemesterPerformance(record.id!, updated);
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Padding(
+                            padding: const EdgeInsets.only(left: 12),
+                            child: TextFormField(
+                              initialValue: record.remarks,
+                              decoration: const InputDecoration(
+                                hintText: 'Enter remarks',
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.symmetric(vertical: 4),
+                              ),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF2E3954),
+                              ),
+                              maxLines: 2,
+                              onChanged: (value) {
+                                if (record.id == null) return;
+                                final updated = SemesterPerformanceModel(
+                                  id: record.id,
+                                  uuid: record.uuid,
+                                  semester: record.semester,
+                                  sgpa: record.sgpa,
+                                  cgpa: record.cgpa,
+                                  backlogs: record.backlogs,
+                                  status: record.status,
+                                  remarks: value,
+                                  createdOn: record.createdOn,
+                                );
+                                _semesterPerformanceService.updateSemesterPerformance(record.id!, updated);
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -2978,6 +4178,617 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
     if (confirm == true) {
       await _achievementService.deleteAchievement(a.id!, a.certificateUrl);
     }
+  }
+
+  Widget _buildCoExtraActivities() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const smcText(
+                textToDisplay: 'Co & Extra Activities',
+                textSize: 16,
+                textBoldness: 5,
+                colorOfText: ColorConst.textPrimary,
+              ),
+              ElevatedButton.icon(
+                onPressed: () => _openCoExtraActivityDialog(),
+                icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+                label: const smcText(
+                  textToDisplay: 'Add Activities',
+                  textSize: 13,
+                  textBoldness: 4,
+                  colorOfText: Colors.white,
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ColorConst.primaryBlue,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<List<CoExtraActivityModel>>(
+            stream: _coExtraActivityService.getActivitiesForStudent(_uuid),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+
+              final activities = snapshot.data ?? [];
+
+              if (activities.isEmpty) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(40),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.directions_run_rounded, size: 64, color: Colors.grey.shade300),
+                        const SizedBox(height: 16),
+                        const smcText(
+                          textToDisplay: "No activities recorded yet. Click Add Activities to add them.",
+                          textSize: 14,
+                          colorOfText: ColorConst.textSecondary,
+                          textAlign: TextAlign.center,
+                          maxLines: 3,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  return _buildCoExtraActivityTable(activities, constraints.maxWidth);
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCoExtraActivityTable(List<CoExtraActivityModel> activities, double tableWidth) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE3EAF8)),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: SingleChildScrollView(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: tableWidth - 40),
+                child: DataTable(
+                  showCheckboxColumn: false,
+                  headingRowHeight: 50,
+                  dataRowMinHeight: 52,
+                  dataRowMaxHeight: 58,
+                  horizontalMargin: 0,
+                  columnSpacing: 0,
+                  dividerThickness: 1,
+                  border: const TableBorder(
+                    horizontalInside: BorderSide(color: Color(0xFFE3EAF8)),
+                    verticalInside: BorderSide(color: Color(0xFFE3EAF8)),
+                    top: BorderSide(color: Color(0xFFE3EAF8)),
+                    bottom: BorderSide(color: Color(0xFFE3EAF8)),
+                    left: BorderSide(color: Color(0xFFE3EAF8)),
+                    right: BorderSide(color: Color(0xFFE3EAF8)),
+                  ),
+                  headingRowColor: WidgetStateProperty.all(const Color(0xFFF4F7FF)),
+                  columns: const [
+                    DataColumn(
+                      label: SizedBox(
+                        width: 50,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'S.No',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 150,
+                        child: Padding(
+                          padding: EdgeInsets.only(left: 12),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: smcText(
+                              textToDisplay: 'Activity',
+                              textSize: 12,
+                              textBoldness: 4,
+                              colorOfText: Color(0xFF5C6B8B),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 120,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Type',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 100,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Level',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 100,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Date',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 120,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Achievement',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 100,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Certificate',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: SizedBox(
+                        width: 80,
+                        child: Center(
+                          child: smcText(
+                            textToDisplay: 'Action',
+                            textSize: 12,
+                            textBoldness: 4,
+                            colorOfText: Color(0xFF5C6B8B),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  rows: activities.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final activity = entry.value;
+                    return DataRow(
+                      cells: [
+                        DataCell(
+                          SizedBox(
+                            width: 50,
+                            child: Center(
+                              child: smcText(
+                                textToDisplay: '${index + 1}',
+                                textSize: 12,
+                                colorOfText: ColorConst.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          SizedBox(
+                            width: 150,
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 12),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: smcText(
+                                  textToDisplay: activity.activityName,
+                                  textSize: 12,
+                                  textBoldness: 4,
+                                  colorOfText: ColorConst.textPrimary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          SizedBox(
+                            width: 120,
+                            child: Center(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF4F7FF),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: smcText(
+                                  textToDisplay: activity.type,
+                                  textSize: 11,
+                                  colorOfText: ColorConst.primaryBlue,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          SizedBox(
+                            width: 100,
+                            child: Center(
+                              child: smcText(
+                                textToDisplay: activity.level,
+                                textSize: 12,
+                                colorOfText: ColorConst.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          SizedBox(
+                            width: 100,
+                            child: Center(
+                              child: smcText(
+                                textToDisplay: activity.date,
+                                textSize: 12,
+                                colorOfText: ColorConst.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          SizedBox(
+                            width: 120,
+                            child: Center(
+                              child: smcText(
+                                textToDisplay: activity.achievement,
+                                textSize: 12,
+                                colorOfText: ColorConst.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          SizedBox(
+                            width: 100,
+                            child: Center(
+                              child: activity.certificate.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.download_rounded, size: 18, color: ColorConst.primaryBlue),
+                                      onPressed: () async {
+                                        final url = Uri.parse(activity.certificate);
+                                        if (await canLaunchUrl(url)) {
+                                          await launchUrl(url);
+                                        }
+                                      },
+                                    )
+                                  : const smcText(
+                                      textToDisplay: '-',
+                                      textSize: 12,
+                                      colorOfText: ColorConst.textSecondary,
+                                    ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          SizedBox(
+                            width: 80,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit_outlined, size: 16, color: ColorConst.textSecondary),
+                                  onPressed: () => _openCoExtraActivityDialog(activity: activity),
+                                  splashRadius: 20,
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, size: 16, color: Colors.red),
+                                  onPressed: () => _deleteCoExtraActivity(activity.id!),
+                                  splashRadius: 20,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _deleteCoExtraActivity(String id) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const smcText(textToDisplay: 'Delete Activity', textSize: 16, textBoldness: 5),
+        content: const smcText(textToDisplay: 'Are you sure you want to delete this activity?', textSize: 14),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const smcText(textToDisplay: 'Cancel', textSize: 14, colorOfText: ColorConst.textSecondary),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () {
+              _coExtraActivityService.deleteActivity(id);
+              Navigator.pop(ctx);
+            },
+            child: const smcText(textToDisplay: 'Delete', textSize: 14, colorOfText: Colors.white),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openCoExtraActivityDialog({CoExtraActivityModel? activity}) async {
+    final bool isEdit = activity != null;
+    final formKey = GlobalKey<FormState>();
+    final activityCtrl = TextEditingController(text: activity?.activityName ?? '');
+    final dateCtrl = TextEditingController(text: activity?.date ?? '');
+    final achievementCtrl = TextEditingController(text: activity?.achievement ?? '');
+    
+    String? selectedType = activity?.type;
+    if (selectedType != null && !['Co-curricular', 'Extra-curricular'].contains(selectedType)) {
+      selectedType = null;
+    }
+    String? selectedLevel = activity?.level;
+    if (selectedLevel != null && !['College', 'State', 'National', 'International'].contains(selectedLevel)) {
+      selectedLevel = null;
+    }
+    
+    Uint8List? selectedFileBytes;
+    String? selectedFileName;
+    String? existingUrl = activity?.certificate;
+    
+    bool saving = false;
+
+    InputDecoration inputDecoration(String hint) {
+      return InputDecoration(
+        hintText: hint,
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFE4E8F0)),
+        ),
+      );
+    }
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 500),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Form(
+                key: formKey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          smcText(
+                            textToDisplay: isEdit ? 'Edit Activity' : 'Add Activity',
+                            textSize: 18,
+                            textBoldness: 5,
+                            colorOfText: ColorConst.textPrimary,
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close, color: ColorConst.textSecondary),
+                            onPressed: () => Navigator.pop(ctx),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      TextFormField(
+                        controller: activityCtrl,
+                        decoration: inputDecoration('Activity Name'),
+                        validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        value: selectedType,
+                        decoration: inputDecoration('Select Type'),
+                        items: const [
+                          DropdownMenuItem(value: 'Co-curricular', child: Text('Co-curricular')),
+                          DropdownMenuItem(value: 'Extra-curricular', child: Text('Extra-curricular')),
+                        ],
+                        onChanged: (v) => selectedType = v,
+                        validator: (v) => v == null ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        value: selectedLevel,
+                        decoration: inputDecoration('Select Level'),
+                        items: const [
+                          DropdownMenuItem(value: 'College', child: Text('College')),
+                          DropdownMenuItem(value: 'State', child: Text('State')),
+                          DropdownMenuItem(value: 'National', child: Text('National')),
+                          DropdownMenuItem(value: 'International', child: Text('International')),
+                        ],
+                        onChanged: (v) => selectedLevel = v,
+                        validator: (v) => v == null ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: dateCtrl,
+                        decoration: inputDecoration('Date (e.g. Oct 2023)'),
+                        validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: achievementCtrl,
+                        decoration: inputDecoration('Achievement'),
+                        validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 16),
+                      InkWell(
+                        onTap: () async {
+                          FilePickerResult? result = await FilePicker.platform.pickFiles(
+                            type: FileType.custom,
+                            allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+                          );
+                          if (result != null) {
+                            setModalState(() {
+                              selectedFileBytes = result.files.single.bytes;
+                              selectedFileName = result.files.single.name;
+                            });
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: const Color(0xFFE4E8F0)),
+                            borderRadius: BorderRadius.circular(14),
+                            color: Colors.white,
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.upload_file, color: ColorConst.primaryBlue, size: 20),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  selectedFileName ?? (existingUrl != null && existingUrl!.isNotEmpty ? 'Certificate Uploaded' : 'Upload Original Certificate'),
+                                  style: TextStyle(
+                                    color: selectedFileName != null || (existingUrl != null && existingUrl!.isNotEmpty)
+                                        ? ColorConst.textPrimary
+                                        : Colors.grey.shade600,
+                                    fontSize: 14,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: saving
+                              ? null
+                              : () async {
+                                  if (formKey.currentState!.validate()) {
+                                    setModalState(() => saving = true);
+                                    try {
+                                      String finalUrl = existingUrl ?? '';
+                                      if (selectedFileBytes != null) {
+                                        finalUrl = await _coExtraActivityService.uploadCertificate(
+                                          _uuid,
+                                          selectedFileName!,
+                                          selectedFileBytes!,
+                                        );
+                                      }
+
+                                      final a = CoExtraActivityModel(
+                                        id: activity?.id,
+                                        uuid: _uuid,
+                                        activityName: activityCtrl.text.trim(),
+                                        type: selectedType!,
+                                        level: selectedLevel!,
+                                        date: dateCtrl.text.trim(),
+                                        achievement: achievementCtrl.text.trim(),
+                                        certificate: finalUrl,
+                                        createdOn: activity?.createdOn ?? DateTime.now(),
+                                      );
+
+                                      if (isEdit) {
+                                        await _coExtraActivityService.updateActivity(activity!.id!, a);
+                                      } else {
+                                        await _coExtraActivityService.addActivity(a);
+                                      }
+                                      if (ctx.mounted) Navigator.pop(ctx);
+                                    } catch (e) {
+                                      setModalState(() => saving = false);
+                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                                    }
+                                  }
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: ColorConst.primaryBlue,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          ),
+                          child: saving
+                              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : smcText(textToDisplay: isEdit ? 'Save Changes' : 'Save Activity', textSize: 14, colorOfText: Colors.white, textBoldness: 5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildPublications() {
