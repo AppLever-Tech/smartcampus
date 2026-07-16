@@ -38,6 +38,7 @@ import 'package:smartcampus/screens/dept_admin/time_table/dept_time_table_view.d
 import 'package:smartcampus/models/announcement_model.dart';
 import 'package:smartcampus/services/announcement_firestore_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:smartcampus/screens/faculty/proctor_meetings_tab.dart';
 
 class DeptAdminDashboardPage extends StatefulWidget {
   final String orgId;
@@ -101,6 +102,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   double proctorListPanelRatio = 0.5;
   bool _hasSeededRequestedProctorAssignments = false;
   Map<String, List<String>> _assignedStudentDocumentIdsByProctor = {};
+  int selectedProctorDetailTab = 0;
 
   List<FacultyModel> filteredProctors = [];
   List<SettingsItem> courseTypes = [];
@@ -6812,7 +6814,10 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                       _assignedStudentCountForProctor(f);
                                   return DataRow(
                                     selected: isSelected,
-                                    onSelectChanged: (_) => setState(() => selectedProctor = f),
+                                    onSelectChanged: (_) => setState(() {
+                                      selectedProctor = f;
+                                      selectedProctorDetailTab = 0;
+                                    }),
                                     color: isSelected
                                         ? WidgetStateProperty.all(const Color(0xFFE8F0FE))
                                         : null,
@@ -7061,120 +7066,161 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
             ),
           ),
 
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const smcText(
-                    textToDisplay: "Assigned Students",
-                    textSize: 16,
-                    textBoldness: 5,
-                    colorOfText: ColorConst.primaryBlue,
-                  ),
-                  const Divider(),
-                  Expanded(
-                    child: assignedStudents.isEmpty
-                        ? const Center(
-                            child: smcText(
-                              textToDisplay: "No Students Assigned",
-                              textSize: 14,
-                              colorOfText: Color(0xFF8A96B2),
-                            ),
-                          )
-                        : ListView.separated(
-                            itemCount: assignedStudents.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: 10),
-                            itemBuilder: (context, index) {
-                              final student = assignedStudents[index];
-                              final documentId = student.documentId ?? '';
-                              final serialNumber =
-                                  serialNumbersByDocumentId[documentId];
-                              return Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFCFDFF),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: const Color(0xFFE8EDFA),
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 20,
-                                      backgroundColor:
-                                          const Color(0xFFEAF0FF),
-                                      child: smcText(
-                                        textToDisplay:
-                                            student.fullName.isNotEmpty
-                                                ? student.fullName[0]
-                                                    .toUpperCase()
-                                                : 'S',
-                                        textSize: 13,
-                                        textBoldness: 5,
-                                        colorOfText: ColorConst.primaryBlue,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          smcText(
-                                            textToDisplay: student.fullName,
-                                            textSize: 13,
-                                            textBoldness: 4,
-                                            colorOfText:
-                                                const Color(0xFF1F2F52),
-                                            maxLines: 1,
-                                          ),
-                                          const SizedBox(height: 2),
-                                          smcText(
-                                            textToDisplay:
-                                                'USN: ${student.studentId}',
-                                            textSize: 11,
-                                            colorOfText:
-                                                const Color(0xFF7D87A3),
-                                            maxLines: 1,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    if (serialNumber != null)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFEFF4FF),
-                                          borderRadius:
-                                              BorderRadius.circular(999),
-                                        ),
-                                        child: smcText(
-                                          textToDisplay:
-                                              'S.No $serialNumber',
-                                          textSize: 11,
-                                          textBoldness: 3,
-                                          colorOfText:
-                                              ColorConst.primaryBlue,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                ],
-              ),
+          // TAB HEADER
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Color(0xFFE4EBFB))),
+            ),
+            child: Row(
+              children: [
+                _buildProctorDetailTab(0, 'Assigned Students'),
+                const SizedBox(width: 12),
+                _buildProctorDetailTab(1, 'Meetings'),
+              ],
             ),
           ),
+
+          Expanded(
+            child: selectedProctorDetailTab == 0
+                ? Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+
+                        Expanded(
+                          child: assignedStudents.isEmpty
+                              ? const Center(
+                                  child: smcText(
+                                    textToDisplay: "No Students Assigned",
+                                    textSize: 14,
+                                    colorOfText: Color(0xFF8A96B2),
+                                  ),
+                                )
+                              : ListView.separated(
+                                  itemCount: assignedStudents.length,
+                                  separatorBuilder: (_, __) =>
+                                      const SizedBox(height: 10),
+                                  itemBuilder: (context, index) {
+                                    final student = assignedStudents[index];
+                                    final documentId = student.documentId ?? '';
+                                    final serialNumber =
+                                        serialNumbersByDocumentId[documentId];
+                                    return Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFCFDFF),
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                          color: const Color(0xFFE8EDFA),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 20,
+                                            backgroundColor:
+                                                const Color(0xFFEAF0FF),
+                                            child: smcText(
+                                              textToDisplay:
+                                                  student.fullName.isNotEmpty
+                                                      ? student.fullName[0]
+                                                          .toUpperCase()
+                                                      : 'S',
+                                              textSize: 13,
+                                              textBoldness: 5,
+                                              colorOfText: ColorConst.primaryBlue,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                smcText(
+                                                  textToDisplay: student.fullName,
+                                                  textSize: 13,
+                                                  textBoldness: 4,
+                                                  colorOfText:
+                                                      const Color(0xFF1F2F52),
+                                                  maxLines: 1,
+                                                ),
+                                                const SizedBox(height: 2),
+                                                smcText(
+                                                  textToDisplay:
+                                                      'USN: ${student.studentId}',
+                                                  textSize: 11,
+                                                  colorOfText:
+                                                      const Color(0xFF7D87A3),
+                                                  maxLines: 1,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          if (serialNumber != null)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 10,
+                                                vertical: 6,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFEFF4FF),
+                                                borderRadius:
+                                                    BorderRadius.circular(999),
+                                              ),
+                                              child: smcText(
+                                                textToDisplay:
+                                                    'S.No $serialNumber',
+                                                textSize: 11,
+                                                textBoldness: 3,
+                                                colorOfText:
+                                                    ColorConst.primaryBlue,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
+                    ),
+                  )
+                : Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: ProctorMeetingsTab(
+                      assignedStudents: assignedStudents,
+                      showScheduleButton: false,
+                    ),
+                  ),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildProctorDetailTab(int index, String label) {
+    final bool isSelected = selectedProctorDetailTab == index;
+    return GestureDetector(
+      onTap: () => setState(() => selectedProctorDetailTab = index),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? ColorConst.primaryBlue.withOpacity(0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? ColorConst.primaryBlue : const Color(0xFFE2E8F5),
+            width: 1,
+          ),
+        ),
+        child: smcText(
+          textToDisplay: label,
+          textSize: 13,
+          textBoldness: isSelected ? 5 : 4,
+          colorOfText: isSelected ? ColorConst.primaryBlue : const Color(0xFF64748B),
+        ),
       ),
     );
   }

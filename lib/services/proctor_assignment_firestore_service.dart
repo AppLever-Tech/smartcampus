@@ -109,4 +109,35 @@ class ProctorAssignmentFirestoreService {
       'updated_at': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
+
+  Future<String?> findProctorFacultyIdForStudent({
+    required String orgId,
+    required String deptId,
+    required String studentDocumentId,
+    required String studentId,
+  }) async {
+    final orgNorm = normalizeOrgId(orgId);
+    final deptNorm = normalizeDeptId(deptId);
+    if (orgNorm.isEmpty) {
+      return null;
+    }
+
+    Query<Map<String, dynamic>> query = _db
+        .collection(collection)
+        .where(OrgField.orgIdKey, isEqualTo: orgNorm);
+    if (deptNorm.isNotEmpty) {
+      query = query.where(OrgField.deptIdKey, isEqualTo: deptNorm);
+    }
+
+    final snap = await query.get();
+    for (final doc in snap.docs) {
+      final data = doc.data();
+      final List<dynamic> studentDocIds = data['student_document_ids'] ?? [];
+      final List<dynamic> stdIds = data['student_ids'] ?? [];
+      if (studentDocIds.contains(studentDocumentId) || stdIds.contains(studentId)) {
+        return data['faculty_id'] as String?;
+      }
+    }
+    return null;
+  }
 }
