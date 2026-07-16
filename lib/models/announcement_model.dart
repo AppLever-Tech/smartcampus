@@ -9,6 +9,8 @@ class AnnouncementModel {
   final String description;
   final String category;
   final List<String> targetSchemes; // Empty means all students
+  final String targetBatch;
+  final String targetSemester;
   final DateTime publishDate;
   final String attachmentUrl;
   final String attachmentName;
@@ -16,12 +18,12 @@ class AnnouncementModel {
   final DateTime? updatedAt;
 
   static const List<String> categories = [
-    'General',
     'Exam',
-    'Holiday',
+    'Circular',
     'Event',
+    'Holiday',
     'Placement',
-    'Emergency',
+    'Others',
   ];
 
   AnnouncementModel({
@@ -32,6 +34,8 @@ class AnnouncementModel {
     required this.description,
     required this.category,
     required this.targetSchemes,
+    this.targetBatch = 'All',
+    this.targetSemester = 'All',
     required this.publishDate,
     this.attachmentUrl = '',
     this.attachmentName = '',
@@ -51,6 +55,8 @@ class AnnouncementModel {
               ?.map((e) => e.toString())
               .toList() ??
           [],
+      targetBatch: data['targetBatch'] ?? 'All',
+      targetSemester: data['targetSemester'] ?? 'All',
       publishDate: (data['publishDate'] is Timestamp
           ? (data['publishDate'] as Timestamp).toDate()
           : DateTime.now()),
@@ -73,6 +79,8 @@ class AnnouncementModel {
       'description': description,
       'category': category,
       'targetSchemes': targetSchemes,
+      'targetBatch': targetBatch,
+      'targetSemester': targetSemester,
       'publishDate': Timestamp.fromDate(publishDate),
       'attachmentUrl': attachmentUrl,
       'attachmentName': attachmentName,
@@ -89,6 +97,8 @@ class AnnouncementModel {
     String? description,
     String? category,
     List<String>? targetSchemes,
+    String? targetBatch,
+    String? targetSemester,
     DateTime? publishDate,
     String? attachmentUrl,
     String? attachmentName,
@@ -103,6 +113,8 @@ class AnnouncementModel {
       description: description ?? this.description,
       category: category ?? this.category,
       targetSchemes: targetSchemes ?? this.targetSchemes,
+      targetBatch: targetBatch ?? this.targetBatch,
+      targetSemester: targetSemester ?? this.targetSemester,
       publishDate: publishDate ?? this.publishDate,
       attachmentUrl: attachmentUrl ?? this.attachmentUrl,
       attachmentName: attachmentName ?? this.attachmentName,

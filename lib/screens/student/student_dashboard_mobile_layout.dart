@@ -13,6 +13,7 @@ class StudentDashboardMobileLayout extends StatelessWidget {
   final Widget dashboardContent;
   final Widget profileContent;
   final Widget classesContent;
+  final Widget myProctorContent;
 
   const StudentDashboardMobileLayout({
     super.key,
@@ -24,6 +25,7 @@ class StudentDashboardMobileLayout extends StatelessWidget {
     required this.dashboardContent,
     required this.profileContent,
     required this.classesContent,
+    required this.myProctorContent,
   });
 
   @override
@@ -94,6 +96,10 @@ class StudentDashboardMobileLayout extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: SizedBox.expand(child: classesContent),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: SizedBox.expand(child: myProctorContent),
+          ),
         ],
       ),
       bottomNavigationBar: Container(
@@ -136,6 +142,11 @@ class StudentDashboardMobileLayout extends StatelessWidget {
                 icon: Icon(Icons.class_outlined),
                 activeIcon: Icon(Icons.class_rounded),
                 label: 'Classes',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.supervisor_account_outlined),
+                activeIcon: Icon(Icons.supervisor_account_rounded),
+                label: 'My Proctor',
               ),
             ],
           ),
