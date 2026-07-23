@@ -103,6 +103,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
   bool _hasSeededRequestedProctorAssignments = false;
   Map<String, List<String>> _assignedStudentDocumentIdsByProctor = {};
   int selectedProctorDetailTab = 0;
+  bool _isAssigningStudents = false;
 
   List<FacultyModel> filteredProctors = [];
   List<SettingsItem> courseTypes = [];
@@ -553,6 +554,16 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
           studentDocumentIds: documentIds,
           studentIds: entry.value.map((student) => student.studentId).toList(),
         );
+
+        // Update each student's proctorId field
+        for (final student in entry.value) {
+          if (student.documentId != null) {
+            await studentService.updateStudent(
+              documentId: student.documentId!,
+              updated: student.copyWith(proctorId: entry.key),
+            );
+          }
+        }
       }
       _hasSeededRequestedProctorAssignments = true;
       assignments = await proctorAssignmentService.listAssignmentsForDept(
@@ -605,6 +616,444 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       }
     }
     return serialNumbers;
+  }
+
+  /// Shows a dialog to assign students to [proctor] filtered by batch.
+  Future<void> _showAssignStudentsDialog(FacultyModel proctor) async {
+    // Gather all unique batches from studentList
+    final allBatches = studentList
+        .map((s) => s.batch.trim())
+        .where((b) => b.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+
+    if (allBatches.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No student batches found.')),
+      );
+      return;
+    }
+
+    String? selectedBatch;
+    final Set<String> selectedDocIds = {};
+
+    // Already assigned doc IDs for this proctor
+    final facultyIdNorm = proctor.facultyId.trim().toUpperCase();
+    final existingDocIds =
+        (_assignedStudentDocumentIdsByProctor[facultyIdNorm] ?? []).toSet();
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return StatefulBuilder(builder: (ctx, setDlgState) {
+          List<StudentModel> filteredStudents = selectedBatch == null
+              ? []
+              : studentList
+                  .where((s) =>
+                      s.batch.trim() == selectedBatch &&
+                      !existingDocIds.contains(s.documentId ?? ''))
+                  .toList()
+            ..sort((a, b) =>
+                a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
+
+          return Dialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            insetPadding:
+                const EdgeInsets.symmetric(horizontal: 32, vertical: 40),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520, maxHeight: 620),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 16),
+                    decoration: const BoxDecoration(
+                      color: ColorConst.primaryBlue,
+                      borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(20)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.person_add_alt_1,
+                            color: Colors.white, size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Assign Students to ${proctor.fullName}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close,
+                              color: Colors.white, size: 20),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () => Navigator.of(ctx).pop(),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Batch filter
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Filter by Batch',
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF5A6480)),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: allBatches.map((batch) {
+                            final isSelected = selectedBatch == batch;
+                            return GestureDetector(
+                              onTap: () => setDlgState(() {
+                                selectedBatch =
+                                    isSelected ? null : batch;
+                                selectedDocIds.clear();
+                              }),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 150),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? ColorConst.primaryBlue
+                                      : const Color(0xFFEFF4FF),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? ColorConst.primaryBlue
+                                        : const Color(0xFFCFDAF7),
+                                  ),
+                                ),
+                                child: Text(
+                                  batch,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : ColorConst.primaryBlue,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  // Student list
+                  Expanded(
+                    child: selectedBatch == null
+                        ? const Center(
+                            child: Text(
+                              'Select a batch to view students',
+                              style: TextStyle(
+                                  color: Color(0xFF8A96B2), fontSize: 13),
+                            ),
+                          )
+                        : filteredStudents.isEmpty
+                            ? Center(
+                                child: Text(
+                                  'All students from batch "$selectedBatch" are already assigned.',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                      color: Color(0xFF8A96B2),
+                                      fontSize: 13),
+                                ),
+                              )
+                            : Column(
+                                children: [
+                                  // Select all
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 4),
+                                    child: Row(
+                                      children: [
+                                        Checkbox(
+                                          value: filteredStudents.every(
+                                              (s) => selectedDocIds.contains(
+                                                  s.documentId ?? '')),
+                                          tristate: true,
+                                          activeColor:
+                                              ColorConst.primaryBlue,
+                                          onChanged: (_) {
+                                            setDlgState(() {
+                                              final allSelected =
+                                                  filteredStudents.every(
+                                                      (s) =>
+                                                          selectedDocIds
+                                                              .contains(
+                                                                  s.documentId ??
+                                                                      ''));
+                                              if (allSelected) {
+                                                for (final s
+                                                    in filteredStudents) {
+                                                  selectedDocIds.remove(
+                                                      s.documentId ?? '');
+                                                }
+                                              } else {
+                                                for (final s
+                                                    in filteredStudents) {
+                                                  if ((s.documentId ?? '')
+                                                      .isNotEmpty) {
+                                                    selectedDocIds.add(
+                                                        s.documentId!);
+                                                  }
+                                                }
+                                              }
+                                            });
+                                          },
+                                        ),
+                                        Text(
+                                          'Select All  (${filteredStudents.length} students)',
+                                          style: const TextStyle(
+                                              fontSize: 12,
+                                              color: Color(0xFF5A6480),
+                                              fontWeight: FontWeight.w500),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const Divider(height: 1),
+                                  Expanded(
+                                    child: ListView.builder(
+                                      itemCount: filteredStudents.length,
+                                      itemBuilder: (_, idx) {
+                                        final student =
+                                            filteredStudents[idx];
+                                        final docId =
+                                            student.documentId ?? '';
+                                        final isChecked = selectedDocIds
+                                            .contains(docId);
+                                        return ListTile(
+                                          dense: true,
+                                          leading: Checkbox(
+                                            value: isChecked,
+                                            activeColor:
+                                                ColorConst.primaryBlue,
+                                            onChanged: (val) {
+                                              setDlgState(() {
+                                                if (val == true &&
+                                                    docId.isNotEmpty) {
+                                                  selectedDocIds.add(docId);
+                                                } else {
+                                                  selectedDocIds
+                                                      .remove(docId);
+                                                }
+                                              });
+                                            },
+                                          ),
+                                          title: Text(
+                                            student.fullName,
+                                            style: const TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w500),
+                                          ),
+                                          subtitle: Text(
+                                            'USN: ${student.studentId}',
+                                            style: const TextStyle(
+                                                fontSize: 11,
+                                                color: Color(0xFF8A96B2)),
+                                          ),
+                                          onTap: () {
+                                            setDlgState(() {
+                                              if (docId.isNotEmpty) {
+                                                if (isChecked) {
+                                                  selectedDocIds
+                                                      .remove(docId);
+                                                } else {
+                                                  selectedDocIds.add(docId);
+                                                }
+                                              }
+                                            });
+                                          },
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                  ),
+                  // Footer buttons
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          child: const Text('Cancel'),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.check, size: 16),
+                          label: Text(
+                              'Assign (${selectedDocIds.length})'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: ColorConst.primaryBlue,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 12),
+                          ),
+                          onPressed: selectedDocIds.isEmpty
+                              ? null
+                              : () async {
+                                  Navigator.of(ctx).pop();
+                                  await _assignStudentsToProctor(
+                                    proctor: proctor,
+                                    newDocIds:
+                                        selectedDocIds.toList(),
+                                    filteredStudents: filteredStudents
+                                        .where((s) => selectedDocIds
+                                            .contains(
+                                                s.documentId ?? ''))
+                                        .toList(),
+                                  );
+                                },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        });
+      },
+    );
+  }
+
+  /// Persists the assignment and refreshes state.
+  Future<void> _assignStudentsToProctor({
+    required FacultyModel proctor,
+    required List<String> newDocIds,
+    required List<StudentModel> filteredStudents,
+  }) async {
+    final facultyIdNorm = proctor.facultyId.trim().toUpperCase();
+    final existing = (_assignedStudentDocumentIdsByProctor[facultyIdNorm] ??
+            const <String>[])
+        .toList();
+    final merged = {...existing, ...newDocIds}.toList();
+
+    setState(() => _isAssigningStudents = true);
+    try {
+      await proctorAssignmentService.saveAssignments(
+        orgId: scopedOrgId,
+        deptId: scopedDeptId,
+        facultyId: facultyIdNorm,
+        studentDocumentIds: merged,
+        studentIds: [
+          ...studentList
+              .where((s) =>
+                  existing.contains(s.documentId ?? '') &&
+                  !newDocIds.contains(s.documentId ?? ''))
+              .map((s) => s.studentId),
+          ...filteredStudents.map((s) => s.studentId),
+        ],
+      );
+
+      // Update each newly assigned student's proctorId field
+      for (final student in filteredStudents) {
+        if (student.documentId != null) {
+          await studentService.updateStudent(
+            documentId: student.documentId!,
+            updated: student.copyWith(proctorId: facultyIdNorm),
+          );
+        }
+      }
+      await _loadProctorAssignments();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                '${filteredStudents.length} student(s) assigned successfully.'),
+            backgroundColor: Colors.green.shade600,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Failed to assign students: $e'),
+              backgroundColor: Colors.red.shade600),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isAssigningStudents = false);
+    }
+  }
+
+  /// Removes a single student from a proctor's assignment.
+  Future<void> _removeStudentFromProctor({
+    required FacultyModel proctor,
+    required StudentModel student,
+  }) async {
+    final facultyIdNorm = proctor.facultyId.trim().toUpperCase();
+    final docId = student.documentId ?? '';
+    final existing =
+        (_assignedStudentDocumentIdsByProctor[facultyIdNorm] ?? []).toList();
+    final updated = existing.where((id) => id != docId).toList();
+
+    try {
+      await proctorAssignmentService.saveAssignments(
+        orgId: scopedOrgId,
+        deptId: scopedDeptId,
+        facultyId: facultyIdNorm,
+        studentDocumentIds: updated,
+        studentIds: studentList
+            .where((s) =>
+                updated.contains(s.documentId ?? '') && (s.documentId ?? '').isNotEmpty)
+            .map((s) => s.studentId)
+            .toList(),
+      );
+      // Clear the proctorId on the student document
+      if (docId.isNotEmpty) {
+        await studentService.updateStudent(
+          documentId: docId,
+          updated: student.copyWith(proctorId: ''),
+        );
+      }
+      await _loadProctorAssignments();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${student.fullName} removed from proctor.'),
+            backgroundColor: Colors.orange.shade700,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Failed to remove student: $e'),
+              backgroundColor: Colors.red.shade600),
+        );
+      }
+    }
   }
 
   Future<void> _importProctorAssignments() async {
@@ -3741,7 +4190,11 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         ),
                       ],
                     const SizedBox(height: 8),
-                    _menuTile(
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          children: [
+                            _menuTile(
                       title: 'Dashboard',
                       icon: Icons.dashboard_outlined,
                       isSelected: selectedMenuIndex == 0,
@@ -3839,15 +4292,27 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                     ),
                     const SizedBox(height: 8),
                     _menuTile(
-
-                      title: 'Settings',
-                      icon: Icons.settings_outlined,
-
+                      title: 'Announcements',
+                      icon: Icons.announcement_outlined,
                       isSelected: selectedMenuIndex == 7,
                       sidebarExpanded: sidebarExpanded,
                       onTap: () =>
                           setState(() {
                             selectedMenuIndex = 7;
+                            selectedStudentDetail = null;
+                            selectedFacultyDetail = null;
+                            selectedCourseDetail = null;
+                          }),
+                    ),
+                    const SizedBox(height: 8),
+                    _menuTile(
+                      title: 'Settings',
+                      icon: Icons.settings_outlined,
+                      isSelected: selectedMenuIndex == 8,
+                      sidebarExpanded: sidebarExpanded,
+                      onTap: () =>
+                          setState(() {
+                            selectedMenuIndex = 8;
                             selectedStudentDetail = null;
                             selectedFacultyDetail = null;
                             selectedCourseDetail = null;
@@ -3861,7 +4326,11 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                       sidebarExpanded: sidebarExpanded,
                       onTap: onSupport,
                     ),
-                    const Spacer(),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     _menuTile(
                       title: 'Version',
                       icon: Icons.info_outline_rounded,
@@ -3920,9 +4389,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
       case 6:
         return _buildTimeTableView();
       case 7:
-        return _buildSettingsView();
-      case 7:
         return _buildAnnouncementsView();
+      case 8:
+        return _buildSettingsView();
 
       default:
         return _buildDashboardView();
@@ -3979,9 +4448,14 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
         AnnouncementModel.categories.first;
     DateTime selectedPublishDate = existing?.publishDate ?? DateTime.now();
     List<String> selectedSchemes = List.from(existing?.targetSchemes ?? []);
+    String selectedBatch = existing?.targetBatch ?? 'All';
+    String selectedSemester = existing?.targetSemester ?? 'All';
     Uint8List? newAttachmentBytes;
     String? newAttachmentName;
     bool uploading = false;
+
+    final availableBatches = ['All', ...studentBatchCount.keys];
+    final availableSemesters = ['All', 'I', 'II', 'III', 'IV'];
 
     showDialog<void>(
       context: context,
@@ -4055,36 +4529,48 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                         ),
                         const SizedBox(height: 16),
                         const smcText(
-                            textToDisplay: 'Target Audience (Batches):',
+                            textToDisplay: 'Target Audience:',
                             textSize: 12,
                             colorOfText: ColorConst.textSecondary,
                             textBoldness: 4),
                         const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
+                        Row(
                           children: [
-                            FilterChip(
-                              label: const Text('All Students'),
-                              selected: selectedSchemes.isEmpty,
-                              onSelected: (_) =>
-                                  setDialogState(() => selectedSchemes = []),
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: availableBatches.contains(selectedBatch) ? selectedBatch : 'All',
+                                decoration: InputDecoration(
+                                  labelText: 'Whom to Send (Batch)',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                items: availableBatches
+                                    .map((batch) => DropdownMenuItem(
+                                        value: batch, child: Text(batch)))
+                                    .toList(),
+                                onChanged: (val) => setDialogState(
+                                    () => selectedBatch = val!),
+                              ),
                             ),
-                            ...schemes.map((scheme) {
-                              return FilterChip(
-                                label: Text(scheme.name),
-                                selected: selectedSchemes.contains(scheme.id),
-                                onSelected: (selected) {
-                                  setDialogState(() {
-                                    if (selected) {
-                                      selectedSchemes.add(scheme.id);
-                                    } else {
-                                      selectedSchemes.remove(scheme.id);
-                                    }
-                                  });
-                                },
-                              );
-                            }),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: availableSemesters.contains(selectedSemester) ? selectedSemester : 'All',
+                                decoration: InputDecoration(
+                                  labelText: 'Semester',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                items: availableSemesters
+                                    .map((sem) => DropdownMenuItem(
+                                        value: sem, child: Text(sem)))
+                                    .toList(),
+                                onChanged: (val) => setDialogState(
+                                    () => selectedSemester = val!),
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 16),
@@ -4252,6 +4738,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                           description: descriptionController.text.trim(),
                           category: selectedCategory,
                           targetSchemes: selectedSchemes,
+                          targetBatch: selectedBatch,
+                          targetSemester: selectedSemester,
                           publishDate: selectedPublishDate,
                           attachmentUrl: attachmentUrl,
                           attachmentName: attachmentName,
@@ -4295,7 +4783,7 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                             strokeWidth: 2, color: Colors.white),
                       ),
                       SizedBox(width: 8),
-                      smcText(textToDisplay: 'Saving...',
+                      smcText(textToDisplay: 'Publishing...',
                           textSize: 14,
                           colorOfText: Colors.white),
                     ],
@@ -7115,6 +7603,114 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                         border: Border.all(
                                           color: const Color(0xFFE8EDFA),
                                         ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header row with title + Assign button
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const smcText(
+                        textToDisplay: 'Assigned Students',
+                        textSize: 16,
+                        textBoldness: 5,
+                        colorOfText: ColorConst.primaryBlue,
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: _isAssigningStudents
+                            ? null
+                            : () => _showAssignStudentsDialog(
+                                selectedProctor!),
+                        icon: _isAssigningStudents
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.person_add_alt_1,
+                                size: 15),
+                        label: const Text(
+                          'Assign Students',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: ColorConst.primaryBlue,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Divider(),
+                  Expanded(
+                    child: assignedStudents.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.group_outlined,
+                                    size: 40,
+                                    color: Colors.grey.shade300),
+                                const SizedBox(height: 8),
+                                const smcText(
+                                  textToDisplay: 'No Students Assigned',
+                                  textSize: 14,
+                                  colorOfText: Color(0xFF8A96B2),
+                                ),
+                                const SizedBox(height: 4),
+                                const smcText(
+                                  textToDisplay:
+                                      'Tap "Assign Students" to add',
+                                  textSize: 12,
+                                  colorOfText: Color(0xFFB0BAD1),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: assignedStudents.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 10),
+                            itemBuilder: (context, index) {
+                              final student = assignedStudents[index];
+                              final documentId = student.documentId ?? '';
+                              final serialNumber =
+                                  serialNumbersByDocumentId[documentId];
+                              return Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFCFDFF),
+                                  borderRadius:
+                                      BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: const Color(0xFFE8EDFA),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 20,
+                                      backgroundColor:
+                                          const Color(0xFFEAF0FF),
+                                      child: smcText(
+                                        textToDisplay:
+                                            student.fullName.isNotEmpty
+                                                ? student.fullName[0]
+                                                    .toUpperCase()
+                                                : 'S',
+                                        textSize: 13,
+                                        textBoldness: 5,
+                                        colorOfText:
+                                            ColorConst.primaryBlue,
                                       ),
                                       child: Row(
                                         children: [
@@ -7132,6 +7728,14 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                               textBoldness: 5,
                                               colorOfText: ColorConst.primaryBlue,
                                             ),
+                                          smcText(
+                                            textToDisplay:
+                                                student.fullName,
+                                            textSize: 13,
+                                            textBoldness: 4,
+                                            colorOfText:
+                                                const Color(0xFF1F2F52),
+                                            maxLines: 1,
                                           ),
                                           const SizedBox(width: 12),
                                           Expanded(
@@ -7183,6 +7787,85 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                       ),
                                     );
                                   },
+                                    ),
+                                    if (serialNumber != null)
+                                      Container(
+                                        padding:
+                                            const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFEFF4FF),
+                                          borderRadius:
+                                              BorderRadius.circular(
+                                                  999),
+                                        ),
+                                        child: smcText(
+                                          textToDisplay:
+                                              'S.No $serialNumber',
+                                          textSize: 11,
+                                          textBoldness: 3,
+                                          colorOfText:
+                                              ColorConst.primaryBlue,
+                                        ),
+                                      ),
+                                    const SizedBox(width: 6),
+                                    // Remove button
+                                    Tooltip(
+                                      message: 'Remove from proctor',
+                                      child: IconButton(
+                                        icon: const Icon(
+                                          Icons.remove_circle_outline,
+                                          color: Color(0xFFE05454),
+                                          size: 18,
+                                        ),
+                                        padding: EdgeInsets.zero,
+                                        constraints:
+                                            const BoxConstraints(),
+                                        onPressed: () async {
+                                          final confirm =
+                                              await showDialog<bool>(
+                                            context: context,
+                                            builder: (ctx) =>
+                                                AlertDialog(
+                                              title: const Text(
+                                                  'Remove Student?'),
+                                              content: Text(
+                                                  'Remove ${student.fullName} from ${selectedProctor!.fullName}\'s proctor list?'),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () =>
+                                                      Navigator.of(ctx)
+                                                          .pop(false),
+                                                  child:
+                                                      const Text('Cancel'),
+                                                ),
+                                                TextButton(
+                                                  style: TextButton
+                                                      .styleFrom(
+                                                    foregroundColor:
+                                                        Colors.red,
+                                                  ),
+                                                  onPressed: () =>
+                                                      Navigator.of(ctx)
+                                                          .pop(true),
+                                                  child: const Text(
+                                                      'Remove'),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                          if (confirm == true) {
+                                            await _removeStudentFromProctor(
+                                              proctor: selectedProctor!,
+                                              student: student,
+                                            );
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                  ],
                                 ),
                         ),
                       ],

@@ -43,6 +43,7 @@ class StudentModel {
   final String deptId;
   final String status;          // 'Active' | 'Inactive'
   final String createdOn;       // ISO-8601 datetime string (stored with time)
+  final String proctorId;       // Assigned proctor faculty ID
   /// courseId -> { gradePoints, letterGrade }
   final Map<String, Map<String, String>> enrolledCourseMarks;
   /// semester -> SGPA for that semester (e.g. "I" -> "8.5")
@@ -80,6 +81,7 @@ class StudentModel {
     required this.deptId,
     this.status = 'Active',
     required this.createdOn,
+    this.proctorId = '',
     this.enrolledCourseMarks = const {},
     this.semesterSgpa = const {},
     this.cgpa = '',
@@ -206,6 +208,7 @@ class StudentModel {
       createdOn: (data['created_on'] ?? data['created_at'] ?? '')
           .toString()
           .trim(),
+      proctorId: (data['proctor_id'] ?? '').toString().trim(),
       enrolledCourseMarks: parseEnrolledCourseMarks(
         data['enrolled_course_marks'],
       ),
@@ -377,6 +380,7 @@ class StudentModel {
     String? deptId,
     String? status,
     String? createdOn,
+    String? proctorId,
     Map<String, Map<String, String>>? enrolledCourseMarks,
     Map<String, String>? semesterSgpa,
     String? cgpa,
@@ -411,6 +415,7 @@ class StudentModel {
       deptId: deptId ?? this.deptId,
       status: status ?? this.status,
       createdOn: createdOn ?? this.createdOn,
+      proctorId: proctorId ?? this.proctorId,
       enrolledCourseMarks: enrolledCourseMarks ?? this.enrolledCourseMarks,
       semesterSgpa: semesterSgpa ?? this.semesterSgpa,
       cgpa: cgpa ?? this.cgpa,
@@ -445,6 +450,7 @@ class StudentModel {
       if (OrgField.normalize(deptId).isNotEmpty) OrgField.deptIdKey: OrgField.normalize(deptId),
       'status': status,
       'created_on': createdOn,
+      if (proctorId.trim().isNotEmpty) 'proctor_id': proctorId.trim(),
       if (enrolledCourseMarks.isNotEmpty)
         'enrolled_course_marks':
             writeEnrolledCourseMarks(enrolledCourseMarks),

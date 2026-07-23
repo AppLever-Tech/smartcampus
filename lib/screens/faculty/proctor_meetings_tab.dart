@@ -54,7 +54,7 @@ class _ProctorMeetingsTabState extends State<ProctorMeetingsTab> {
       );
     }
     
-    final studentUuids = widget.assignedStudents.map((s) => s.documentId ?? s.studentId).toList();
+    final studentUuids = widget.assignedStudents.map((s) => s.resolvedUuid).toList();
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -513,9 +513,9 @@ class _ProctorMeetingsTabState extends State<ProctorMeetingsTab> {
                                   }
                                 } else {
                                 final uuidsToSave = selectedUuid == '__ALL__'
-                                    ? widget.assignedStudents.map((s) => s.documentId ?? s.studentId).toList()
+                                    ? widget.assignedStudents.map((s) => s.resolvedUuid).toList()
                                     : [selectedUuid];
-                                
+
                                 for (var uuid in uuidsToSave) {
                                   final m = MeetingModel(
                                     uuid: uuid,
