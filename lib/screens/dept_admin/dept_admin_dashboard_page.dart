@@ -27,7 +27,6 @@ import 'dart:typed_data';
 import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' as excel;
-import 'package:smartcampus/widgets/profile_photo_avatar.dart';
 import 'package:smartcampus/widgets/student_import_dialog.dart';
 import 'package:smartcampus/widgets/course_list_table.dart';
 import 'package:smartcampus/services/user_master_firestore_service.dart';
@@ -7576,141 +7575,100 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const smcText(
+                              textToDisplay: 'Assigned Students',
+                              textSize: 16,
+                              textBoldness: 5,
+                              colorOfText: ColorConst.primaryBlue,
+                            ),
+                            ElevatedButton.icon(
+                              onPressed: _isAssigningStudents
+                                  ? null
+                                  : () => _showAssignStudentsDialog(
+                                        selectedProctor!,
+                                      ),
+                              icon: _isAssigningStudents
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.person_add_alt_1,
+                                      size: 15,
+                                    ),
+                              label: const Text(
+                                'Assign Students',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: ColorConst.primaryBlue,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Divider(),
                         Expanded(
                           child: assignedStudents.isEmpty
-                              ? const Center(
-                                  child: smcText(
-                                    textToDisplay: "No Students Assigned",
-                                    textSize: 14,
-                                    colorOfText: Color(0xFF8A96B2),
+                              ? Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.group_outlined,
+                                        size: 40,
+                                        color: Colors.grey.shade300,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      const smcText(
+                                        textToDisplay: 'No Students Assigned',
+                                        textSize: 14,
+                                        colorOfText: Color(0xFF8A96B2),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      const smcText(
+                                        textToDisplay:
+                                            'Tap "Assign Students" to add',
+                                        textSize: 12,
+                                        colorOfText: Color(0xFFB0BAD1),
+                                      ),
+                                    ],
                                   ),
                                 )
                               : ListView.separated(
                                   itemCount: assignedStudents.length,
-                                  separatorBuilder: (_, __) =>
+                                  separatorBuilder: (_, _) =>
                                       const SizedBox(height: 10),
                                   itemBuilder: (context, index) {
                                     final student = assignedStudents[index];
-                                    final documentId = student.documentId ?? '';
+                                    final documentId =
+                                        student.documentId ?? '';
                                     final serialNumber =
                                         serialNumbersByDocumentId[documentId];
                                     return Container(
                                       padding: const EdgeInsets.all(12),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFFFCFDFF),
-                                        borderRadius: BorderRadius.circular(14),
+                                        borderRadius:
+                                            BorderRadius.circular(14),
                                         border: Border.all(
                                           color: const Color(0xFFE8EDFA),
                                         ),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header row with title + Assign button
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const smcText(
-                        textToDisplay: 'Assigned Students',
-                        textSize: 16,
-                        textBoldness: 5,
-                        colorOfText: ColorConst.primaryBlue,
-                      ),
-                      ElevatedButton.icon(
-                        onPressed: _isAssigningStudents
-                            ? null
-                            : () => _showAssignStudentsDialog(
-                                selectedProctor!),
-                        icon: _isAssigningStudents
-                            ? const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.person_add_alt_1,
-                                size: 15),
-                        label: const Text(
-                          'Assign Students',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: ColorConst.primaryBlue,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  const Divider(),
-                  Expanded(
-                    child: assignedStudents.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.group_outlined,
-                                    size: 40,
-                                    color: Colors.grey.shade300),
-                                const SizedBox(height: 8),
-                                const smcText(
-                                  textToDisplay: 'No Students Assigned',
-                                  textSize: 14,
-                                  colorOfText: Color(0xFF8A96B2),
-                                ),
-                                const SizedBox(height: 4),
-                                const smcText(
-                                  textToDisplay:
-                                      'Tap "Assign Students" to add',
-                                  textSize: 12,
-                                  colorOfText: Color(0xFFB0BAD1),
-                                ),
-                              ],
-                            ),
-                          )
-                        : ListView.separated(
-                            itemCount: assignedStudents.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: 10),
-                            itemBuilder: (context, index) {
-                              final student = assignedStudents[index];
-                              final documentId = student.documentId ?? '';
-                              final serialNumber =
-                                  serialNumbersByDocumentId[documentId];
-                              return Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFCFDFF),
-                                  borderRadius:
-                                      BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: const Color(0xFFE8EDFA),
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 20,
-                                      backgroundColor:
-                                          const Color(0xFFEAF0FF),
-                                      child: smcText(
-                                        textToDisplay:
-                                            student.fullName.isNotEmpty
-                                                ? student.fullName[0]
-                                                    .toUpperCase()
-                                                : 'S',
-                                        textSize: 13,
-                                        textBoldness: 5,
-                                        colorOfText:
-                                            ColorConst.primaryBlue,
                                       ),
                                       child: Row(
                                         children: [
@@ -7726,16 +7684,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                                       : 'S',
                                               textSize: 13,
                                               textBoldness: 5,
-                                              colorOfText: ColorConst.primaryBlue,
+                                              colorOfText:
+                                                  ColorConst.primaryBlue,
                                             ),
-                                          smcText(
-                                            textToDisplay:
-                                                student.fullName,
-                                            textSize: 13,
-                                            textBoldness: 4,
-                                            colorOfText:
-                                                const Color(0xFF1F2F52),
-                                            maxLines: 1,
                                           ),
                                           const SizedBox(width: 12),
                                           Expanded(
@@ -7744,11 +7695,13 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                                   CrossAxisAlignment.start,
                                               children: [
                                                 smcText(
-                                                  textToDisplay: student.fullName,
+                                                  textToDisplay:
+                                                      student.fullName,
                                                   textSize: 13,
                                                   textBoldness: 4,
-                                                  colorOfText:
-                                                      const Color(0xFF1F2F52),
+                                                  colorOfText: const Color(
+                                                    0xFF1F2F52,
+                                                  ),
                                                   maxLines: 1,
                                                 ),
                                                 const SizedBox(height: 2),
@@ -7756,8 +7709,9 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                                   textToDisplay:
                                                       'USN: ${student.studentId}',
                                                   textSize: 11,
-                                                  colorOfText:
-                                                      const Color(0xFF7D87A3),
+                                                  colorOfText: const Color(
+                                                    0xFF7D87A3,
+                                                  ),
                                                   maxLines: 1,
                                                 ),
                                               ],
@@ -7765,7 +7719,8 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                           ),
                                           if (serialNumber != null)
                                             Container(
-                                              padding: const EdgeInsets.symmetric(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
                                                 horizontal: 10,
                                                 vertical: 6,
                                               ),
@@ -7783,89 +7738,67 @@ class DeptAdminDashboardPageState extends State<DeptAdminDashboardPage> {
                                                     ColorConst.primaryBlue,
                                               ),
                                             ),
+                                          const SizedBox(width: 6),
+                                          Tooltip(
+                                            message: 'Remove from proctor',
+                                            child: IconButton(
+                                              icon: const Icon(
+                                                Icons.remove_circle_outline,
+                                                color: Color(0xFFE05454),
+                                                size: 18,
+                                              ),
+                                              padding: EdgeInsets.zero,
+                                              constraints:
+                                                  const BoxConstraints(),
+                                              onPressed: () async {
+                                                final confirm =
+                                                    await showDialog<bool>(
+                                                  context: context,
+                                                  builder: (ctx) => AlertDialog(
+                                                    title: const Text(
+                                                      'Remove Student?',
+                                                    ),
+                                                    content: Text(
+                                                      'Remove ${student.fullName} from ${selectedProctor!.fullName}\'s proctor list?',
+                                                    ),
+                                                    actions: [
+                                                      TextButton(
+                                                        onPressed: () =>
+                                                            Navigator.of(ctx)
+                                                                .pop(false),
+                                                        child: const Text(
+                                                          'Cancel',
+                                                        ),
+                                                      ),
+                                                      TextButton(
+                                                        style: TextButton
+                                                            .styleFrom(
+                                                          foregroundColor:
+                                                              Colors.red,
+                                                        ),
+                                                        onPressed: () =>
+                                                            Navigator.of(ctx)
+                                                                .pop(true),
+                                                        child: const Text(
+                                                          'Remove',
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                );
+                                                if (confirm == true) {
+                                                  await _removeStudentFromProctor(
+                                                    proctor: selectedProctor!,
+                                                    student: student,
+                                                  );
+                                                }
+                                              },
+                                            ),
+                                          ),
                                         ],
                                       ),
                                     );
                                   },
-                                    ),
-                                    if (serialNumber != null)
-                                      Container(
-                                        padding:
-                                            const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFEFF4FF),
-                                          borderRadius:
-                                              BorderRadius.circular(
-                                                  999),
-                                        ),
-                                        child: smcText(
-                                          textToDisplay:
-                                              'S.No $serialNumber',
-                                          textSize: 11,
-                                          textBoldness: 3,
-                                          colorOfText:
-                                              ColorConst.primaryBlue,
-                                        ),
-                                      ),
-                                    const SizedBox(width: 6),
-                                    // Remove button
-                                    Tooltip(
-                                      message: 'Remove from proctor',
-                                      child: IconButton(
-                                        icon: const Icon(
-                                          Icons.remove_circle_outline,
-                                          color: Color(0xFFE05454),
-                                          size: 18,
-                                        ),
-                                        padding: EdgeInsets.zero,
-                                        constraints:
-                                            const BoxConstraints(),
-                                        onPressed: () async {
-                                          final confirm =
-                                              await showDialog<bool>(
-                                            context: context,
-                                            builder: (ctx) =>
-                                                AlertDialog(
-                                              title: const Text(
-                                                  'Remove Student?'),
-                                              content: Text(
-                                                  'Remove ${student.fullName} from ${selectedProctor!.fullName}\'s proctor list?'),
-                                              actions: [
-                                                TextButton(
-                                                  onPressed: () =>
-                                                      Navigator.of(ctx)
-                                                          .pop(false),
-                                                  child:
-                                                      const Text('Cancel'),
-                                                ),
-                                                TextButton(
-                                                  style: TextButton
-                                                      .styleFrom(
-                                                    foregroundColor:
-                                                        Colors.red,
-                                                  ),
-                                                  onPressed: () =>
-                                                      Navigator.of(ctx)
-                                                          .pop(true),
-                                                  child: const Text(
-                                                      'Remove'),
-                                                ),
-                                              ],
-                                            ),
-                                          );
-                                          if (confirm == true) {
-                                            await _removeStudentFromProctor(
-                                              proctor: selectedProctor!,
-                                              student: student,
-                                            );
-                                          }
-                                        },
-                                      ),
-                                    ),
-                                  ],
                                 ),
                         ),
                       ],
