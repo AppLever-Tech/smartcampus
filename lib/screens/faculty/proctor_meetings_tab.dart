@@ -7,10 +7,12 @@ import 'package:smartcampus/widgets/smc_text.dart';
 
 class ProctorMeetingsTab extends StatefulWidget {
   final List<StudentModel> assignedStudents;
+  final bool showScheduleButton;
   
   const ProctorMeetingsTab({
     super.key,
     required this.assignedStudents,
+    this.showScheduleButton = true,
   });
 
   @override
@@ -106,22 +108,23 @@ class _ProctorMeetingsTabState extends State<ProctorMeetingsTab> {
                     ),
                   ],
                 ),
-                ElevatedButton.icon(
-                  onPressed: () => _openMeetingDialog(),
-                  icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
-                  label: const smcText(
-                    textToDisplay: 'Schedule Meeting',
-                    textSize: 13,
-                    textBoldness: 4,
-                    colorOfText: Colors.white,
+                if (widget.showScheduleButton)
+                  ElevatedButton.icon(
+                    onPressed: () => _openMeetingDialog(),
+                    icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+                    label: const smcText(
+                      textToDisplay: 'Schedule Meeting',
+                      textSize: 13,
+                      textBoldness: 4,
+                      colorOfText: Colors.white,
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: ColorConst.primaryBlue,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
                   ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: ColorConst.primaryBlue,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
-                ),
               ],
             ),
             const SizedBox(height: 16),

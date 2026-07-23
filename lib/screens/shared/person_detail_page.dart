@@ -17,8 +17,6 @@ import 'package:smartcampus/models/academic_record_model.dart';
 import 'package:smartcampus/services/academic_firestore_service.dart';
 import 'package:smartcampus/models/meeting_model.dart';
 import 'package:smartcampus/services/meeting_firestore_service.dart';
-import 'package:smartcampus/models/co_extra_activity_model.dart';
-import 'package:smartcampus/services/co_extra_activity_firestore_service.dart';
 import 'package:smartcampus/models/semester_performance_model.dart';
 import 'package:smartcampus/services/semester_performance_firestore_service.dart';
 import 'package:smartcampus/screens/faculty/faculty_class_management/class_attendance_firestore_service.dart';
@@ -45,6 +43,7 @@ class PersonDetailPage extends StatefulWidget {
   final bool showEmbeddedHeader;
   /// Custom list of tab labels for the page
   final List<String>? customTabLabels;
+  final bool isReadOnly;
 
   const PersonDetailPage({
     super.key,
@@ -61,6 +60,7 @@ class PersonDetailPage extends StatefulWidget {
     this.showLeadingAction = true,
     this.showEmbeddedHeader = true,
     this.customTabLabels,
+    this.isReadOnly = false,
   });
 
   @override
@@ -76,7 +76,6 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
   final PublicationFirestoreService _publicationService = PublicationFirestoreService();
   final AcademicFirestoreService _academicService = AcademicFirestoreService();
   final MeetingFirestoreService _meetingService = MeetingFirestoreService();
-  final CoExtraActivityFirestoreService _coExtraActivityService = CoExtraActivityFirestoreService();
   final SemesterPerformanceFirestoreService _semesterPerformanceService = SemesterPerformanceFirestoreService();
   final ClassAttendanceFirestoreService _classAttendanceService = ClassAttendanceFirestoreService();
   Stream<List<CourseModel>>? _enrolledCoursesStream;
@@ -408,20 +407,21 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
                 textBoldness: 5,
                 colorOfText: ColorConst.textPrimary,
               ),
-              ElevatedButton.icon(
-                onPressed: () => _openAcademicDialog(),
-                icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
-                label: const smcText(
-                  textToDisplay: 'Add Academic Record',
-                  textSize: 13,
-                  textBoldness: 4,
-                  colorOfText: Colors.white,
+              if (!widget.isReadOnly)
+                ElevatedButton.icon(
+                  onPressed: () => _openAcademicDialog(),
+                  icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+                  label: const smcText(
+                    textToDisplay: 'Add Academic Record',
+                    textSize: 13,
+                    textBoldness: 4,
+                    colorOfText: Colors.white,
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: ColorConst.primaryBlue,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
                 ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: ColorConst.primaryBlue,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
             ],
           ),
         ),
@@ -468,17 +468,169 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
         return _buildAchievements();
       case 'Publications':
         return _buildPublications();
+      case 'Overview':
+        return _buildOverview();
       case 'Meetings':
         return _buildMeetings();
       case 'Attendance':
         return _buildAttendance();
-      case 'Co & Extra Activities':
-        return _buildCoExtraActivities();
       case 'Academic Activities':
         return _buildPlaceholder('Academic Activities');
       default:
         return _buildBasicDetails();
     }
+  }
+
+  Widget _buildOverview() {
+    if (!widget.isStudent) {
+      return _buildPlaceholder('Overview');
+    }
+
+    final StudentModel s = _studentModel;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF3558DA), Color(0xFF1E3A8A)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF3558DA).withOpacity(0.2),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.star_rounded, color: Colors.white, size: 28),
+                      const SizedBox(height: 16),
+                      const smcText(
+                        textToDisplay: 'Cumulative CGPA',
+                        textSize: 12,
+                        colorOfText: Colors.white70,
+                      ),
+                      const SizedBox(height: 4),
+                      smcText(
+                        textToDisplay: s.cgpa.isEmpty ? 'N/A' : s.cgpa,
+                        textSize: 24,
+                        textBoldness: 6,
+                        colorOfText: Colors.white,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE3EAF8)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.school_outlined, color: Color(0xFF3558DA), size: 28),
+                      const SizedBox(height: 16),
+                      const smcText(
+                        textToDisplay: 'Current Semester',
+                        textSize: 12,
+                        colorOfText: ColorConst.textSecondary,
+                      ),
+                      const SizedBox(height: 4),
+                      smcText(
+                        textToDisplay: s.currentSemester.isEmpty ? '—' : s.currentSemester,
+                        textSize: 24,
+                        textBoldness: 6,
+                        colorOfText: ColorConst.textPrimary,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE3EAF8)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.calendar_today_outlined, color: Color(0xFF3558DA), size: 28),
+                      const SizedBox(height: 16),
+                      const smcText(
+                        textToDisplay: 'Academic Batch',
+                        textSize: 12,
+                        colorOfText: ColorConst.textSecondary,
+                      ),
+                      const SizedBox(height: 4),
+                      smcText(
+                        textToDisplay: s.batch.isEmpty ? '—' : s.batch,
+                        textSize: 24,
+                        textBoldness: 6,
+                        colorOfText: ColorConst.textPrimary,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          _buildDetailsSection(
+            title: 'Quick Contact Information',
+            icon: Icons.contact_mail_outlined,
+            children: [
+              _buildDetailRow('Email Address', s.email),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(child: _buildDetailField('Mobile Number', s.mobile)),
+                  const SizedBox(width: 24),
+                  Expanded(child: _buildDetailField('Blood Group', s.bloodGroup)),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          _buildDetailsSection(
+            title: 'Emergency Contact Details',
+            icon: Icons.emergency_outlined,
+            children: [
+              Row(
+                children: [
+                  Expanded(child: _buildDetailField('Contact Name', s.emergencyContactName)),
+                  const SizedBox(width: 24),
+                  Expanded(child: _buildDetailField('Relation', s.emergencyContactRelation)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _buildDetailField('Emergency Mobile', s.emergencyContactMobile),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildPlaceholder(String title) {
@@ -2614,20 +2766,21 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
                 textBoldness: 5,
                 colorOfText: ColorConst.textPrimary,
               ),
-              ElevatedButton.icon(
-                onPressed: () => _openAcademicDialog(),
-                icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
-                label: const smcText(
-                  textToDisplay: 'Add Academic Record',
-                  textSize: 13,
-                  textBoldness: 4,
-                  colorOfText: Colors.white,
+              if (!widget.isReadOnly)
+                ElevatedButton.icon(
+                  onPressed: () => _openAcademicDialog(),
+                  icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+                  label: const smcText(
+                    textToDisplay: 'Add Academic Record',
+                    textSize: 13,
+                    textBoldness: 4,
+                    colorOfText: Colors.white,
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: ColorConst.primaryBlue,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
                 ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: ColorConst.primaryBlue,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
             ],
           ),
         ),
@@ -3187,16 +3340,18 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                IconButton(
-                                  icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.green),
-                                  onPressed: () => _openAcademicDialog(record: r),
-                                  tooltip: 'Edit',
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
-                                  onPressed: () => _deleteAcademicRecord(r),
-                                  tooltip: 'Delete',
-                                ),
+                                if (!widget.isReadOnly) ...[
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.green),
+                                    onPressed: () => _openAcademicDialog(record: r),
+                                    tooltip: 'Edit',
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
+                                    onPressed: () => _deleteAcademicRecord(r),
+                                    tooltip: 'Delete',
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -3495,20 +3650,21 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
                 textBoldness: 5,
                 colorOfText: ColorConst.textPrimary,
               ),
-              ElevatedButton.icon(
-                onPressed: () => _openAchievementDialog(),
-                icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
-                label: const smcText(
-                  textToDisplay: 'Add Achievement',
-                  textSize: 13,
-                  textBoldness: 4,
-                  colorOfText: Colors.white,
+              if (!widget.isReadOnly)
+                ElevatedButton.icon(
+                  onPressed: () => _openAchievementDialog(),
+                  icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+                  label: const smcText(
+                    textToDisplay: 'Add Achievement',
+                    textSize: 13,
+                    textBoldness: 4,
+                    colorOfText: Colors.white,
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: ColorConst.primaryBlue,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
                 ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: ColorConst.primaryBlue,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
             ],
           ),
         ),
@@ -3792,16 +3948,18 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
                                   onPressed: () => _viewAchievement(a),
                                   tooltip: 'View',
                                 ),
-                                IconButton(
-                                  icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.green),
-                                  onPressed: () => _openAchievementDialog(achievement: a),
-                                  tooltip: 'Edit',
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
-                                  onPressed: () => _deleteAchievement(a),
-                                  tooltip: 'Delete',
-                                ),
+                                if (!widget.isReadOnly) ...[
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.green),
+                                    onPressed: () => _openAchievementDialog(achievement: a),
+                                    tooltip: 'Edit',
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
+                                    onPressed: () => _deleteAchievement(a),
+                                    tooltip: 'Delete',
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -4180,617 +4338,6 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
     }
   }
 
-  Widget _buildCoExtraActivities() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const smcText(
-                textToDisplay: 'Co & Extra Activities',
-                textSize: 16,
-                textBoldness: 5,
-                colorOfText: ColorConst.textPrimary,
-              ),
-              ElevatedButton.icon(
-                onPressed: () => _openCoExtraActivityDialog(),
-                icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
-                label: const smcText(
-                  textToDisplay: 'Add Activities',
-                  textSize: 13,
-                  textBoldness: 4,
-                  colorOfText: Colors.white,
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: ColorConst.primaryBlue,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: StreamBuilder<List<CoExtraActivityModel>>(
-            stream: _coExtraActivityService.getActivitiesForStudent(_uuid),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (snapshot.hasError) {
-                return Center(child: Text('Error: ${snapshot.error}'));
-              }
-
-              final activities = snapshot.data ?? [];
-
-              if (activities.isEmpty) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(40),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.directions_run_rounded, size: 64, color: Colors.grey.shade300),
-                        const SizedBox(height: 16),
-                        const smcText(
-                          textToDisplay: "No activities recorded yet. Click Add Activities to add them.",
-                          textSize: 14,
-                          colorOfText: ColorConst.textSecondary,
-                          textAlign: TextAlign.center,
-                          maxLines: 3,
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }
-
-              return LayoutBuilder(
-                builder: (context, constraints) {
-                  return _buildCoExtraActivityTable(activities, constraints.maxWidth);
-                },
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCoExtraActivityTable(List<CoExtraActivityModel> activities, double tableWidth) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE3EAF8)),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: SingleChildScrollView(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minWidth: tableWidth - 40),
-                child: DataTable(
-                  showCheckboxColumn: false,
-                  headingRowHeight: 50,
-                  dataRowMinHeight: 52,
-                  dataRowMaxHeight: 58,
-                  horizontalMargin: 0,
-                  columnSpacing: 0,
-                  dividerThickness: 1,
-                  border: const TableBorder(
-                    horizontalInside: BorderSide(color: Color(0xFFE3EAF8)),
-                    verticalInside: BorderSide(color: Color(0xFFE3EAF8)),
-                    top: BorderSide(color: Color(0xFFE3EAF8)),
-                    bottom: BorderSide(color: Color(0xFFE3EAF8)),
-                    left: BorderSide(color: Color(0xFFE3EAF8)),
-                    right: BorderSide(color: Color(0xFFE3EAF8)),
-                  ),
-                  headingRowColor: WidgetStateProperty.all(const Color(0xFFF4F7FF)),
-                  columns: const [
-                    DataColumn(
-                      label: SizedBox(
-                        width: 50,
-                        child: Center(
-                          child: smcText(
-                            textToDisplay: 'S.No',
-                            textSize: 12,
-                            textBoldness: 4,
-                            colorOfText: Color(0xFF5C6B8B),
-                          ),
-                        ),
-                      ),
-                    ),
-                    DataColumn(
-                      label: SizedBox(
-                        width: 150,
-                        child: Padding(
-                          padding: EdgeInsets.only(left: 12),
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: smcText(
-                              textToDisplay: 'Activity',
-                              textSize: 12,
-                              textBoldness: 4,
-                              colorOfText: Color(0xFF5C6B8B),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    DataColumn(
-                      label: SizedBox(
-                        width: 120,
-                        child: Center(
-                          child: smcText(
-                            textToDisplay: 'Type',
-                            textSize: 12,
-                            textBoldness: 4,
-                            colorOfText: Color(0xFF5C6B8B),
-                          ),
-                        ),
-                      ),
-                    ),
-                    DataColumn(
-                      label: SizedBox(
-                        width: 100,
-                        child: Center(
-                          child: smcText(
-                            textToDisplay: 'Level',
-                            textSize: 12,
-                            textBoldness: 4,
-                            colorOfText: Color(0xFF5C6B8B),
-                          ),
-                        ),
-                      ),
-                    ),
-                    DataColumn(
-                      label: SizedBox(
-                        width: 100,
-                        child: Center(
-                          child: smcText(
-                            textToDisplay: 'Date',
-                            textSize: 12,
-                            textBoldness: 4,
-                            colorOfText: Color(0xFF5C6B8B),
-                          ),
-                        ),
-                      ),
-                    ),
-                    DataColumn(
-                      label: SizedBox(
-                        width: 120,
-                        child: Center(
-                          child: smcText(
-                            textToDisplay: 'Achievement',
-                            textSize: 12,
-                            textBoldness: 4,
-                            colorOfText: Color(0xFF5C6B8B),
-                          ),
-                        ),
-                      ),
-                    ),
-                    DataColumn(
-                      label: SizedBox(
-                        width: 100,
-                        child: Center(
-                          child: smcText(
-                            textToDisplay: 'Certificate',
-                            textSize: 12,
-                            textBoldness: 4,
-                            colorOfText: Color(0xFF5C6B8B),
-                          ),
-                        ),
-                      ),
-                    ),
-                    DataColumn(
-                      label: SizedBox(
-                        width: 80,
-                        child: Center(
-                          child: smcText(
-                            textToDisplay: 'Action',
-                            textSize: 12,
-                            textBoldness: 4,
-                            colorOfText: Color(0xFF5C6B8B),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                  rows: activities.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final activity = entry.value;
-                    return DataRow(
-                      cells: [
-                        DataCell(
-                          SizedBox(
-                            width: 50,
-                            child: Center(
-                              child: smcText(
-                                textToDisplay: '${index + 1}',
-                                textSize: 12,
-                                colorOfText: ColorConst.textPrimary,
-                              ),
-                            ),
-                          ),
-                        ),
-                        DataCell(
-                          SizedBox(
-                            width: 150,
-                            child: Padding(
-                              padding: const EdgeInsets.only(left: 12),
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: smcText(
-                                  textToDisplay: activity.activityName,
-                                  textSize: 12,
-                                  textBoldness: 4,
-                                  colorOfText: ColorConst.textPrimary,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        DataCell(
-                          SizedBox(
-                            width: 120,
-                            child: Center(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF4F7FF),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: smcText(
-                                  textToDisplay: activity.type,
-                                  textSize: 11,
-                                  colorOfText: ColorConst.primaryBlue,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        DataCell(
-                          SizedBox(
-                            width: 100,
-                            child: Center(
-                              child: smcText(
-                                textToDisplay: activity.level,
-                                textSize: 12,
-                                colorOfText: ColorConst.textPrimary,
-                              ),
-                            ),
-                          ),
-                        ),
-                        DataCell(
-                          SizedBox(
-                            width: 100,
-                            child: Center(
-                              child: smcText(
-                                textToDisplay: activity.date,
-                                textSize: 12,
-                                colorOfText: ColorConst.textPrimary,
-                              ),
-                            ),
-                          ),
-                        ),
-                        DataCell(
-                          SizedBox(
-                            width: 120,
-                            child: Center(
-                              child: smcText(
-                                textToDisplay: activity.achievement,
-                                textSize: 12,
-                                colorOfText: ColorConst.textPrimary,
-                              ),
-                            ),
-                          ),
-                        ),
-                        DataCell(
-                          SizedBox(
-                            width: 100,
-                            child: Center(
-                              child: activity.certificate.isNotEmpty
-                                  ? IconButton(
-                                      icon: const Icon(Icons.download_rounded, size: 18, color: ColorConst.primaryBlue),
-                                      onPressed: () async {
-                                        final url = Uri.parse(activity.certificate);
-                                        if (await canLaunchUrl(url)) {
-                                          await launchUrl(url);
-                                        }
-                                      },
-                                    )
-                                  : const smcText(
-                                      textToDisplay: '-',
-                                      textSize: 12,
-                                      colorOfText: ColorConst.textSecondary,
-                                    ),
-                            ),
-                          ),
-                        ),
-                        DataCell(
-                          SizedBox(
-                            width: 80,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.edit_outlined, size: 16, color: ColorConst.textSecondary),
-                                  onPressed: () => _openCoExtraActivityDialog(activity: activity),
-                                  splashRadius: 20,
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline, size: 16, color: Colors.red),
-                                  onPressed: () => _deleteCoExtraActivity(activity.id!),
-                                  splashRadius: 20,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  }).toList(),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _deleteCoExtraActivity(String id) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const smcText(textToDisplay: 'Delete Activity', textSize: 16, textBoldness: 5),
-        content: const smcText(textToDisplay: 'Are you sure you want to delete this activity?', textSize: 14),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const smcText(textToDisplay: 'Cancel', textSize: 14, colorOfText: ColorConst.textSecondary),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            onPressed: () {
-              _coExtraActivityService.deleteActivity(id);
-              Navigator.pop(ctx);
-            },
-            child: const smcText(textToDisplay: 'Delete', textSize: 14, colorOfText: Colors.white),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _openCoExtraActivityDialog({CoExtraActivityModel? activity}) async {
-    final bool isEdit = activity != null;
-    final formKey = GlobalKey<FormState>();
-    final activityCtrl = TextEditingController(text: activity?.activityName ?? '');
-    final dateCtrl = TextEditingController(text: activity?.date ?? '');
-    final achievementCtrl = TextEditingController(text: activity?.achievement ?? '');
-    
-    String? selectedType = activity?.type;
-    if (selectedType != null && !['Co-curricular', 'Extra-curricular'].contains(selectedType)) {
-      selectedType = null;
-    }
-    String? selectedLevel = activity?.level;
-    if (selectedLevel != null && !['College', 'State', 'National', 'International'].contains(selectedLevel)) {
-      selectedLevel = null;
-    }
-    
-    Uint8List? selectedFileBytes;
-    String? selectedFileName;
-    String? existingUrl = activity?.certificate;
-    
-    bool saving = false;
-
-    InputDecoration inputDecoration(String hint) {
-      return InputDecoration(
-        hintText: hint,
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFE4E8F0)),
-        ),
-      );
-    }
-
-    await showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModalState) => Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 500),
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Form(
-                key: formKey,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          smcText(
-                            textToDisplay: isEdit ? 'Edit Activity' : 'Add Activity',
-                            textSize: 18,
-                            textBoldness: 5,
-                            colorOfText: ColorConst.textPrimary,
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.close, color: ColorConst.textSecondary),
-                            onPressed: () => Navigator.pop(ctx),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      TextFormField(
-                        controller: activityCtrl,
-                        decoration: inputDecoration('Activity Name'),
-                        validator: (v) => v == null || v.isEmpty ? 'Required' : null,
-                      ),
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        value: selectedType,
-                        decoration: inputDecoration('Select Type'),
-                        items: const [
-                          DropdownMenuItem(value: 'Co-curricular', child: Text('Co-curricular')),
-                          DropdownMenuItem(value: 'Extra-curricular', child: Text('Extra-curricular')),
-                        ],
-                        onChanged: (v) => selectedType = v,
-                        validator: (v) => v == null ? 'Required' : null,
-                      ),
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        value: selectedLevel,
-                        decoration: inputDecoration('Select Level'),
-                        items: const [
-                          DropdownMenuItem(value: 'College', child: Text('College')),
-                          DropdownMenuItem(value: 'State', child: Text('State')),
-                          DropdownMenuItem(value: 'National', child: Text('National')),
-                          DropdownMenuItem(value: 'International', child: Text('International')),
-                        ],
-                        onChanged: (v) => selectedLevel = v,
-                        validator: (v) => v == null ? 'Required' : null,
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: dateCtrl,
-                        decoration: inputDecoration('Date (e.g. Oct 2023)'),
-                        validator: (v) => v == null || v.isEmpty ? 'Required' : null,
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: achievementCtrl,
-                        decoration: inputDecoration('Achievement'),
-                        validator: (v) => v == null || v.isEmpty ? 'Required' : null,
-                      ),
-                      const SizedBox(height: 16),
-                      InkWell(
-                        onTap: () async {
-                          FilePickerResult? result = await FilePicker.platform.pickFiles(
-                            type: FileType.custom,
-                            allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
-                          );
-                          if (result != null) {
-                            setModalState(() {
-                              selectedFileBytes = result.files.single.bytes;
-                              selectedFileName = result.files.single.name;
-                            });
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: const Color(0xFFE4E8F0)),
-                            borderRadius: BorderRadius.circular(14),
-                            color: Colors.white,
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.upload_file, color: ColorConst.primaryBlue, size: 20),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  selectedFileName ?? (existingUrl != null && existingUrl!.isNotEmpty ? 'Certificate Uploaded' : 'Upload Original Certificate'),
-                                  style: TextStyle(
-                                    color: selectedFileName != null || (existingUrl != null && existingUrl!.isNotEmpty)
-                                        ? ColorConst.textPrimary
-                                        : Colors.grey.shade600,
-                                    fontSize: 14,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: saving
-                              ? null
-                              : () async {
-                                  if (formKey.currentState!.validate()) {
-                                    setModalState(() => saving = true);
-                                    try {
-                                      String finalUrl = existingUrl ?? '';
-                                      if (selectedFileBytes != null) {
-                                        finalUrl = await _coExtraActivityService.uploadCertificate(
-                                          _uuid,
-                                          selectedFileName!,
-                                          selectedFileBytes!,
-                                        );
-                                      }
-
-                                      final a = CoExtraActivityModel(
-                                        id: activity?.id,
-                                        uuid: _uuid,
-                                        activityName: activityCtrl.text.trim(),
-                                        type: selectedType!,
-                                        level: selectedLevel!,
-                                        date: dateCtrl.text.trim(),
-                                        achievement: achievementCtrl.text.trim(),
-                                        certificate: finalUrl,
-                                        createdOn: activity?.createdOn ?? DateTime.now(),
-                                      );
-
-                                      if (isEdit) {
-                                        await _coExtraActivityService.updateActivity(activity!.id!, a);
-                                      } else {
-                                        await _coExtraActivityService.addActivity(a);
-                                      }
-                                      if (ctx.mounted) Navigator.pop(ctx);
-                                    } catch (e) {
-                                      setModalState(() => saving = false);
-                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-                                    }
-                                  }
-                                },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: ColorConst.primaryBlue,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          ),
-                          child: saving
-                              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                              : smcText(textToDisplay: isEdit ? 'Save Changes' : 'Save Activity', textSize: 14, colorOfText: Colors.white, textBoldness: 5),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildPublications() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -4806,20 +4353,21 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
                 textBoldness: 5,
                 colorOfText: ColorConst.textPrimary,
               ),
-              ElevatedButton.icon(
-                onPressed: () => _openPublicationDialog(),
-                icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
-                label: const smcText(
-                  textToDisplay: 'Add Publication',
-                  textSize: 13,
-                  textBoldness: 4,
-                  colorOfText: Colors.white,
+              if (!widget.isReadOnly)
+                ElevatedButton.icon(
+                  onPressed: () => _openPublicationDialog(),
+                  icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+                  label: const smcText(
+                    textToDisplay: 'Add Publication',
+                    textSize: 13,
+                    textBoldness: 4,
+                    colorOfText: Colors.white,
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: ColorConst.primaryBlue,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
                 ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: ColorConst.primaryBlue,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
             ],
           ),
         ),
@@ -5089,16 +4637,18 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
                                   onPressed: () => _viewPublication(p),
                                   tooltip: 'View',
                                 ),
-                                IconButton(
-                                  icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.green),
-                                  onPressed: () => _openPublicationDialog(publication: p),
-                                  tooltip: 'Edit',
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
-                                  onPressed: () => _deletePublication(p),
-                                  tooltip: 'Delete',
-                                ),
+                                if (!widget.isReadOnly) ...[
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.green),
+                                    onPressed: () => _openPublicationDialog(publication: p),
+                                    tooltip: 'Edit',
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
+                                    onPressed: () => _deletePublication(p),
+                                    tooltip: 'Delete',
+                                  ),
+                                ],
                               ],
                             ),
                           ),

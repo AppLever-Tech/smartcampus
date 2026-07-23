@@ -176,6 +176,29 @@ class FacultyFirestoreService {
     return null;
   }
 
+  Future<FacultyModel?> getFacultyByFacultyId({
+    required String orgId,
+    required String facultyId,
+  }) async {
+    final orgNorm = normalizeOrgId(orgId);
+    final facultyNorm = facultyId.trim().toUpperCase();
+    if (orgNorm.isEmpty || facultyNorm.isEmpty) {
+      return null;
+    }
+    final snap = await _db
+        .collection(_collection)
+        .where(OrgField.orgIdKey, isEqualTo: orgNorm)
+        .where('faculty_id', isEqualTo: facultyNorm)
+        .limit(1)
+        .get();
+
+    if (snap.docs.isNotEmpty) {
+      final doc = snap.docs.first;
+      return FacultyModel.fromMap(doc.data(), documentId: doc.id);
+    }
+    return null;
+  }
+
   /// Resolves the faculty profile for a logged-in user.
   Future<FacultyModel?> resolveFacultyForUser({
     required String orgId,
