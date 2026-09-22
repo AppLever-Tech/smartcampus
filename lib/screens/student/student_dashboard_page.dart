@@ -19,6 +19,7 @@ import 'package:smartcampus/models/meeting_model.dart';
 import 'package:smartcampus/screens/auth/landing_page.dart';
 import 'package:smartcampus/screens/shared/person_detail_page.dart';
 import 'package:smartcampus/screens/student/student_class_management/student_classes_page.dart';
+import 'package:smartcampus/screens/student/student_assignments_page.dart';
 import 'package:smartcampus/screens/student/student_courses_page.dart';
 import 'package:smartcampus/screens/student/student_course_registration/student_course_registration_page.dart';
 import 'package:smartcampus/screens/student/student_dashboard_mobile_layout.dart';
@@ -542,8 +543,9 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
         return _buildClassesView();
 
       case 4:
-        return const Center(
-          child: Text('Assignments'),
+        return StudentAssignmentsPage(
+          student: studentProfile!,
+          enrolledCourses: enrolledCourses,
         );
 
       case 5:

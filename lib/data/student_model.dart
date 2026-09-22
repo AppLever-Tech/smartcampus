@@ -128,11 +128,11 @@ class StudentModel {
   /// Builds a student from a spreadsheet row (dept admin import template).
   /// Column 8 is mobile; optional column 15 is explicit login [uuid].
   factory StudentModel.fromExcelRow(
-    List<dynamic> row, {
-    required String orgId,
-    required String deptId,
-    String createdOn = '',
-  }) {
+      List<dynamic> row, {
+        required String orgId,
+        required String deptId,
+        String createdOn = '',
+      }) {
     String cell(int index) {
       if (index < 0 || index >= row.length) {
         return '';
@@ -180,9 +180,9 @@ class StudentModel {
       gender: (data['gender'] ?? '').toString().trim(),
       dateOfBirth: (data['date_of_birth'] ?? '').toString().trim(),
       photographUrl: (data['photograph_url'] ??
-              data['photographUrl'] ??
-              data['photo_url'] ??
-              '')
+          data['photographUrl'] ??
+          data['photo_url'] ??
+          '')
           .toString()
           .trim(),
       batch: (data['batch'] ?? '').toString().trim(),
@@ -224,8 +224,8 @@ class StudentModel {
   }
 
   static Map<String, Map<String, String>> parseEnrolledCourseMarks(
-    dynamic value,
-  ) {
+      dynamic value,
+      ) {
     if (value is! Map) {
       return const {};
     }
@@ -235,41 +235,75 @@ class StudentModel {
       if (courseId == null || rawMarks is! Map) {
         return;
       }
+      final String ia1Marks =
+      (rawMarks['ia1_marks'] ?? rawMarks['ia1Marks'] ?? '')
+          .toString()
+          .trim();
+      final String ia2Marks =
+      (rawMarks['ia2_marks'] ?? rawMarks['ia2Marks'] ?? '')
+          .toString()
+          .trim();
+      final String storedFinalCie =
+      (rawMarks['final_cie'] ??
+          rawMarks['finalCie'] ??
+          rawMarks['cie_marks'] ??
+          rawMarks['cieMarks'] ??
+          '')
+          .toString()
+          .trim();
       marks[courseId.toString()] = {
         'gradePoints': (rawMarks['grade_points'] ?? rawMarks['gradePoints'] ?? '')
             .toString()
             .trim(),
         'letterGrade':
-            (rawMarks['letter_grade'] ?? rawMarks['letterGrade'] ?? '')
-                .toString()
-                .trim(),
+        (rawMarks['letter_grade'] ?? rawMarks['letterGrade'] ?? '')
+            .toString()
+            .trim(),
+        'ia1Marks': ia1Marks,
+        'ia2Marks': ia2Marks,
+        'finalCie': storedFinalCie,
+        'cieMarks': storedFinalCie,
       };
     });
     return marks;
   }
 
   static Map<String, dynamic> writeEnrolledCourseMarks(
-    Map<String, Map<String, String>> marks,
-  ) {
+      Map<String, Map<String, String>> marks,
+      ) {
     final Map<String, dynamic> serialized = {};
     marks.forEach((courseId, values) {
       final String gradePoints = values['gradePoints']?.trim() ?? '';
       final String letterGrade = values['letterGrade']?.trim() ?? '';
-      if (gradePoints.isEmpty && letterGrade.isEmpty) {
+      final String ia1Marks = values['ia1Marks']?.trim() ?? '';
+      final String ia2Marks = values['ia2Marks']?.trim() ?? '';
+      final String storedFinalCie = values['finalCie']?.trim() ?? '';
+      final String legacyCie = values['cieMarks']?.trim() ?? '';
+      final String finalCie =
+      storedFinalCie.isNotEmpty ? storedFinalCie : legacyCie;
+      if (gradePoints.isEmpty &&
+          letterGrade.isEmpty &&
+          ia1Marks.isEmpty &&
+          ia2Marks.isEmpty &&
+          finalCie.isEmpty) {
         return;
       }
       serialized[courseId] = {
         if (gradePoints.isNotEmpty) 'grade_points': gradePoints,
         if (letterGrade.isNotEmpty) 'letter_grade': letterGrade,
+        if (ia1Marks.isNotEmpty) 'ia1_marks': ia1Marks,
+        if (ia2Marks.isNotEmpty) 'ia2_marks': ia2Marks,
+        if (finalCie.isNotEmpty) 'final_cie': finalCie,
+        if (finalCie.isNotEmpty) 'cie_marks': finalCie,
       };
     });
     return serialized;
   }
 
   static Map<String, String> parseSemesterSgpa(
-    dynamic value, {
-    dynamic legacySemesterGpa,
-  }) {
+      dynamic value, {
+        dynamic legacySemesterGpa,
+      }) {
     final Map<String, String> semesterSgpa = {};
     if (value is Map) {
       value.forEach((dynamic semester, dynamic sgpa) {
@@ -303,9 +337,9 @@ class StudentModel {
   }
 
   static String parseCgpa(
-    dynamic value, {
-    dynamic legacySemesterGpa,
-  }) {
+      dynamic value, {
+        dynamic legacySemesterGpa,
+      }) {
     final String fromRoot = (value ?? '').toString().trim();
     if (fromRoot.isNotEmpty) {
       return fromRoot;
@@ -405,9 +439,9 @@ class StudentModel {
       correspondenceAddress: correspondenceAddress ?? this.correspondenceAddress,
       emergencyContactName: emergencyContactName ?? this.emergencyContactName,
       emergencyContactRelation:
-          emergencyContactRelation ?? this.emergencyContactRelation,
+      emergencyContactRelation ?? this.emergencyContactRelation,
       emergencyContactMobile:
-          emergencyContactMobile ?? this.emergencyContactMobile,
+      emergencyContactMobile ?? this.emergencyContactMobile,
       fatherName: fatherName ?? this.fatherName,
       motherName: motherName ?? this.motherName,
       guardianName: guardianName ?? this.guardianName,
@@ -453,7 +487,7 @@ class StudentModel {
       if (proctorId.trim().isNotEmpty) 'proctor_id': proctorId.trim(),
       if (enrolledCourseMarks.isNotEmpty)
         'enrolled_course_marks':
-            writeEnrolledCourseMarks(enrolledCourseMarks),
+        writeEnrolledCourseMarks(enrolledCourseMarks),
       if (semesterSgpa.isNotEmpty)
         'semester_sgpa': writeSemesterSgpa(semesterSgpa),
       if (cgpa.trim().isNotEmpty) 'cgpa': cgpa.trim(),

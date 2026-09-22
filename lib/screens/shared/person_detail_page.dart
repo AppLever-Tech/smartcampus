@@ -25,6 +25,7 @@ import 'package:smartcampus/screens/faculty/faculty_class_management/class_atten
 import 'package:smartcampus/screens/faculty/faculty_class_management/models/completed_class_record.dart';
 import 'package:smartcampus/screens/student/student_class_management/student_class_firestore_service.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:smartcampus/screens/faculty/faculty_course_management_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class PersonDetailPage extends StatefulWidget {
@@ -1274,6 +1275,17 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
                   child: CourseListTable(
                     courses: assignedCourses,
                     totalsCourses: assignedCourses,
+                    onCourseTap: (course) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => FacultyCourseManagementPage(
+                            faculty: faculty,
+                            course: course,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               );
@@ -1286,6 +1298,17 @@ class _PersonDetailPageState extends State<PersonDetailPage> {
                   return Card(
                     margin: const EdgeInsets.only(bottom: 12),
                     child: ListTile(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => FacultyCourseManagementPage(
+                              faculty: faculty,
+                              course: course,
+                            ),
+                          ),
+                        );
+                      },
                       leading: const Icon(Icons.menu_book_outlined),
                       title: smcText(
                         textToDisplay: course.courseTitle,

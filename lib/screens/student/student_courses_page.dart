@@ -44,7 +44,7 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
       // Fetch all courses for the student's organization
       final coursesStream = _courseService.getCoursesForOrg(orgId: widget.orgId);
       final courses = await coursesStream.first;
-      
+
       // Fetch completed class records for attendance
       final classesStream = _attendanceService.watchClassesForOrg(orgId: widget.orgId);
       final classes = await classesStream.first;
@@ -87,7 +87,7 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
         }
       }
     }
-    
+
     // Fallback if batch is single year
     final year = int.tryParse(batch);
     if (year != null) {
@@ -207,15 +207,15 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
                                     Center(
                                       child: hasSyllabus
                                           ? IconButton(
-                                              icon: const Icon(Icons.download_rounded, color: ColorConst.primaryBlue, size: 20),
-                                              tooltip: 'View Syllabus PDF',
-                                              onPressed: () async {
-                                                final uri = Uri.parse(course.syllabusPdfUrl);
-                                                if (await canLaunchUrl(uri)) {
-                                                  await launchUrl(uri);
-                                                }
-                                              },
-                                            )
+                                        icon: const Icon(Icons.download_rounded, color: ColorConst.primaryBlue, size: 20),
+                                        tooltip: 'View Syllabus PDF',
+                                        onPressed: () async {
+                                          final uri = Uri.parse(course.syllabusPdfUrl);
+                                          if (await canLaunchUrl(uri)) {
+                                            await launchUrl(uri);
+                                          }
+                                        },
+                                      )
                                           : const smcText(textToDisplay: '—', textSize: 12, colorOfText: ColorConst.textSecondary),
                                     ),
                                   ),
@@ -239,6 +239,11 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
     showDialog<void>(
       context: context,
       builder: (ctx) {
+        String displayMarks(String? value) {
+          final trimmed = value?.trim() ?? '';
+          return trimmed.isEmpty ? 'Awaiting Entry' : trimmed;
+        }
+
         return Dialog(
           insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
           backgroundColor: Colors.white,
@@ -298,38 +303,31 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
                             DataColumn(label: smcText(textToDisplay: 'Sl. No', textSize: 12, textBoldness: 3, colorOfText: ColorConst.textPrimary)),
                             DataColumn(label: smcText(textToDisplay: 'Course Code', textSize: 12, textBoldness: 3, colorOfText: ColorConst.textPrimary)),
                             DataColumn(label: smcText(textToDisplay: 'Course Title', textSize: 12, textBoldness: 3, colorOfText: ColorConst.textPrimary)),
-                            DataColumn(label: smcText(textToDisplay: 'Max CIE Marks', textSize: 12, textBoldness: 3, colorOfText: ColorConst.textPrimary)),
-                            DataColumn(label: smcText(textToDisplay: 'Obtained CIE Marks', textSize: 12, textBoldness: 3, colorOfText: ColorConst.textPrimary)),
+                            DataColumn(label: smcText(textToDisplay: 'IA-1', textSize: 12, textBoldness: 3, colorOfText: ColorConst.textPrimary)),
+                            DataColumn(label: smcText(textToDisplay: 'IA-2', textSize: 12, textBoldness: 3, colorOfText: ColorConst.textPrimary)),
+                            DataColumn(label: smcText(textToDisplay: 'Final CIE', textSize: 12, textBoldness: 3, colorOfText: ColorConst.textPrimary)),
                           ],
                           rows: courses.asMap().entries.map((entry) {
                             final idx = entry.key;
                             final course = entry.value;
-
-                            // Only use actual stored grade points - no simulation!
-                            final gradePointsStr = widget.student.enrolledCourseMarks[course.id]?['gradePoints'] ?? '';
-                            final gp = double.tryParse(gradePointsStr);
-                            int? obtained;
-                            if (gp != null) {
-                              obtained = ((gp / 10.0) * course.cieMarks).round();
-                            }
-
-                            final obtainedDisplay = obtained == null ? 'Awaiting Entry' : '$obtained';
+                            final Map<String, String> marks =
+                                widget.student.enrolledCourseMarks[course.id] ??
+                                    const <String, String>{};
+                            final ia1Marks = displayMarks(marks['ia1Marks']);
+                            final ia2Marks = displayMarks(marks['ia2Marks']);
+                            final finalCie = displayMarks(
+                              marks['finalCie']?.isNotEmpty == true
+                                  ? marks['finalCie']
+                                  : marks['cieMarks'],
+                            );
 
                             return DataRow(cells: [
                               DataCell(Center(child: smcText(textToDisplay: '${idx + 1}', textSize: 12))),
                               DataCell(smcText(textToDisplay: course.courseCode, textSize: 12, textBoldness: 2)),
                               DataCell(smcText(textToDisplay: course.courseTitle, textSize: 12)),
-                              DataCell(Center(child: smcText(textToDisplay: '${course.cieMarks}', textSize: 12))),
-                              DataCell(
-                                Center(
-                                  child: smcText(
-                                    textToDisplay: obtainedDisplay,
-                                    textSize: 12,
-                                    textBoldness: obtained != null ? 3 : 1,
-                                    colorOfText: obtained == null ? ColorConst.textSecondary : ColorConst.textPrimary,
-                                  ),
-                                ),
-                              ),
+                              DataCell(Center(child: smcText(textToDisplay: ia1Marks, textSize: 12, textBoldness: ia1Marks == 'Awaiting Entry' ? 1 : 3, colorOfText: ia1Marks == 'Awaiting Entry' ? ColorConst.textSecondary : ColorConst.textPrimary))),
+                              DataCell(Center(child: smcText(textToDisplay: ia2Marks, textSize: 12, textBoldness: ia2Marks == 'Awaiting Entry' ? 1 : 3, colorOfText: ia2Marks == 'Awaiting Entry' ? ColorConst.textSecondary : ColorConst.textPrimary))),
+                              DataCell(Center(child: smcText(textToDisplay: finalCie, textSize: 12, textBoldness: finalCie == 'Awaiting Entry' ? 1 : 3, colorOfText: finalCie == 'Awaiting Entry' ? ColorConst.textSecondary : ColorConst.textPrimary))),
                             ]);
                           }).toList(),
                         ),
@@ -373,7 +371,7 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
                         ),
                         const SizedBox(height: 4),
                         const smcText(
-                          textToDisplay: 'Note: Minimum 75% attendance is required for exam eligibility.',
+                          textToDisplay: 'Note: Attendance above 85% is required for approval status.',
                           textSize: 11,
                           colorOfText: ColorConst.textSecondary,
                         ),
@@ -421,7 +419,7 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
                             DataColumn(label: smcText(textToDisplay: 'Conducted', textSize: 12, textBoldness: 3, colorOfText: ColorConst.textPrimary)),
                             DataColumn(label: smcText(textToDisplay: 'Attended', textSize: 12, textBoldness: 3, colorOfText: ColorConst.textPrimary)),
                             DataColumn(label: smcText(textToDisplay: 'Attendance %', textSize: 12, textBoldness: 3, colorOfText: ColorConst.textPrimary)),
-                            DataColumn(label: smcText(textToDisplay: 'Eligibility Status', textSize: 12, textBoldness: 3, colorOfText: ColorConst.textPrimary)),
+                            DataColumn(label: smcText(textToDisplay: 'Approval Status', textSize: 12, textBoldness: 3, colorOfText: ColorConst.textPrimary)),
                           ],
                           rows: courses.asMap().entries.map((entry) {
                             final idx = entry.key;
@@ -442,9 +440,9 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
                               statusText = 'Awaiting Entry';
                               statusColor = ColorConst.textSecondary;
                             } else {
-                              final bool isEligible = percentage >= 75.0;
-                              statusText = isEligible ? 'Eligible' : 'Shortage';
-                              statusColor = isEligible ? Colors.green : Colors.red;
+                              final bool isApproved = percentage > 85.0;
+                              statusText = isApproved ? 'Approved' : 'Not Approved';
+                              statusColor = isApproved ? Colors.green : Colors.red;
                             }
 
                             return DataRow(cells: [
@@ -545,7 +543,7 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
     }
 
     final student = widget.student;
-    
+
     // Resolve Program Name based on department or fallback to MCA
     final String programName = student.deptId.toUpperCase() == 'MCA'
         ? 'Master of Computer Applications'
@@ -671,7 +669,7 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
                     final semIndex = index + 1;
                     final semCode = _getSemesterCode(semIndex);
                     final acadYear = _getAcademicYearForSemester(semIndex);
-                    
+
                     final semesterCourses = _enrolledCourses.where((c) => c.semester == semCode).toList();
                     final isRegistered = semesterCourses.isNotEmpty;
 
@@ -684,31 +682,31 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
                           Center(
                             child: isRegistered
                                 ? Wrap(
-                                    spacing: 8,
-                                    children: [
-                                      _buildHyperlink('View Registered Courses', () => _showRegisteredCoursesDialog(semCode, semesterCourses)),
-                                      _buildHyperlink('View Internal Assessment', () => _showInternalAssessmentDialog(semCode, semesterCourses)),
-                                      _buildHyperlink('View Attendance', () => _showAttendanceDialog(semCode, semesterCourses, _classRecords)),
-                                    ],
-                                  )
+                              spacing: 8,
+                              children: [
+                                _buildHyperlink('View Registered Courses', () => _showRegisteredCoursesDialog(semCode, semesterCourses)),
+                                _buildHyperlink('View Internal Assessment', () => _showInternalAssessmentDialog(semCode, semesterCourses)),
+                                _buildHyperlink('View Attendance', () => _showAttendanceDialog(semCode, semesterCourses, _classRecords)),
+                              ],
+                            )
                                 : _buildHyperlink(
-                                    'Course Registration',
-                                    () async {
-                                      final registered = await Navigator.push<bool>(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => StudentCourseRegistrationPage(
-                                            student: student,
-                                            orgId: widget.orgId,
-                                            initialSemester: semCode,
-                                          ),
-                                        ),
-                                      );
-                                      if (registered == true) {
-                                        _loadData();
-                                      }
-                                    },
+                              'Course Registration',
+                                  () async {
+                                final registered = await Navigator.push<bool>(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => StudentCourseRegistrationPage(
+                                      student: student,
+                                      orgId: widget.orgId,
+                                      initialSemester: semCode,
+                                    ),
                                   ),
+                                );
+                                if (registered == true) {
+                                  _loadData();
+                                }
+                              },
+                            ),
                           ),
                         ),
                       ],
