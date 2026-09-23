@@ -1231,27 +1231,22 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         automaticallyImplyLeading: false,
-        title: Row(
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const smcText(
+            smcText(
               textToDisplay: 'Create Student Assessment',
               textSize: 22,
               textBoldness: 5,
               colorOfText: ColorConst.textPrimary,
             ),
-          ],
-        ),
-        flexibleSpace: const Column(
-          children: [
-            SizedBox(height: 56),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 4),
-              child: smcText(
-                textToDisplay:
-                    'Create and assign an assessment for your students. You can set the type, marks, due date and select the relevant scheme, semester, and course.',
-                textSize: 14,
-                colorOfText: ColorConst.textSecondary,
-              ),
+            SizedBox(height: 4),
+            smcText(
+              textToDisplay:
+              'Create and assign an assessment for your students. You can set the type, marks, due date and select the relevant scheme, semester, and course.',
+              textSize: 14,
+              colorOfText: ColorConst.textSecondary,
             ),
           ],
         ),
@@ -1670,25 +1665,64 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
                                   const SizedBox(height: 4),
                                   // Individual student checkboxes
                                   Expanded(
-                                    child: ListView.builder(
+                                    child: _getFilteredStudents().isEmpty
+                                        ? Center(
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.person_search_outlined,
+                                            size: 40,
+                                            color: ColorConst.textSecondary,
+                                          ),
+                                          const SizedBox(height: 10),
+                                          smcText(
+                                            textToDisplay: 'No students found',
+                                            textSize: 14,
+                                            textBoldness: 5,
+                                            colorOfText: ColorConst.textPrimary,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          smcText(
+                                            textToDisplay: 'No student matches your search.',
+                                            textSize: 12,
+                                            colorOfText: ColorConst.textSecondary,
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                        : ListView.builder(
                                       shrinkWrap: true,
                                       itemCount: _getFilteredStudents().length,
                                       itemBuilder: (ctx, i) {
                                         final s = _getFilteredStudents()[i];
-                                        final sid =
-                                            s['student_id'] ?? s['studentId'] ?? s['documentId'] ?? '';
-                                        final name = s['full_name'] ?? s['fullName'] ?? s['name'] ?? 'Student';
-                                        final usn = s['USN'] ?? s['usn'] ?? s['studentRegNo'] ?? '';
+
+                                        final sid = s['student_id'] ??
+                                            s['studentId'] ??
+                                            s['documentId'] ??
+                                            '';
+
+                                        final name = s['full_name'] ??
+                                            s['fullName'] ??
+                                            s['name'] ??
+                                            'Student';
+
+                                        final usn = s['USN'] ??
+                                            s['usn'] ??
+                                            s['studentRegNo'] ??
+                                            '';
+
                                         final isSelected =
-                                            _selectedStudentIds.contains(sid);
+                                        _selectedStudentIds.contains(sid);
+
                                         return CheckboxListTile(
                                           value: isSelected,
                                           onChanged: (v) {
                                             setState(() {
                                               if (v == true) {
-                                                if (!_selectedStudentIds
-                                                    .contains(sid))
+                                                if (!_selectedStudentIds.contains(sid)) {
                                                   _selectedStudentIds.add(sid);
+                                                }
                                               } else {
                                                 _selectedStudentIds.remove(sid);
                                               }
@@ -1696,17 +1730,15 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
                                           },
                                           title: smcText(
                                             textToDisplay:
-                                                '$name${usn.toString().isNotEmpty ? ' ($usn)' : ''}',
+                                            '$name${usn.toString().isNotEmpty ? ' ($usn)' : ''}',
                                             textSize: 13,
                                             colorOfText: ColorConst.textPrimary,
-                                            maxLines: 1,
                                           ),
                                           activeColor: ColorConst.primaryBlue,
-                                          contentPadding: EdgeInsets.zero,
                                         );
                                       },
                                     ),
-                                  ),
+                                  )
                                 ],
                               ),
                             ),
@@ -1930,129 +1962,168 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
             ),
             const SizedBox(width: 24),
             // Assessment Summary Sidebar
-            Expanded(
-              flex: 1,
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE3EAF8)),
+          // Assessment Summary Sidebar
+          Expanded(
+            flex: 1,
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: const Color(0xFFE3EAF8),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEAF0FF),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(
-                            Icons.assignment_outlined,
-                            color: ColorConst.primaryBlue,
-                            size: 22,
-                          ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEAF0FF),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        const SizedBox(width: 10),
-                        const smcText(
+                        child: const Icon(
+                          Icons.assignment_outlined,
+                          color: ColorConst.primaryBlue,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: smcText(
                           textToDisplay: 'Assessment Summary',
                           textSize: 18,
                           textBoldness: 5,
                           colorOfText: ColorConst.textPrimary,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    _buildSummaryRow(
-                        'Title',
-                        _titleCtrl.text.trim().isEmpty
-                            ? '—'
-                            : _titleCtrl.text.trim()),
-                    _buildSummaryRow(
-                        'Type',
-                        _selectedAssessmentType.isEmpty
-                            ? '—'
-                            : _selectedAssessmentType),
-                    _buildSummaryRow(
-                        'Scheme',
-                        _selectedScheme.isEmpty
-                            ? '—'
-                            : _formatSchemeForDisplay(_selectedScheme)),
-                    _buildSummaryRow(
-                        'Semester',
-                        _selectedSemester.isEmpty
-                            ? '—'
-                            : _selectedSemester),
-                    _buildSummaryRow(
-                        'Course',
-                        _selectedCourseId.isEmpty
-                            ? '—'
-                            : assignedCourses
-                                    .where((c) => c.id == _selectedCourseId)
-                                    .firstOrNull
-                                    ?.courseCode ??
-                                '—'),
-                    _buildSummaryRow(
-                        'Total Marks',
-                        _totalMarksCtrl.text.trim().isEmpty
-                            ? '—'
-                            : _totalMarksCtrl.text.trim()),
-                    _buildSummaryRow(
-                        'Due Date',
-                        _selectedDueDate == null
-                            ? '—'
-                            : _formatDate(_selectedDueDate!)),
-                    _buildSummaryRow(
-                        'Attachments',
-                        _attachmentNames.isEmpty
-                            ? 'None'
-                            : '${_attachmentNames.length} file(s)'),
-                    _buildSummaryRow(
-                      'Students',
-                      _allStudentsInSection
-                          ? 'All enrolled in course'
-                          : '${_selectedStudentIds.length} selected'),
-                    const SizedBox(height: 20),
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEFF4FF),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                            color: const Color(0xFFD8E2F4)),
                       ),
-                      child: Row(
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Icon(
-                            Icons.info_outline,
-                            color: ColorConst.primaryBlue,
-                            size: 20,
+                        children: [
+                          _buildSummaryRow(
+                            'Title',
+                            _titleCtrl.text.trim().isEmpty
+                                ? '—'
+                                : _titleCtrl.text.trim(),
                           ),
-                          SizedBox(width: 10),
-                          Expanded(
-                            child: smcText(
-                              textToDisplay:
-                                  'Once created, the assessment will be visible to students in the selected scheme, semester, and course.',
-                              textSize: 12,
-                              colorOfText: ColorConst.textPrimary,
+
+                          _buildSummaryRow(
+                            'Type',
+                            _selectedAssessmentType.isEmpty
+                                ? '—'
+                                : _selectedAssessmentType,
+                          ),
+
+                          _buildSummaryRow(
+                            'Scheme',
+                            _selectedScheme.isEmpty
+                                ? '—'
+                                : _formatSchemeForDisplay(_selectedScheme),
+                          ),
+
+                          _buildSummaryRow(
+                            'Semester',
+                            _selectedSemester.isEmpty
+                                ? '—'
+                                : _selectedSemester,
+                          ),
+
+                          _buildSummaryRow(
+                            'Course',
+                            _selectedCourseId.isEmpty
+                                ? '—'
+                                : assignedCourses
+                                .where(
+                                  (c) => c.id == _selectedCourseId,
+                            )
+                                .firstOrNull
+                                ?.courseCode ??
+                                '—',
+                          ),
+
+                          _buildSummaryRow(
+                            'Total Marks',
+                            _totalMarksCtrl.text.trim().isEmpty
+                                ? '—'
+                                : _totalMarksCtrl.text.trim(),
+                          ),
+
+                          _buildSummaryRow(
+                            'Due Date',
+                            _selectedDueDate == null
+                                ? '—'
+                                : _formatDate(_selectedDueDate!),
+                          ),
+
+                          _buildSummaryRow(
+                            'Attachments',
+                            _attachmentNames.isEmpty
+                                ? 'None'
+                                : '${_attachmentNames.length} file(s)',
+                          ),
+
+                          _buildSummaryRow(
+                            'Students',
+                            _allStudentsInSection
+                                ? 'All enrolled in course'
+                                : '${_selectedStudentIds.length} selected',
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF4FF),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFFD8E2F4),
+                              ),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: const [
+                                Icon(
+                                  Icons.info_outline,
+                                  color: ColorConst.primaryBlue,
+                                  size: 20,
+                                ),
+                                SizedBox(width: 10),
+                                Expanded(
+                                  child: smcText(
+                                    textToDisplay:
+                                    'Once created, the assessment will be visible to students in the selected scheme, semester, and course.',
+                                    textSize: 12,
+                                    colorOfText: ColorConst.textPrimary,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
-    );
+                  ),
+              ],
+              ),
+            ),
+         );
   }
 
   Widget _buildStepCard({
@@ -2107,23 +2178,29 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          smcText(
-            textToDisplay: label,
-            textSize: 13,
-            colorOfText: ColorConst.textSecondary,
-          ),
-          const SizedBox(width: 12),
-          Flexible(
+          Expanded(
+            flex: 2,
             child: smcText(
-              textToDisplay: value,
+              textToDisplay: label,
               textSize: 13,
-              textBoldness: 4,
-              colorOfText: ColorConst.textPrimary,
-              textAlign: TextAlign.right,
-              maxLines: 2,
+              colorOfText: ColorConst.textSecondary,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 3,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: smcText(
+                textToDisplay: value,
+                textSize: 13,
+                textBoldness: 4,
+                colorOfText: ColorConst.textPrimary,
+                textAlign: TextAlign.right,
+                maxLines: 2,
+              ),
             ),
           ),
         ],
