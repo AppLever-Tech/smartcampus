@@ -1557,201 +1557,205 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
                       step: 2,
                       title: 'Assign to Students',
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  decoration: InputDecoration(
-                                    hintText: 'Search students by name or USN...',
-                                    hintStyle: const TextStyle(
-                                        fontSize: 13, color: ColorConst.textSecondary),
-                                    prefixIcon: const Icon(Icons.search, size: 18),
-                                    filled: true,
-                                    fillColor: const Color(0xFFF9FAFF),
-                                    contentPadding: const EdgeInsets.symmetric(
-                                        horizontal: 16, vertical: 12),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      borderSide: const BorderSide(color: Color(0xFFD8E2F4)),
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      borderSide: const BorderSide(color: Color(0xFFD8E2F4)),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      borderSide: const BorderSide(color: ColorConst.primaryBlue),
-                                    ),
-                                  ),
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _studentSearchQuery = value;
-                                    });
-                                  },
+                          // Search students
+                          TextField(
+                            decoration: InputDecoration(
+                              hintText: 'Search students by name or USN...',
+                              hintStyle: const TextStyle(
+                                fontSize: 13,
+                                color: ColorConst.textSecondary,
+                              ),
+                              prefixIcon: const Icon(
+                                Icons.search,
+                                size: 18,
+                              ),
+                              filled: true,
+                              fillColor: const Color(0xFFF9FAFF),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFFD8E2F4),
                                 ),
                               ),
-                              const SizedBox(width: 12),
-                              ElevatedButton.icon(
-                                onPressed: () => setState(() {
-                                  _allStudentsInSection = !_allStudentsInSection;
-                                  if (_allStudentsInSection) {
-                                    _selectedStudentIds.clear();
-                                  }
-                                }),
-                                icon: Icon(
-                                  _allStudentsInSection 
-                                      ? Icons.check_circle_outline 
-                                      : Icons.radio_button_unchecked,
-                                  size: 18,
-                                ),
-                                label: Text(_allStudentsInSection ? 'All Students' : 'Select Specific'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: _allStudentsInSection 
-                                      ? Colors.green 
-                                      : ColorConst.primaryBlue,
-                                  foregroundColor: Colors.white,
-                                  elevation: 0,
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 12),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFFD8E2F4),
                                 ),
                               ),
-                            ],
-                          ),
-                          if (!_allStudentsInSection) ...[
-                            const SizedBox(height: 12),
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF6F7FB),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              constraints: const BoxConstraints(maxHeight: 280),
-                              child: Column(
-                                children: [
-                                  // Select All checkbox
-                                  CheckboxListTile(
-                                    value: _selectedStudentIds.length ==
-                                        _getFilteredStudents().length &&
-                                        _getFilteredStudents().isNotEmpty,
-                                    onChanged: (v) {
-                                      setState(() {
-                                        final allStudentIds = _getFilteredStudents()
-                                            .map((s) => (s['student_Id'] ?? s['studentId'] ?? s['documentId'] ?? '') as String)
-                                            .toList();
-                                        if (v == true) {
-                                          _selectedStudentIds.clear();
-                                          _selectedStudentIds.addAll(allStudentIds);
-                                        } else {
-                                          _selectedStudentIds.clear();
-                                        }
-                                      });
-                                    },
-                                    title: smcText(
-                                      textToDisplay: 'Select All (${_getFilteredStudents().length} students)',
-                                      textSize: 14,
-                                      textBoldness: 4,
-                                      colorOfText: ColorConst.textPrimary,
-                                    ),
-                                    activeColor: ColorConst.primaryBlue,
-                                    contentPadding: EdgeInsets.zero,
-                                    controlAffinity:
-                                        ListTileControlAffinity.leading,
-                                  ),
-                                  const Divider(height: 1),
-                                  const SizedBox(height: 4),
-                                  // Individual student checkboxes
-                                  Expanded(
-                                    child: _getFilteredStudents().isEmpty
-                                        ? Center(
-                                      child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Icon(
-                                            Icons.person_search_outlined,
-                                            size: 40,
-                                            color: ColorConst.textSecondary,
-                                          ),
-                                          const SizedBox(height: 10),
-                                          smcText(
-                                            textToDisplay: 'No students found',
-                                            textSize: 14,
-                                            textBoldness: 5,
-                                            colorOfText: ColorConst.textPrimary,
-                                          ),
-                                          const SizedBox(height: 4),
-                                          smcText(
-                                            textToDisplay: 'No student matches your search.',
-                                            textSize: 12,
-                                            colorOfText: ColorConst.textSecondary,
-                                          ),
-                                        ],
-                                      ),
-                                    )
-                                        : ListView.builder(
-                                      shrinkWrap: true,
-                                      itemCount: _getFilteredStudents().length,
-                                      itemBuilder: (ctx, i) {
-                                        final s = _getFilteredStudents()[i];
-
-                                        final sid = s['student_id'] ??
-                                            s['studentId'] ??
-                                            s['documentId'] ??
-                                            '';
-
-                                        final name = s['full_name'] ??
-                                            s['fullName'] ??
-                                            s['name'] ??
-                                            'Student';
-
-                                        final usn = s['USN'] ??
-                                            s['usn'] ??
-                                            s['studentRegNo'] ??
-                                            '';
-
-                                        final isSelected =
-                                        _selectedStudentIds.contains(sid);
-
-                                        return CheckboxListTile(
-                                          value: isSelected,
-                                          onChanged: (v) {
-                                            setState(() {
-                                              if (v == true) {
-                                                if (!_selectedStudentIds.contains(sid)) {
-                                                  _selectedStudentIds.add(sid);
-                                                }
-                                              } else {
-                                                _selectedStudentIds.remove(sid);
-                                              }
-                                            });
-                                          },
-                                          title: smcText(
-                                            textToDisplay:
-                                            '$name${usn.toString().isNotEmpty ? ' ($usn)' : ''}',
-                                            textSize: 13,
-                                            colorOfText: ColorConst.textPrimary,
-                                          ),
-                                          activeColor: ColorConst.primaryBlue,
-                                        );
-                                      },
-                                    ),
-                                  )
-                                ],
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(
+                                  color: ColorConst.primaryBlue,
+                                ),
                               ),
                             ),
-                            if (_selectedStudentIds.isEmpty) ...[
-                              const SizedBox(height: 8),
-                              const smcText(
-                                textToDisplay:
-                                    '⚠️  No students selected yet. Select at least one student.',
-                                textSize: 12,
-                                colorOfText: Colors.orange,
+                            onChanged: (value) {
+                              setState(() {
+                                _studentSearchQuery = value;
+                              });
+                            },
+                          ),
+
+                          const SizedBox(height: 12),
+
+                          // Select All Students
+                          CheckboxListTile(
+                            value: _allStudentsInSection,
+                            onChanged: (value) {
+                              setState(() {
+                                _allStudentsInSection = value ?? false;
+
+                                if (_allStudentsInSection) {
+                                  _selectedStudentIds.clear();
+                                }
+                              });
+                            },
+                            title: const smcText(
+                              textToDisplay: 'Select All Students',
+                              textSize: 14,
+                              textBoldness: 5,
+                              colorOfText: ColorConst.textPrimary,
+                            ),
+                            subtitle: smcText(
+                              textToDisplay:
+                              '${_getFilteredStudents().length} students available',
+                              textSize: 12,
+                              colorOfText: ColorConst.textSecondary,
+                            ),
+                            activeColor: ColorConst.primaryBlue,
+                            contentPadding: EdgeInsets.zero,
+                            controlAffinity: ListTileControlAffinity.leading,
+                          ),
+
+                          const Divider(height: 1),
+
+                          const SizedBox(height: 8),
+
+                          // Student results
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF6F7FB),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            constraints: const BoxConstraints(
+                              maxHeight: 280,
+                            ),
+                            child: _getFilteredStudents().isEmpty
+                                ? Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(30),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(
+                                      Icons.person_search_outlined,
+                                      size: 40,
+                                      color: ColorConst.textSecondary,
+                                    ),
+                                    const SizedBox(height: 10),
+                                    smcText(
+                                      textToDisplay:
+                                      _studentSearchQuery.trim().isEmpty
+                                          ? 'No students found'
+                                          : 'No students found',
+                                      textSize: 14,
+                                      textBoldness: 5,
+                                      colorOfText: ColorConst.textPrimary,
+                                    ),
+                                    if (_studentSearchQuery.trim().isNotEmpty) ...[
+                                      const SizedBox(height: 4),
+                                      smcText(
+                                        textToDisplay:
+                                        'No student matches "$_studentSearchQuery".',
+                                        textSize: 12,
+                                        colorOfText: ColorConst.textSecondary,
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ],
+                                  ],
+                                ),
                               ),
-                            ],
-                          ],
+                            )
+                                : ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: _getFilteredStudents().length,
+                              itemBuilder: (ctx, i) {
+                                final s = _getFilteredStudents()[i];
+
+                                final sid = s['student_id'] ??
+                                    s['student_Id'] ??
+                                    s['studentId'] ??
+                                    s['documentId'] ??
+                                    '';
+
+                                final name = s['full_name'] ??
+                                    s['fullName'] ??
+                                    s['name'] ??
+                                    'Student';
+
+                                final usn = s['USN'] ??
+                                    s['usn'] ??
+                                    s['studentRegNo'] ??
+                                    '';
+
+                                final isSelected =
+                                _selectedStudentIds.contains(sid);
+
+                                return CheckboxListTile(
+                                  value: isSelected,
+                                  onChanged: _allStudentsInSection
+                                      ? null
+                                      : (value) {
+                                    setState(() {
+                                      if (value == true) {
+                                        if (!_selectedStudentIds
+                                            .contains(sid)) {
+                                          _selectedStudentIds.add(sid);
+                                        }
+                                      } else {
+                                        _selectedStudentIds.remove(sid);
+                                      }
+                                    });
+                                  },
+                                  title: smcText(
+                                    textToDisplay:
+                                    '$name${usn.toString().isNotEmpty ? ' ($usn)' : ''}',
+                                    textSize: 13,
+                                    colorOfText: ColorConst.textPrimary,
+                                  ),
+                                  activeColor: ColorConst.primaryBlue,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
+                                  controlAffinity:
+                                  ListTileControlAffinity.leading,
+                                );
+                              },
+                            ),
+                          ),
+
+                          const SizedBox(height: 12),
+
+                          // Selection status
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: smcText(
+                              textToDisplay: _allStudentsInSection
+                                  ? 'All students will receive this assessment'
+                                  : '${_selectedStudentIds.length} student(s) selected',
+                              textSize: 12,
+                              textBoldness: 4,
+                              colorOfText: ColorConst.textSecondary,
+                            ),
+                          ),
                         ],
                       ),
                     ),
