@@ -1598,7 +1598,7 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
                             ),
                             onChanged: (value) {
                               setState(() {
-                                _studentSearchQuery = value;
+                                _studentSearchQuery = value.trim();
                               });
                             },
                           ),
@@ -1623,9 +1623,8 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
                               textBoldness: 5,
                               colorOfText: ColorConst.textPrimary,
                             ),
-                            subtitle: smcText(
-                              textToDisplay:
-                              '${_getFilteredStudents().length} students available',
+                            subtitle: const smcText(
+                              textToDisplay: 'Assign to all students enrolled in the selected course',
                               textSize: 12,
                               colorOfText: ColorConst.textSecondary,
                             ),
@@ -1633,114 +1632,76 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
                             contentPadding: EdgeInsets.zero,
                             controlAffinity: ListTileControlAffinity.leading,
                           ),
-
                           const Divider(height: 1),
 
                           const SizedBox(height: 8),
 
                           // Student results
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF6F7FB),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            constraints: const BoxConstraints(
-                              maxHeight: 280,
-                            ),
-                            child: _getFilteredStudents().isEmpty
-                                ? Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(30),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(
-                                      Icons.person_search_outlined,
-                                      size: 40,
-                                      color: ColorConst.textSecondary,
-                                    ),
-                                    const SizedBox(height: 10),
-                                    smcText(
-                                      textToDisplay:
-                                      _studentSearchQuery.trim().isEmpty
-                                          ? 'No students found'
-                                          : 'No students found',
-                                      textSize: 14,
-                                      textBoldness: 5,
-                                      colorOfText: ColorConst.textPrimary,
-                                    ),
-                                    if (_studentSearchQuery.trim().isNotEmpty) ...[
-                                      const SizedBox(height: 4),
-                                      smcText(
-                                        textToDisplay:
-                                        'No student matches "$_studentSearchQuery".',
-                                        textSize: 12,
-                                        colorOfText: ColorConst.textSecondary,
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ],
-                                  ],
-                                ),
+                          // Student results: show only when faculty starts searching
+                          if (_studentSearchQuery.trim().isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF6F7FB),
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                            )
-                                : ListView.builder(
-                              shrinkWrap: true,
-                              itemCount: _getFilteredStudents().length,
-                              itemBuilder: (ctx, i) {
-                                final s = _getFilteredStudents()[i];
+                              constraints: const BoxConstraints(maxHeight: 280),
+                              child: _getFilteredStudents().isEmpty
+                                  ? const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(30),
+                                  child: Text('No students found'),
+                                ),
+                              )
+                                  : ListView.builder(
+                                shrinkWrap: true,
+                                itemCount: _getFilteredStudents().length,
+                                itemBuilder: (ctx, i) {
+                                  final s = _getFilteredStudents()[i];
 
-                                final sid = s['student_id'] ??
-                                    s['student_Id'] ??
-                                    s['studentId'] ??
-                                    s['documentId'] ??
-                                    '';
+                                  final sid = (s['student_id'] ??
+                                      s['student_Id'] ??
+                                      s['studentId'] ??
+                                      s['documentId'] ??
+                                      '')
+                                      .toString();
 
-                                final name = s['full_name'] ??
-                                    s['fullName'] ??
-                                    s['name'] ??
-                                    'Student';
+                                  final name = (s['full_name'] ??
+                                      s['fullName'] ??
+                                      s['name'] ??
+                                      'Student')
+                                      .toString();
 
-                                final usn = s['USN'] ??
-                                    s['usn'] ??
-                                    s['studentRegNo'] ??
-                                    '';
+                                  final usn = (s['USN'] ??
+                                      s['usn'] ??
+                                      s['studentRegNo'] ??
+                                      '')
+                                      .toString();
 
-                                final isSelected =
-                                _selectedStudentIds.contains(sid);
-
-                                return CheckboxListTile(
-                                  value: isSelected,
-                                  onChanged: _allStudentsInSection
-                                      ? null
-                                      : (value) {
-                                    setState(() {
-                                      if (value == true) {
-                                        if (!_selectedStudentIds
-                                            .contains(sid)) {
-                                          _selectedStudentIds.add(sid);
+                                  return CheckboxListTile(
+                                    value: _selectedStudentIds.contains(sid),
+                                    onChanged: _allStudentsInSection
+                                        ? null
+                                        : (value) {
+                                      setState(() {
+                                        if (value == true) {
+                                          if (!_selectedStudentIds.contains(sid)) {
+                                            _selectedStudentIds.add(sid);
+                                          }
+                                        } else {
+                                          _selectedStudentIds.remove(sid);
                                         }
-                                      } else {
-                                        _selectedStudentIds.remove(sid);
-                                      }
-                                    });
-                                  },
-                                  title: smcText(
-                                    textToDisplay:
-                                    '$name${usn.toString().isNotEmpty ? ' ($usn)' : ''}',
-                                    textSize: 13,
-                                    colorOfText: ColorConst.textPrimary,
-                                  ),
-                                  activeColor: ColorConst.primaryBlue,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                  ),
-                                  controlAffinity:
-                                  ListTileControlAffinity.leading,
-                                );
-                              },
+                                      });
+                                    },
+                                    title: Text(
+                                      '$name${usn.isNotEmpty ? ' ($usn)' : ''}',
+                                    ),
+                                    controlAffinity:
+                                    ListTileControlAffinity.leading,
+                                  );
+                                },
+                              ),
                             ),
-                          ),
 
                           const SizedBox(height: 12),
 
@@ -2581,7 +2542,32 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
                               await assessmentService.deleteAssessment(a.id!);
                             }
                           } else if (value == 'edit') {
-                            // TODO: implement edit assessment pre-fill
+                            setState(() {
+                              // Store the assessment being edited
+                              _selectedManageMarksAssessment = a;
+
+                              // Fill existing assessment details
+                              _titleCtrl.text = a.title;
+                              _totalMarksCtrl.text = a.totalMarks.toString();
+                              _descriptionCtrl.text = a.description ?? '';
+
+                              _selectedAssessmentType = a.assessmentType;
+                              _selectedScheme = a.scheme;
+                              _selectedSemester = a.semester;
+                              _selectedCourseId = a.courseId;
+                              _selectedDueDate = a.dueDate;
+
+                              _allStudentsInSection = a.allStudentsInSection;
+                              _selectedStudentIds = List<String>.from(
+                                a.selectedStudentIds,
+                              );
+
+                              _allowLateSubmission = a.allowLateSubmission;
+                              _showMarksToStudents = a.showMarksToStudents;
+
+                              // Open Create Assessment form
+                              selectedAssessmentSubIndex = 0;
+                            });
                           } else if (value == 'marks') {
                             setState(() {
                               _selectedManageMarksAssessment = a;
@@ -3176,15 +3162,34 @@ class _FacultyDashboardPageState extends State<FacultyDashboardPage> {
       }
     } else {
       for (final sid in assessment.selectedStudentIds) {
-        final match = students.firstWhere((s) {
-          final sId = s['student_Id'] ??
-              s['studentId'] ??
-              s['documentId'] ??
-              s['Student_ID'] ??
-              '';
-          return sId.toString() == sid.toString();
-        }, orElse: () => {'studentId': sid, 'fullName': 'Unknown Student'});
-        studentList.add(match);
+        final match = students.firstWhere(
+              (s) {
+            final sId = s['student_id'] ??
+                s['student_Id'] ??
+                s['studentId'] ??
+                s['Student_ID'] ??
+                s['documentId'] ??
+                s['USN'] ??
+                s['usn'] ??
+                '';
+
+            return sId.toString().trim() == sid.toString().trim();
+          },
+          orElse: () => <String, dynamic>{},
+        );
+
+        final studentName = match['full_name'] ??
+            match['fullName'] ??
+            match['name'] ??
+            match['student_name'] ??
+            match['studentName'] ??
+            'Unknown Student';
+
+        studentList.add({
+          ...match,
+          'studentId': sid,
+          'fullName': studentName,
+        });
       }
     }
 
